@@ -54,8 +54,15 @@ def _validate_database_configuration(
 
 def _initialize_extensions(app: Flask) -> None:
     db.init_app(app)
+    _load_models()
     migrate.init_app(app, db, compare_type=True)
     jwt.init_app(app)
+
+
+def _load_models() -> None:
+    from app.models import Device
+
+    _ = Device
 
 
 def register_blueprints(app: Flask) -> None:

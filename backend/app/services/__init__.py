@@ -1,4 +1,4 @@
-from app.services import device_registration
+from app.services import device_registration, policy_sync
 
 
-__all__ = ["device_registration"]
+__all__ = ["device_registration", "policy_sync"]

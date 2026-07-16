@@ -5,6 +5,7 @@ from uuid import UUID
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     JSON,
@@ -12,9 +13,10 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.ext.mutable import MutableList
-from sqlalchemy.orm import Mapped, mapped_column, validates
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.extensions import db
 
@@ -70,6 +72,10 @@ class Device(db.Model):
         onupdate=utc_now,
         server_default=func.now(),
     )
+    policy_assignments: Mapped[list["DevicePolicyAssignment"]] = relationship(
+        back_populates="device",
+        order_by="DevicePolicyAssignment.assigned_at",
+    )
 
 
 class Policy(db.Model):
@@ -117,6 +123,10 @@ class Policy(db.Model):
         onupdate=utc_now,
         server_default=func.now(),
     )
+    device_assignments: Mapped[list["DevicePolicyAssignment"]] = relationship(
+        back_populates="policy",
+        order_by="DevicePolicyAssignment.assigned_at",
+    )
 
     @validates("blocked_apps")
     def validate_blocked_apps(
@@ -141,4 +151,71 @@ class Policy(db.Model):
         return list(value)
 
 
-__all__ = ["Device", "Policy"]
+class DevicePolicyAssignment(db.Model):
+    __tablename__ = "device_policy_assignments"
+    __table_args__ = (
+        CheckConstraint(
+            "policy_version >= 1",
+            name="ck_device_policy_assignments_version_positive",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'superseded')",
+            name="ck_device_policy_assignments_status",
+        ),
+        CheckConstraint(
+            "(status = 'active' AND superseded_at IS NULL) OR "
+            "(status = 'superseded' AND superseded_at IS NOT NULL)",
+            name="ck_device_policy_assignments_status_timestamp",
+        ),
+        Index(
+            "uq_device_policy_assignments_active_device",
+            "device_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ),
+        Index(
+            "ix_device_policy_assignments_device_history",
+            "device_id",
+            "assigned_at",
+        ),
+        Index("ix_device_policy_assignments_policy_id", "policy_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    policy_id: Mapped[int] = mapped_column(
+        ForeignKey("policies.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    policy_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+    )
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="active",
+        server_default="active",
+    )
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    device: Mapped[Device] = relationship(back_populates="policy_assignments")
+    policy: Mapped[Policy] = relationship(back_populates="device_assignments")
+
+
+__all__ = ["Device", "DevicePolicyAssignment", "Policy"]

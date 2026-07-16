@@ -11,6 +11,11 @@ class InvalidDeviceUUIDError(ValueError):
         super().__init__("invalid device UUID")
 
 
+class InvalidCurrentVersionError(ValueError):
+    def __init__(self) -> None:
+        super().__init__("current_version must be a non-negative integer")
+
+
 class DeviceNotFoundError(LookupError):
     def __init__(self) -> None:
         super().__init__("device not found")
@@ -40,6 +45,39 @@ def get_policy_sync_payload(device_uuid: object) -> dict[str, object]:
                 "blocked_apps": list(policy.blocked_apps),
             },
         }
+
+
+def get_version_aware_policy_sync_payload(
+    device_uuid: object,
+    current_version: object,
+) -> dict[str, object]:
+    if (
+        isinstance(current_version, bool)
+        or not isinstance(current_version, int)
+        or current_version < 0
+    ):
+        raise InvalidCurrentVersionError()
+
+    payload = get_policy_sync_payload(device_uuid)
+    policy = payload["policy"]
+    if isinstance(policy, dict):
+        server_version = policy["policy_version"]
+        if not isinstance(server_version, int):
+            raise RuntimeError("policy version must be an integer")
+
+        if server_version > current_version:
+            return {
+                "update_available": True,
+                "policy": policy,
+            }
+    else:
+        server_version = 0
+
+    return {
+        "update_available": False,
+        "policy_version": server_version,
+        "policy": None,
+    }
 
 
 def _canonicalize_device_uuid(device_uuid: object) -> UUID:
@@ -95,6 +133,8 @@ def _no_policy_payload(device_uuid: UUID) -> dict[str, object]:
 
 __all__ = [
     "DeviceNotFoundError",
+    "InvalidCurrentVersionError",
     "InvalidDeviceUUIDError",
     "get_policy_sync_payload",
+    "get_version_aware_policy_sync_payload",
 ]

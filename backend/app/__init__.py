@@ -60,9 +60,9 @@ def _initialize_extensions(app: Flask) -> None:
 
 
 def _load_models() -> None:
-    from app.models import Device
+    from app.models import Device, Policy
 
-    _ = Device
+    _ = (Device, Policy)
 
 
 def register_blueprints(app: Flask) -> None:

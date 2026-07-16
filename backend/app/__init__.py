@@ -5,7 +5,13 @@ from typing import Any
 
 from flask import Flask
 
-from app.config import get_configuration, resolve_database_uri
+from app.config import (
+    get_configuration,
+    resolve_database_uri,
+    resolve_migration_database_uri,
+    validate_database_separation,
+    validate_migration_target,
+)
 from app.errors import register_error_handlers
 from app.extensions import db, jwt, migrate
 from app.routes import BLUEPRINTS
@@ -30,6 +36,18 @@ def create_app(
         app.config.update(config_overrides)
 
     _validate_database_configuration(app, configuration.DATABASE_ENV_VAR)
+    validate_database_separation()
+    migration_database_uri = resolve_migration_database_uri(
+        selected_name,
+        app.config.get("SQLALCHEMY_DATABASE_URI"),
+    )
+    app.config["MIGRATION_DATABASE_URI"] = migration_database_uri
+    if selected_name != "testing" and migration_database_uri is not None:
+        validate_migration_target(
+            app.config["SQLALCHEMY_DATABASE_URI"],
+            migration_database_uri,
+        )
+    _validate_production_secrets(app)
     _initialize_extensions(app)
     register_blueprints(app)
     register_error_handlers(app)
@@ -57,6 +75,17 @@ def _initialize_extensions(app: Flask) -> None:
     _load_models()
     migrate.init_app(app, db, compare_type=True)
     jwt.init_app(app)
+
+
+def _validate_production_secrets(app: Flask) -> None:
+    if app.config["APP_ENV"] != "production":
+        return
+
+    required_settings = ("SECRET_KEY", "JWT_SECRET_KEY")
+    if any(not app.config.get(setting) for setting in required_settings):
+        raise RuntimeError(
+            "Required production secrets must be configured"
+        )
 
 
 def _load_models() -> None:

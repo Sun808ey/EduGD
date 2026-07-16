@@ -2,6 +2,9 @@ import logging
 from logging.config import fileConfig
 
 from flask import current_app
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
+from sqlalchemy.pool import NullPool
 
 from alembic import context
 
@@ -15,29 +18,20 @@ fileConfig(config.config_file_name)
 logger = logging.getLogger('alembic.env')
 
 
-def get_engine():
-    try:
-        # this works with Flask-SQLAlchemy>=3
-        return current_app.extensions['migrate'].db.engine
-    except (TypeError, AttributeError):
-        # compatibility fallback for Flask-SQLAlchemy<3 and Alchemical
-        return current_app.extensions['migrate'].db.get_engine()
-
-
-def get_engine_url():
-    try:
-        return get_engine().url.render_as_string(hide_password=True).replace(
-            '%', '%%')
-    except AttributeError:
-        return str(get_engine().url).replace('%', '%%')
-
-
 # add your model's MetaData object here
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-config.set_main_option('sqlalchemy.url', get_engine_url())
 target_db = current_app.extensions['migrate'].db
+migration_database_uri = current_app.config.get("MIGRATION_DATABASE_URI")
+if not migration_database_uri:
+    raise RuntimeError(
+        "MIGRATION_DATABASE_URL must be configured for database migrations"
+    )
+config.set_main_option(
+    "sqlalchemy.url",
+    str(migration_database_uri).replace("%", "%%"),
+)
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -49,6 +43,18 @@ def get_metadata():
     if hasattr(target_db, 'metadatas'):
         return target_db.metadatas[None]
     return target_db.metadata
+
+
+def get_migration_engine() -> tuple[Engine, bool]:
+    if current_app.config["APP_ENV"] == "testing":
+        return target_db.engine, False
+
+    engine = create_engine(
+        migration_database_uri,
+        pool_pre_ping=True,
+        poolclass=NullPool,
+    )
+    return engine, True
 
 
 def run_migrations_offline():
@@ -94,17 +100,21 @@ def run_migrations_online():
     if conf_args.get("process_revision_directives") is None:
         conf_args["process_revision_directives"] = process_revision_directives
 
-    connectable = get_engine()
+    connectable, owns_engine = get_migration_engine()
 
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=get_metadata(),
-            **conf_args
-        )
+    try:
+        with connectable.connect() as connection:
+            context.configure(
+                connection=connection,
+                target_metadata=get_metadata(),
+                **conf_args
+            )
 
-        with context.begin_transaction():
-            context.run_migrations()
+            with context.begin_transaction():
+                context.run_migrations()
+    finally:
+        if owns_engine:
+            connectable.dispose()
 
 
 if context.is_offline_mode():

@@ -38,7 +38,7 @@ Run the isolated suite explicitly with:
 python -m pytest -m unit
 ```
 
-The following selections are reserved for later harness increments:
+PostgreSQL categories must be selected explicitly:
 
 ```powershell
 python -m pytest -m postgres
@@ -46,12 +46,22 @@ python -m pytest -m migration
 python -m pytest -m concurrency
 ```
 
-At the current harness stage, these explicit selections are rejected before
-collection. Harness increment B will replace that temporary block with the
-reusable database safety guard. Database-category tests must continue to fail
-closed unless that guard validates the dedicated test branch. Marker
-registration alone does not grant permission to connect, migrate, write, reset,
-downgrade, delete, or run concurrency operations.
+Before collecting one of these selections, the reusable database safety guard
+validates configuration without opening a connection. It requires the exact
+non-secret branch marker
+`POSTGRES_TEST_BRANCH_NAME=backend-integration-test`, a pooled Neon
+`POSTGRES_TEST_DATABASE_URL`, PostgreSQL TLS, and separation from configured
+development and production branches. Migration selections also require a
+direct `MIGRATION_DATABASE_URL` for the same test endpoint. Validation errors
+name variables but never render database URLs or credentials.
+
+The branch marker documents operator intent; it does not derive or prove the
+human-readable Neon branch name from a connection URL. Add it manually to the
+local `.env`. Never place credentials in `.env.example`.
+
+Passing the guard does not itself connect, migrate, write, reset, downgrade,
+delete, or run concurrency operations. Fixtures for any destructive operation
+must call the guard with its destructive requirement enabled.
 
 Destructive PostgreSQL execution additionally requires an exact
 `ALLOW_DESTRUCTIVE_POSTGRES_TESTS=true` value and the separately required user

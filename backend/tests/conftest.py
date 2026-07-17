@@ -8,6 +8,46 @@ from app import create_app
 from app.extensions import db
 
 
+POSTGRES_TEST_MARKERS = frozenset(
+    {
+        "postgres",
+        "migration",
+        "concurrency",
+    }
+)
+SAFE_DEFAULT_MARK_EXPRESSION = (
+    "not postgres and not migration and not concurrency"
+)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Fail closed for explicit database selections until the guard exists."""
+    marker_expression = config.option.markexpr
+    if not marker_expression or marker_expression == SAFE_DEFAULT_MARK_EXPRESSION:
+        return
+
+    requests_postgres_category = any(
+        marker_name in marker_expression
+        for marker_name in POSTGRES_TEST_MARKERS
+    )
+    if requests_postgres_category:
+        raise pytest.UsageError(
+            "PostgreSQL-category selection is blocked until the reusable "
+            "database safety guard is implemented"
+        )
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Classify tests without a PostgreSQL category as isolated unit tests."""
+    for item in items:
+        has_postgres_category = any(
+            item.get_closest_marker(marker_name) is not None
+            for marker_name in POSTGRES_TEST_MARKERS
+        )
+        if not has_postgres_category:
+            item.add_marker(pytest.mark.unit)
+
+
 @pytest.fixture()
 def app() -> Iterator[Flask]:
     application = create_app("testing")

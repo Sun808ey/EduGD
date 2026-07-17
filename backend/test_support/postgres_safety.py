@@ -71,6 +71,15 @@ def validate_postgres_test_environment(
             "PostgreSQL test branch"
         )
 
+    destructive_allowed = values.get(DESTRUCTIVE_OPT_IN_VARIABLE) == "true"
+    if require_destructive and not destructive_allowed:
+        _fail(
+            f"{DESTRUCTIVE_OPT_IN_VARIABLE} must be exactly true for "
+            "destructive PostgreSQL tests"
+        )
+    if require_destructive:
+        require_migration = True
+
     application_database_url = values.get(APP_DATABASE_VARIABLE, "")
     if not application_database_url:
         _fail(f"{APP_DATABASE_VARIABLE} is required")
@@ -99,14 +108,11 @@ def validate_postgres_test_environment(
                 "must target the same dedicated Neon test branch"
             )
 
-    _reject_protected_database_reuse(values, application_url, migration_url)
-
-    destructive_allowed = values.get(DESTRUCTIVE_OPT_IN_VARIABLE) == "true"
-    if require_destructive and not destructive_allowed:
-        _fail(
-            f"{DESTRUCTIVE_OPT_IN_VARIABLE} must be exactly true for "
-            "destructive PostgreSQL tests"
-        )
+    _reject_protected_database_reuse(
+        values,
+        application_url,
+        migration_url,
+    )
 
     return ApprovedPostgresTestEnvironment(
         application_database_url=application_database_url,
@@ -114,6 +120,39 @@ def validate_postgres_test_environment(
         branch_name=branch_name,
         destructive_allowed=destructive_allowed,
     )
+
+
+def validate_connected_postgres_test_environment(
+    connection: object,
+    approved: ApprovedPostgresTestEnvironment,
+    *,
+    expected_database_url: str | None = None,
+    require_destructive: bool = False,
+) -> None:
+    """Verify the actual libpq target without rendering connection details."""
+    if require_destructive and not approved.destructive_allowed:
+        _fail("Destructive PostgreSQL access has not been approved")
+
+    configured_url = expected_database_url or approved.application_database_url
+    parsed_url = _validate_url("approved PostgreSQL test URL", configured_url)
+    driver_connection = getattr(
+        getattr(connection, "connection", None),
+        "driver_connection",
+        connection,
+    )
+    connection_info = getattr(driver_connection, "info", None)
+    if connection_info is None:
+        _fail("Connected PostgreSQL identity is unavailable")
+
+    actual_host = getattr(connection_info, "host", "")
+    actual_database = getattr(connection_info, "dbname", "")
+    tls_active = getattr(connection_info, "ssl_in_use", False)
+    if _host_identity(actual_host) != _endpoint_identity(parsed_url):
+        _fail("Connected PostgreSQL endpoint does not match the approved target")
+    if actual_database != parsed_url.database:
+        _fail("Connected PostgreSQL database does not match the approved target")
+    if tls_active is not True:
+        _fail("Connected PostgreSQL session must use TLS")
 
 
 def _validate_url(
@@ -161,7 +200,11 @@ def _reject_protected_database_reuse(
         raw_url = values.get(variable_name)
         if not raw_url:
             continue
-        protected_url = _validate_url(variable_name, raw_url)
+        protected_url = _validate_url(
+            variable_name,
+            raw_url,
+            require_pooled=True,
+        )
         if _endpoint_identity(protected_url) in test_identities:
             _fail(
                 "PostgreSQL tests must use a Neon branch separate from "
@@ -170,7 +213,11 @@ def _reject_protected_database_reuse(
 
 
 def _endpoint_identity(database_url: URL) -> str:
-    hostname = (database_url.host or "").lower()
+    return _host_identity(database_url.host or "")
+
+
+def _host_identity(hostname: str) -> str:
+    hostname = hostname.lower()
     endpoint_name, separator, remainder = hostname.partition(".")
     if endpoint_name.endswith("-pooler"):
         endpoint_name = endpoint_name.removesuffix("-pooler")
@@ -185,5 +232,6 @@ __all__ = [
     "APPROVED_POSTGRES_TEST_BRANCH",
     "ApprovedPostgresTestEnvironment",
     "PostgresTestSafetyError",
+    "validate_connected_postgres_test_environment",
     "validate_postgres_test_environment",
 ]

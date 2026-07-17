@@ -3,6 +3,7 @@ import pytest
 from test_support.postgres_safety import (
     APPROVED_POSTGRES_TEST_BRANCH,
     PostgresTestSafetyError,
+    validate_connected_postgres_test_environment,
     validate_postgres_test_environment,
 )
 
@@ -15,6 +16,14 @@ MIGRATION_URL = (
     "postgresql://ep-integration.us-east-2.aws.neon.tech/"
     "neondb?sslmode=require"
 )
+DEVELOPMENT_URL = (
+    "postgresql://ep-development-pooler.us-east-2.aws.neon.tech/"
+    "neondb?sslmode=require"
+)
+PRODUCTION_URL = (
+    "postgresql://ep-production-pooler.us-east-2.aws.neon.tech/"
+    "neondb?sslmode=require"
+)
 
 
 def safe_environment(**overrides: str) -> dict[str, str]:
@@ -23,6 +32,8 @@ def safe_environment(**overrides: str) -> dict[str, str]:
         "POSTGRES_TEST_DATABASE_URL": APPLICATION_URL,
         "MIGRATION_DATABASE_URL": MIGRATION_URL,
         "ALLOW_DESTRUCTIVE_POSTGRES_TESTS": "false",
+        "DEVELOPMENT_DATABASE_URL": DEVELOPMENT_URL,
+        "PRODUCTION_DATABASE_URL": PRODUCTION_URL,
     }
     environment.update(overrides)
     return environment
@@ -121,7 +132,7 @@ def test_guard_rejects_a_protected_branch_even_with_pooling_difference(
     protected_variable: str,
 ) -> None:
     environment = safe_environment()
-    environment[protected_variable] = MIGRATION_URL
+    environment[protected_variable] = APPLICATION_URL
 
     with pytest.raises(PostgresTestSafetyError, match="separate"):
         validate_postgres_test_environment(environment)
@@ -140,6 +151,25 @@ def test_guard_requires_exact_destructive_opt_in() -> None:
     )
 
     assert approved.destructive_allowed is True
+
+
+@pytest.mark.parametrize(
+    "missing_variable",
+    ["MIGRATION_DATABASE_URL"],
+)
+def test_destructive_guard_requires_direct_migration_target(
+    missing_variable: str,
+) -> None:
+    environment = safe_environment(
+        ALLOW_DESTRUCTIVE_POSTGRES_TESTS="true"
+    )
+    environment.pop(missing_variable)
+
+    with pytest.raises(PostgresTestSafetyError, match=missing_variable):
+        validate_postgres_test_environment(
+            environment,
+            require_destructive=True,
+        )
 
 
 def test_guard_errors_and_result_never_disclose_credentials() -> None:
@@ -182,3 +212,56 @@ def test_invalid_url_does_not_retain_a_parser_exception() -> None:
     assert error.value.__cause__ is None
     assert username not in str(error.value)
     assert password not in str(error.value)
+
+
+class FakeConnectionInfo:
+    def __init__(
+        self,
+        *,
+        host: str = "ep-integration-pooler.us-east-2.aws.neon.tech",
+        dbname: str = "neondb",
+        ssl_in_use: bool = True,
+    ) -> None:
+        self.host = host
+        self.dbname = dbname
+        self.ssl_in_use = ssl_in_use
+
+
+class FakeConnection:
+    def __init__(self, info: FakeConnectionInfo) -> None:
+        self.info = info
+
+
+def test_connected_guard_accepts_exact_endpoint_database_and_tls() -> None:
+    approved = validate_postgres_test_environment(safe_environment())
+
+    validate_connected_postgres_test_environment(
+        FakeConnection(FakeConnectionInfo()),
+        approved,
+    )
+
+
+@pytest.mark.parametrize(
+    ("connection_info", "expected_message"),
+    [
+        (
+            FakeConnectionInfo(
+                host="ep-development-pooler.us-east-2.aws.neon.tech"
+            ),
+            "endpoint",
+        ),
+        (FakeConnectionInfo(dbname="other_database"), "database"),
+        (FakeConnectionInfo(ssl_in_use=False), "TLS"),
+    ],
+)
+def test_connected_guard_fails_closed_for_wrong_live_identity(
+    connection_info: FakeConnectionInfo,
+    expected_message: str,
+) -> None:
+    approved = validate_postgres_test_environment(safe_environment())
+
+    with pytest.raises(PostgresTestSafetyError, match=expected_message):
+        validate_connected_postgres_test_environment(
+            FakeConnection(connection_info),
+            approved,
+        )

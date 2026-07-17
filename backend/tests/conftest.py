@@ -6,6 +6,10 @@ from flask_migrate import upgrade
 
 from app import create_app
 from app.extensions import db
+from test_support.postgres_safety import (
+    PostgresTestSafetyError,
+    validate_postgres_test_environment,
+)
 
 
 POSTGRES_TEST_MARKERS = frozenset(
@@ -21,9 +25,12 @@ SAFE_DEFAULT_MARK_EXPRESSION = (
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Fail closed for explicit database selections until the guard exists."""
+    """Validate safety before collecting an explicit PostgreSQL category."""
     marker_expression = config.option.markexpr
-    if not marker_expression or marker_expression == SAFE_DEFAULT_MARK_EXPRESSION:
+    if (
+        not marker_expression
+        or marker_expression == SAFE_DEFAULT_MARK_EXPRESSION
+    ):
         return
 
     requests_postgres_category = any(
@@ -31,10 +38,12 @@ def pytest_configure(config: pytest.Config) -> None:
         for marker_name in POSTGRES_TEST_MARKERS
     )
     if requests_postgres_category:
-        raise pytest.UsageError(
-            "PostgreSQL-category selection is blocked until the reusable "
-            "database safety guard is implemented"
-        )
+        try:
+            validate_postgres_test_environment(
+                require_migration="migration" in marker_expression,
+            )
+        except PostgresTestSafetyError as error:
+            raise pytest.UsageError(str(error)) from None
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:

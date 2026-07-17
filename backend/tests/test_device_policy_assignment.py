@@ -128,11 +128,15 @@ def test_assignment_replacement_preserves_history(app: Flask) -> None:
         db.session.add(replacement_assignment)
         db.session.commit()
 
-        assignments = db.session.execute(
-            select(DevicePolicyAssignment)
-            .where(DevicePolicyAssignment.device_id == device.id)
-            .order_by(DevicePolicyAssignment.id)
-        ).scalars().all()
+        assignments = (
+            db.session.execute(
+                select(DevicePolicyAssignment)
+                .where(DevicePolicyAssignment.device_id == device.id)
+                .order_by(DevicePolicyAssignment.id)
+            )
+            .scalars()
+            .all()
+        )
 
         assert len(assignments) == 2
         assert assignments[0].status == "superseded"

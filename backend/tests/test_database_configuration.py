@@ -11,22 +11,16 @@ from app.config import (
     validate_database_separation,
 )
 
-
 DEVELOPMENT_URL = (
-    "postgresql://ep-development-pooler.us-east-2.aws.neon.tech/"
-    "neondb?sslmode=require"
+    "postgresql://ep-development-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
 )
-TEST_URL = (
-    "postgresql://ep-integration.us-east-2.aws.neon.tech/"
-    "neondb?sslmode=require"
-)
+TEST_URL = "postgresql://ep-integration.us-east-2.aws.neon.tech/neondb?sslmode=require"
 PRODUCTION_URL = (
     "postgresql://ep-production-pooler.us-east-2.aws.neon.tech/"
     "neondb?sslmode=verify-full"
 )
 MIGRATION_URL = (
-    "postgresql://ep-development.us-east-2.aws.neon.tech/"
-    "neondb?sslmode=require"
+    "postgresql://ep-development.us-east-2.aws.neon.tech/neondb?sslmode=require"
 )
 DATABASE_VARIABLES = (
     "DATABASE_URL",
@@ -103,18 +97,9 @@ def test_missing_environment_database_fails_closed(
     "database_url",
     [
         "sqlite:///development.db",
-        (
-            "postgresql://ep-development-pooler.example.com/"
-            "neondb?sslmode=require"
-        ),
-        (
-            "postgresql://ep-development-pooler.us-east-2.aws.neon.tech/"
-            "neondb"
-        ),
-        (
-            "postgresql://ep-development.us-east-2.aws.neon.tech/"
-            "neondb?sslmode=require"
-        ),
+        ("postgresql://ep-development-pooler.example.com/neondb?sslmode=require"),
+        ("postgresql://ep-development-pooler.us-east-2.aws.neon.tech/neondb"),
+        ("postgresql://ep-development.us-east-2.aws.neon.tech/neondb?sslmode=require"),
     ],
 )
 def test_development_rejects_unsafe_or_non_pooled_database_url(
@@ -148,20 +133,13 @@ def test_migrations_require_direct_neon_url(
 
     monkeypatch.setenv("MIGRATION_DATABASE_URL", MIGRATION_URL)
 
-    assert (
-        resolve_migration_database_uri("development", None)
-        == MIGRATION_URL
-    )
+    assert resolve_migration_database_uri("development", None) == MIGRATION_URL
 
 
-def test_sqlite_unit_tests_reuse_the_application_database_for_migrations(
-) -> None:
+def test_sqlite_unit_tests_reuse_the_application_database_for_migrations() -> None:
     application_url = TestingConfig.SQLALCHEMY_DATABASE_URI
 
-    assert (
-        resolve_migration_database_uri("testing", application_url)
-        == application_url
-    )
+    assert resolve_migration_database_uri("testing", application_url) == application_url
 
 
 def test_configured_application_databases_must_use_separate_branches(

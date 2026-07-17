@@ -10,7 +10,6 @@ from app.services.device_registration import (
     register_device,
 )
 
-
 device_bp = Blueprint("devices", __name__)
 
 
@@ -33,9 +32,7 @@ def register_device_endpoint() -> tuple[Response, int]:
     except DeviceRegistrationDatabaseError:
         return jsonify({"error": "internal server error"}), 500
 
-    message = (
-        "device registered" if result.created else "device already registered"
-    )
+    message = "device registered" if result.created else "device already registered"
     status_code = 201 if result.created else 200
     return (
         jsonify(

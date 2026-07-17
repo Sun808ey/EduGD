@@ -4,7 +4,6 @@ from uuid import UUID
 from flask import Request
 from werkzeug.exceptions import BadRequest
 
-
 REGISTRATION_FIELDS = frozenset({"device_uuid", "android_version"})
 ANDROID_VERSION_MAX_LENGTH = 32
 
@@ -44,9 +43,7 @@ def validate_device_registration_request(
     unexpected_fields = sorted(set(payload) - REGISTRATION_FIELDS)
     if unexpected_fields:
         field_names = ", ".join(unexpected_fields)
-        raise DeviceRegistrationValidationError(
-            f"unexpected fields: {field_names}"
-        )
+        raise DeviceRegistrationValidationError(f"unexpected fields: {field_names}")
 
     if "device_uuid" not in payload:
         raise DeviceRegistrationValidationError("device_uuid is required")
@@ -64,9 +61,7 @@ def validate_device_registration_request(
 
 def _validate_device_uuid(value: object) -> UUID:
     if not isinstance(value, str) or not value:
-        raise DeviceRegistrationValidationError(
-            "device_uuid must be a valid UUID"
-        )
+        raise DeviceRegistrationValidationError("device_uuid must be a valid UUID")
 
     try:
         return UUID(value)

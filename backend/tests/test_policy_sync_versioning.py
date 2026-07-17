@@ -7,7 +7,6 @@ from flask.testing import FlaskClient
 from app.extensions import db
 from app.models import Device, DevicePolicyAssignment, Policy
 
-
 DEVICE_UUID = "550e8400-e29b-41d4-a716-446655440000"
 POLICY_UUID = "8e65f112-f7c4-4776-b113-e0eef34ec881"
 SYNC_URL = f"/api/v1/sync/policies/{DEVICE_UUID}"
@@ -77,9 +76,7 @@ def test_version_aware_sync_returns_no_update(
     with app.app_context():
         create_device_with_policy()
 
-    response = client.get(
-        f"{SYNC_URL}?current_version={current_version}"
-    )
+    response = client.get(f"{SYNC_URL}?current_version={current_version}")
 
     assert response.status_code == 200
     assert response.get_json() == {

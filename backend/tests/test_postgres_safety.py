@@ -7,22 +7,17 @@ from test_support.postgres_safety import (
     validate_postgres_test_environment,
 )
 
-
 APPLICATION_URL = (
-    "postgresql://ep-integration-pooler.us-east-2.aws.neon.tech/"
-    "neondb?sslmode=require"
+    "postgresql://ep-integration-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
 )
 MIGRATION_URL = (
-    "postgresql://ep-integration.us-east-2.aws.neon.tech/"
-    "neondb?sslmode=require"
+    "postgresql://ep-integration.us-east-2.aws.neon.tech/neondb?sslmode=require"
 )
 DEVELOPMENT_URL = (
-    "postgresql://ep-development-pooler.us-east-2.aws.neon.tech/"
-    "neondb?sslmode=require"
+    "postgresql://ep-development-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
 )
 PRODUCTION_URL = (
-    "postgresql://ep-production-pooler.us-east-2.aws.neon.tech/"
-    "neondb?sslmode=require"
+    "postgresql://ep-production-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
 )
 
 
@@ -92,8 +87,7 @@ def test_guard_accepts_separated_pooled_and_direct_test_urls() -> None:
         (
             {
                 "POSTGRES_TEST_DATABASE_URL": (
-                    "postgresql://ep-integration-pooler.us-east-2.aws.neon.tech/"
-                    "neondb"
+                    "postgresql://ep-integration-pooler.us-east-2.aws.neon.tech/neondb"
                 )
             },
             False,
@@ -160,9 +154,7 @@ def test_guard_requires_exact_destructive_opt_in() -> None:
 def test_destructive_guard_requires_direct_migration_target(
     missing_variable: str,
 ) -> None:
-    environment = safe_environment(
-        ALLOW_DESTRUCTIVE_POSTGRES_TESTS="true"
-    )
+    environment = safe_environment(ALLOW_DESTRUCTIVE_POSTGRES_TESTS="true")
     environment.pop(missing_variable)
 
     with pytest.raises(PostgresTestSafetyError, match=missing_variable):
@@ -245,9 +237,7 @@ def test_connected_guard_accepts_exact_endpoint_database_and_tls() -> None:
     ("connection_info", "expected_message"),
     [
         (
-            FakeConnectionInfo(
-                host="ep-development-pooler.us-east-2.aws.neon.tech"
-            ),
+            FakeConnectionInfo(host="ep-development-pooler.us-east-2.aws.neon.tech"),
             "endpoint",
         ),
         (FakeConnectionInfo(dbname="other_database"), "database"),

@@ -1,14 +1,14 @@
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     UniqueConstraint,
     Uuid,
@@ -20,14 +20,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.extensions import db
 
-
 ANDROID_PACKAGE_PATTERN = re.compile(
     r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$"
 )
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Device(db.Model):

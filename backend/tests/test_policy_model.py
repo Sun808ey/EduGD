@@ -3,10 +3,10 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     DateTime,
     Index,
-    JSON,
     UniqueConstraint,
     Uuid,
 )
@@ -14,7 +14,6 @@ from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.schema import CreateTable
 
 from app.models import Policy
-
 
 VALID_BLOCKED_APPS = [
     "com.facebook.katana",

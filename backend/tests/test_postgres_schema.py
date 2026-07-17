@@ -1,14 +1,14 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import delete, insert, inspect, select
-from sqlalchemy.dialects.postgresql import JSON, UUID as POSTGRES_UUID
+from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.dialects.postgresql import UUID as POSTGRES_UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Device, DevicePolicyAssignment, Policy
-
 
 pytestmark = pytest.mark.postgres
 
@@ -75,9 +75,7 @@ def test_existing_schema_metadata_and_constraints(
     active_index = indexes["uq_device_policy_assignments_active_device"]
     assert active_index["unique"] is True
     assert active_index["column_names"] == ["device_id"]
-    active_predicate = str(
-        active_index["dialect_options"]["postgresql_where"]
-    )
+    active_predicate = str(active_index["dialect_options"]["postgresql_where"])
     assert "status" in active_predicate
     assert "'active'" in active_predicate
 
@@ -102,9 +100,7 @@ def test_existing_schema_metadata_and_constraints(
             name for name, column in policy_columns.items() if column["nullable"]
         },
         "device_policy_assignments": {
-            name
-            for name, column in assignment_columns.items()
-            if column["nullable"]
+            name for name, column in assignment_columns.items() if column["nullable"]
         },
     }
     assert nullable_columns == {
@@ -123,14 +119,11 @@ def test_existing_schema_metadata_and_constraints(
         assert all(columns[name]["type"].timezone for name in timestamp_names)
 
     policy_checks = {
-        constraint["name"]
-        for constraint in inspector.get_check_constraints("policies")
+        constraint["name"] for constraint in inspector.get_check_constraints("policies")
     }
     assignment_checks = {
         constraint["name"]
-        for constraint in inspector.get_check_constraints(
-            "device_policy_assignments"
-        )
+        for constraint in inspector.get_check_constraints("device_policy_assignments")
     }
     assert policy_checks == {"ck_policies_version_positive"}
     assert assignment_checks == {
@@ -173,9 +166,7 @@ def test_uuid_json_primary_keys_uniqueness_and_timestamps(
         assignment.assigned_at,
     )
     assert all(value.tzinfo is not None for value in timestamp_values)
-    assert stored_policy.created_at.utcoffset() == timezone.utc.utcoffset(
-        datetime.now(timezone.utc)
-    )
+    assert stored_policy.created_at.utcoffset() == UTC.utcoffset(datetime.now(UTC))
 
     _expect_integrity_error(
         postgres_session,
@@ -222,9 +213,7 @@ def test_not_null_foreign_keys_and_restrict_delete(
 
     with pytest.raises(IntegrityError):
         with postgres_session.begin_nested():
-            postgres_session.execute(
-                delete(Device).where(Device.id == device.id)
-            )
+            postgres_session.execute(delete(Device).where(Device.id == device.id))
 
 
 def test_existing_check_constraints(postgres_session: Session) -> None:
@@ -249,7 +238,7 @@ def test_existing_check_constraints(postgres_session: Session) -> None:
             device_id=device.id,
             policy_id=policy.id,
             status="active",
-            superseded_at=datetime.now(timezone.utc),
+            superseded_at=datetime.now(UTC),
         ),
         DevicePolicyAssignment(
             device_id=device.id,
@@ -286,7 +275,7 @@ def test_partial_unique_index_allows_only_one_active_assignment(
     )
 
     first_assignment.status = "superseded"
-    first_assignment.superseded_at = datetime.now(timezone.utc)
+    first_assignment.superseded_at = datetime.now(UTC)
     postgres_session.flush()
     replacement = DevicePolicyAssignment(
         device_id=device.id,
@@ -294,8 +283,11 @@ def test_partial_unique_index_allows_only_one_active_assignment(
     )
     postgres_session.add(replacement)
     postgres_session.flush()
-    assert postgres_session.scalar(
-        select(DevicePolicyAssignment).where(
-            DevicePolicyAssignment.id == replacement.id
+    assert (
+        postgres_session.scalar(
+            select(DevicePolicyAssignment).where(
+                DevicePolicyAssignment.id == replacement.id
+            )
         )
-    ) is replacement
+        is replacement
+    )

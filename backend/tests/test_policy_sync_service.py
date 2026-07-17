@@ -14,7 +14,6 @@ from app.services.policy_sync import (
     get_policy_sync_payload,
 )
 
-
 DEVICE_UUID = "550e8400-e29b-41d4-a716-446655440000"
 POLICY_UUID = "8e65f112-f7c4-4776-b113-e0eef34ec881"
 BLOCKED_APPS = [
@@ -57,9 +56,7 @@ def assign_policy(
         policy_id=policy.id,
         policy_version=assignment_version,
         status=assignment_status,
-        superseded_at=(
-            utc_now() if assignment_status == "superseded" else None
-        ),
+        superseded_at=(utc_now() if assignment_status == "superseded" else None),
     )
     db.session.add(assignment)
     db.session.commit()

@@ -9,7 +9,6 @@ import app.routes.sync as sync_routes
 from app.extensions import db
 from app.models import Device, DevicePolicyAssignment, Policy
 
-
 DEVICE_UUID = "550e8400-e29b-41d4-a716-446655440000"
 POLICY_UUID = "8e65f112-f7c4-4776-b113-e0eef34ec881"
 SYNC_URL = f"/api/v1/sync/policies/{DEVICE_UUID}"
@@ -59,9 +58,7 @@ def test_policy_sync_route_returns_active_policy(
         device = create_device()
         assign_active_policy(device)
 
-    response = client.get(
-        f"/api/v1/sync/policies/{DEVICE_UUID.upper()}"
-    )
+    response = client.get(f"/api/v1/sync/policies/{DEVICE_UUID.upper()}")
 
     assert response.status_code == 200
     assert response.content_type == "application/json"

@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import ArgumentError
 
-
 APP_DATABASE_VARIABLE = "POSTGRES_TEST_DATABASE_URL"
 MIGRATION_DATABASE_VARIABLE = "MIGRATION_DATABASE_URL"
 BRANCH_NAME_VARIABLE = "POSTGRES_TEST_BRANCH_NAME"
@@ -100,9 +99,7 @@ def validate_postgres_test_environment(
             migration_database_url,
             require_direct=True,
         )
-        if _endpoint_identity(application_url) != _endpoint_identity(
-            migration_url
-        ):
+        if _endpoint_identity(application_url) != _endpoint_identity(migration_url):
             _fail(
                 f"{APP_DATABASE_VARIABLE} and {MIGRATION_DATABASE_VARIABLE} "
                 "must target the same dedicated Neon test branch"

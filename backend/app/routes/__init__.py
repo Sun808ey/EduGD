@@ -7,7 +7,6 @@ from app.routes.logs import logs_bp
 from app.routes.policies import policy_bp
 from app.routes.sync import sync_bp
 
-
 BLUEPRINTS: tuple[Blueprint, ...] = (
     health_bp,
     auth_bp,

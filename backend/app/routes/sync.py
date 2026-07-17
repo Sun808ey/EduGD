@@ -8,7 +8,6 @@ from app.services.policy_sync import (
     get_version_aware_policy_sync_payload,
 )
 
-
 sync_bp = Blueprint("sync", __name__)
 
 
@@ -24,9 +23,7 @@ def synchronize_policy(device_uuid: str) -> tuple[Response, int]:
                 current_version,
             )
     except InvalidCurrentVersionError:
-        return jsonify(
-            {"error": "current_version must be a non-negative integer"}
-        ), 400
+        return jsonify({"error": "current_version must be a non-negative integer"}), 400
     except InvalidDeviceUUIDError:
         return jsonify({"error": "invalid device UUID"}), 400
     except DeviceNotFoundError:

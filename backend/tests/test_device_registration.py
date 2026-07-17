@@ -12,7 +12,6 @@ from app.models import Device
 from app.schemas import DeviceRegistrationData
 from app.services import device_registration as registration_service
 
-
 DEVICE_UUID = "550e8400-e29b-41d4-a716-446655440000"
 REGISTRATION_URL = "/api/v1/devices/register"
 VALID_PAYLOAD = {

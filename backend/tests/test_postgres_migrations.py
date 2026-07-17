@@ -16,7 +16,6 @@ from test_support.postgres_safety import (
     validate_postgres_test_environment,
 )
 
-
 pytestmark = [pytest.mark.postgres, pytest.mark.migration]
 MIGRATIONS_DIRECTORY = Path(__file__).resolve().parents[1] / "migrations"
 HEAD_REVISION = "3a6f4a9eb4f2"

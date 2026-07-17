@@ -83,9 +83,7 @@ def _validate_production_secrets(app: Flask) -> None:
 
     required_settings = ("SECRET_KEY", "JWT_SECRET_KEY")
     if any(not app.config.get(setting) for setting in required_settings):
-        raise RuntimeError(
-            "Required production secrets must be configured"
-        )
+        raise RuntimeError("Required production secrets must be configured")
 
 
 def _load_models() -> None:

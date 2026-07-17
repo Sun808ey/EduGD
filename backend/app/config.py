@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import cast
 
 from dotenv import load_dotenv
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import ArgumentError
-
 
 BACKEND_DIRECTORY = Path(__file__).resolve().parent.parent
 load_dotenv(BACKEND_DIRECTORY / ".env", override=False)
@@ -91,7 +91,8 @@ CONFIGURATIONS: dict[str, type[Config]] = {
 def get_configuration(
     config_name: str | None = None,
 ) -> tuple[str, type[Config]]:
-    selected_name = (config_name or os.getenv("APP_ENV", "development")).lower()
+    environment_name = cast(str, os.getenv("APP_ENV", "development"))
+    selected_name = (config_name or environment_name).lower()
     try:
         return selected_name, CONFIGURATIONS[selected_name]
     except KeyError as error:
@@ -156,8 +157,7 @@ def validate_database_separation() -> None:
         existing_variable = branch_variables.get(branch_identity)
         if existing_variable is not None:
             raise RuntimeError(
-                "Configured application databases must use separate "
-                "Neon branches"
+                "Configured application databases must use separate Neon branches"
             )
         branch_variables[branch_identity] = variable_name
 
@@ -175,9 +175,7 @@ def validate_migration_target(
         migration_database_uri,
         require_direct=True,
     )
-    if _neon_branch_identity(application_url) != _neon_branch_identity(
-        migration_url
-    ):
+    if _neon_branch_identity(application_url) != _neon_branch_identity(migration_url):
         raise RuntimeError(
             "MIGRATION_DATABASE_URL must target the active application branch"
         )
@@ -201,9 +199,7 @@ def _validate_neon_database_uri(
         "postgresql",
         "postgresql+psycopg2",
     }:
-        raise RuntimeError(
-            f"{variable_name} must contain a PostgreSQL URL"
-        )
+        raise RuntimeError(f"{variable_name} must contain a PostgreSQL URL")
 
     hostname = (parsed_url.host or "").lower()
     if not hostname.endswith(NEON_HOST_SUFFIX):
@@ -211,19 +207,13 @@ def _validate_neon_database_uri(
 
     ssl_mode = parsed_url.query.get("sslmode")
     if ssl_mode not in SECURE_POSTGRES_SSL_MODES:
-        raise RuntimeError(
-            f"{variable_name} must require PostgreSQL TLS"
-        )
+        raise RuntimeError(f"{variable_name} must require PostgreSQL TLS")
 
     is_pooled = hostname.split(".", maxsplit=1)[0].endswith("-pooler")
     if require_pooled and not is_pooled:
-        raise RuntimeError(
-            f"{variable_name} must use a pooled Neon connection"
-        )
+        raise RuntimeError(f"{variable_name} must use a pooled Neon connection")
     if require_direct and is_pooled:
-        raise RuntimeError(
-            f"{variable_name} must use a direct Neon connection"
-        )
+        raise RuntimeError(f"{variable_name} must use a direct Neon connection")
 
     return parsed_url
 

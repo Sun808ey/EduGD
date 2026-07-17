@@ -8,7 +8,6 @@ from test_support.postgres_safety import (
     validate_postgres_test_environment,
 )
 
-
 CONNECT_TIMEOUT_SECONDS = 10
 STATEMENT_TIMEOUT_MILLISECONDS = 10_000
 

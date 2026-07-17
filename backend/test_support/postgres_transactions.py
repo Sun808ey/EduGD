@@ -43,9 +43,7 @@ def isolated_postgres_session(
             outer_transaction.rollback()
         connection.close()
         if outer_transaction is None or outer_transaction.is_active:
-            raise AssertionError(
-                "PostgreSQL outer test transaction was not cleaned up"
-            )
+            raise AssertionError("PostgreSQL outer test transaction was not cleaned up")
         if not connection.closed:
             raise AssertionError("PostgreSQL test connection was not closed")
 

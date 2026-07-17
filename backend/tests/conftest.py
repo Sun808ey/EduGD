@@ -14,7 +14,6 @@ from test_support.postgres_safety import (
 )
 from test_support.postgres_transactions import isolated_postgres_session
 
-
 POSTGRES_TEST_MARKERS = frozenset(
     {
         "postgres",
@@ -22,23 +21,17 @@ POSTGRES_TEST_MARKERS = frozenset(
         "concurrency",
     }
 )
-SAFE_DEFAULT_MARK_EXPRESSION = (
-    "not postgres and not migration and not concurrency"
-)
+SAFE_DEFAULT_MARK_EXPRESSION = "not postgres and not migration and not concurrency"
 
 
 def pytest_configure(config: pytest.Config) -> None:
     """Validate safety before collecting an explicit PostgreSQL category."""
     marker_expression = config.option.markexpr
-    if (
-        not marker_expression
-        or marker_expression == SAFE_DEFAULT_MARK_EXPRESSION
-    ):
+    if not marker_expression or marker_expression == SAFE_DEFAULT_MARK_EXPRESSION:
         return
 
     requests_postgres_category = any(
-        marker_name in marker_expression
-        for marker_name in POSTGRES_TEST_MARKERS
+        marker_name in marker_expression for marker_name in POSTGRES_TEST_MARKERS
     )
     if requests_postgres_category:
         try:

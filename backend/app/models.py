@@ -1,6 +1,6 @@
 import re
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
     JSON,
@@ -25,6 +25,14 @@ ANDROID_PACKAGE_PATTERN = re.compile(
     r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$"
 )
 DEVICE_STATUSES = frozenset({"active", "suspended", "retired"})
+DEVICE_REGISTRATION_EVENT_TYPES = frozenset(
+    {
+        "registered",
+        "duplicate",
+        "upgrade_requires_authentication",
+        "downgrade_rejected",
+    }
+)
 
 
 def utc_now() -> datetime:
@@ -97,6 +105,10 @@ class Device(db.Model):
     policy_assignments: Mapped[list["DevicePolicyAssignment"]] = relationship(
         back_populates="device",
         order_by="DevicePolicyAssignment.assigned_at",
+    )
+    registration_events: Mapped[list["DeviceRegistrationEvent"]] = relationship(
+        back_populates="device",
+        order_by="DeviceRegistrationEvent.created_at",
     )
 
     @validates("status")
@@ -198,6 +210,61 @@ class Policy(db.Model):
         return list(value)
 
 
+class DeviceRegistrationEvent(db.Model):
+    __tablename__ = "device_registration_events"
+    __table_args__ = (
+        UniqueConstraint("event_uuid", name="uq_device_registration_events_uuid"),
+        CheckConstraint(
+            "event_type IN ('registered', 'duplicate', "
+            "'upgrade_requires_authentication', 'downgrade_rejected')",
+            name="ck_device_registration_events_type",
+        ),
+        CheckConstraint(
+            "reported_api_level BETWEEN 21 AND 29",
+            name="ck_device_registration_events_reported_api_level",
+        ),
+        CheckConstraint(
+            "stored_api_level BETWEEN 21 AND 29",
+            name="ck_device_registration_events_stored_api_level",
+        ),
+        Index(
+            "ix_device_registration_events_device_created",
+            "device_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        nullable=False,
+        default=uuid4,
+    )
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    stored_android_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    stored_api_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    reported_android_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    reported_api_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+    device: Mapped[Device] = relationship(back_populates="registration_events")
+
+    @validates("event_type")
+    def validate_event_type(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in DEVICE_REGISTRATION_EVENT_TYPES:
+            raise ValueError("invalid device registration event type")
+        return value
+
+
 class DevicePolicyAssignment(db.Model):
     __tablename__ = "device_policy_assignments"
     __table_args__ = (
@@ -265,4 +332,11 @@ class DevicePolicyAssignment(db.Model):
     policy: Mapped[Policy] = relationship(back_populates="device_assignments")
 
 
-__all__ = ["DEVICE_STATUSES", "Device", "DevicePolicyAssignment", "Policy"]
+__all__ = [
+    "DEVICE_REGISTRATION_EVENT_TYPES",
+    "DEVICE_STATUSES",
+    "Device",
+    "DevicePolicyAssignment",
+    "DeviceRegistrationEvent",
+    "Policy",
+]

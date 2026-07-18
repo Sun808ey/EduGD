@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
-from app.models import Device
+from app.models import Device, DeviceRegistrationEvent
 from app.schemas import DeviceRegistrationData
 
 
@@ -47,7 +47,7 @@ def register_device(
     try:
         existing_device = _find_device(registration_data.device_uuid)
         if existing_device is not None:
-            return _result_for_existing_device(
+            return _complete_existing_registration(
                 existing_device,
                 registration_data,
             )
@@ -59,8 +59,11 @@ def register_device(
             status="active",
         )
         db.session.add(device)
+        db.session.flush()
+        _record_registration_event(device, registration_data, "registered")
         response_data = _serialize_device(device)
         db.session.commit()
+        _log_registration_outcome("device_registration_created")
         return DeviceRegistrationResult(
             device=response_data,
             created=True,
@@ -95,24 +98,62 @@ def _resolve_concurrent_duplicate(
             "device registration database operation failed"
         ) from original_error
 
-    return _result_for_existing_device(existing_device, registration_data)
+    return _complete_existing_registration(existing_device, registration_data)
 
 
-def _result_for_existing_device(
+def _complete_existing_registration(
     existing_device: Device,
     registration_data: DeviceRegistrationData,
 ) -> DeviceRegistrationResult:
-    if (
-        existing_device.android_version != registration_data.android_version
-        or existing_device.api_level != registration_data.api_level
-    ):
-        raise DeviceRegistrationConflictError(
-            "device UUID already registered with different data"
+    if existing_device.api_level < registration_data.api_level:
+        event_type = "upgrade_requires_authentication"
+        conflict_message = (
+            "device metadata upgrade requires authenticated synchronization"
         )
+    elif existing_device.api_level > registration_data.api_level:
+        event_type = "downgrade_rejected"
+        conflict_message = "reported Android downgrade rejected"
+    elif existing_device.android_version != registration_data.android_version:
+        event_type = "downgrade_rejected"
+        conflict_message = "reported Android metadata conflicts with stored data"
+    else:
+        event_type = "duplicate"
+        conflict_message = None
+
+    _record_registration_event(existing_device, registration_data, event_type)
+    db.session.commit()
+    _log_registration_outcome(f"device_registration_{event_type}")
+
+    if conflict_message is not None:
+        raise DeviceRegistrationConflictError(conflict_message)
 
     return DeviceRegistrationResult(
         device=_serialize_device(existing_device),
         created=False,
+    )
+
+
+def _record_registration_event(
+    device: Device,
+    registration_data: DeviceRegistrationData,
+    event_type: str,
+) -> None:
+    db.session.add(
+        DeviceRegistrationEvent(
+            device_id=device.id,
+            event_type=event_type,
+            stored_android_version=device.android_version,
+            stored_api_level=device.api_level,
+            reported_android_version=registration_data.android_version,
+            reported_api_level=registration_data.api_level,
+        )
+    )
+
+
+def _log_registration_outcome(event_name: str) -> None:
+    current_app.logger.info(
+        "Device registration lifecycle event completed",
+        extra={"event": event_name},
     )
 
 

@@ -19,6 +19,13 @@ It does not mean later remediation increments have been implemented.
   and database constraints preserve the same compatibility boundary.
 - An authenticated OS upgrade updates device metadata and appends an immutable
   audit event. A reported downgrade is rejected and flagged for review.
+- Until device authentication exists, unauthenticated re-registration cannot
+  change stored Android metadata. Identical requests are idempotent, upgrades
+  return an authentication-required conflict, and downgrades are rejected.
+- Every valid registration lifecycle attempt for a known or newly created
+  device appends an immutable `DeviceRegistrationEvent` in the same database
+  transaction. Operational logs record only a fixed outcome category and do
+  not include device UUIDs or submitted metadata.
 - Suspended and retired devices receive HTTP 403 with operation `blocked` and
   retain their last locally enforced policy.
 

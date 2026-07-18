@@ -1,3 +1,5 @@
+import logging
+from io import StringIO
 from typing import Any
 from uuid import UUID
 
@@ -8,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
-from app.models import Device
+from app.models import Device, DeviceRegistrationEvent
 from app.schemas import DeviceRegistrationData
 from app.services import device_registration as registration_service
 
@@ -44,6 +46,15 @@ def test_registers_new_device(client: FlaskClient, app: Flask) -> None:
         assert device.registered_at is not None
         assert device.created_at is not None
         assert device.updated_at is not None
+        event = db.session.execute(select(DeviceRegistrationEvent)).scalar_one()
+        assert event.device_id == device.id
+        assert event.event_uuid is not None
+        assert event.event_type == "registered"
+        assert event.stored_android_version == "10"
+        assert event.stored_api_level == 29
+        assert event.reported_android_version == "10"
+        assert event.reported_api_level == 29
+        assert event.created_at is not None
 
 
 def test_identical_registration_is_idempotent(
@@ -70,10 +81,17 @@ def test_identical_registration_is_idempotent(
             select(func.count()).select_from(Device)
         ).scalar_one()
         assert device_count == 1
+        event_types = db.session.scalars(
+            select(DeviceRegistrationEvent.event_type).order_by(
+                DeviceRegistrationEvent.id
+            )
+        ).all()
+        assert event_types == ["registered", "duplicate"]
 
 
-def test_existing_uuid_with_different_data_is_rejected(
+def test_reported_android_downgrade_is_rejected_and_audited(
     client: FlaskClient,
+    app: Flask,
 ) -> None:
     client.post(REGISTRATION_URL, json=VALID_PAYLOAD)
 
@@ -83,9 +101,47 @@ def test_existing_uuid_with_different_data_is_rejected(
     )
 
     assert response.status_code == 409
-    assert response.get_json() == {
-        "error": "device UUID already registered with different data"
+    assert response.get_json() == {"error": "reported Android downgrade rejected"}
+
+    with app.app_context():
+        device = db.session.execute(select(Device)).scalar_one()
+        assert device.android_version == "10"
+        assert device.api_level == 29
+        event_types = db.session.scalars(
+            select(DeviceRegistrationEvent.event_type).order_by(
+                DeviceRegistrationEvent.id
+            )
+        ).all()
+        assert event_types == ["registered", "downgrade_rejected"]
+
+
+def test_reported_android_upgrade_requires_authentication_and_is_audited(
+    client: FlaskClient,
+    app: Flask,
+) -> None:
+    initial_payload = {
+        **VALID_PAYLOAD,
+        "android_version": "9",
+        "api_level": 28,
     }
+    client.post(REGISTRATION_URL, json=initial_payload)
+
+    response = client.post(REGISTRATION_URL, json=VALID_PAYLOAD)
+
+    assert response.status_code == 409
+    assert response.get_json() == {
+        "error": "device metadata upgrade requires authenticated synchronization"
+    }
+    with app.app_context():
+        device = db.session.execute(select(Device)).scalar_one()
+        assert device.android_version == "9"
+        assert device.api_level == 28
+        event_types = db.session.scalars(
+            select(DeviceRegistrationEvent.event_type).order_by(
+                DeviceRegistrationEvent.id
+            )
+        ).all()
+        assert event_types == ["registered", "upgrade_requires_authentication"]
 
 
 @pytest.mark.parametrize(
@@ -153,6 +209,10 @@ def test_registration_database_failure_rolls_back(
         assert response.get_json() == {"error": "internal server error"}
         assert rollback_calls == 1
         assert db.session.execute(select(Device)).scalar_one_or_none() is None
+        assert (
+            db.session.execute(select(DeviceRegistrationEvent)).scalar_one_or_none()
+            is None
+        )
 
 
 def test_registration_rejects_body_over_endpoint_limit(
@@ -190,8 +250,13 @@ def test_unique_constraint_race_returns_idempotent_result(
     def find_device(_device_uuid: UUID) -> Device | None:
         return next(lookup_results)
 
-    def fail_commit() -> None:
-        raise IntegrityError("INSERT", {}, Exception("duplicate"))
+    commit_calls = 0
+
+    def fail_first_commit() -> None:
+        nonlocal commit_calls
+        commit_calls += 1
+        if commit_calls == 1:
+            raise IntegrityError("INSERT", {}, Exception("duplicate"))
 
     def track_rollback() -> None:
         nonlocal rollback_calls
@@ -199,7 +264,7 @@ def test_unique_constraint_race_returns_idempotent_result(
 
     with app.app_context():
         monkeypatch.setattr(registration_service, "_find_device", find_device)
-        monkeypatch.setattr(db.session, "commit", fail_commit)
+        monkeypatch.setattr(db.session, "commit", fail_first_commit)
         monkeypatch.setattr(db.session, "rollback", track_rollback)
 
         result = registration_service.register_device(
@@ -213,3 +278,33 @@ def test_unique_constraint_race_returns_idempotent_result(
     assert result.created is False
     assert result.device.device_uuid == DEVICE_UUID
     assert rollback_calls == 1
+    assert commit_calls == 2
+
+
+def test_registration_logs_exclude_identity_and_request_metadata(
+    client: FlaskClient,
+    app: Flask,
+) -> None:
+    log_stream = StringIO()
+    log_handler = app.logger.handlers[0]
+    assert isinstance(log_handler, logging.StreamHandler)
+    original_stream = log_handler.stream
+    original_level = app.logger.level
+    original_disabled = app.logger.disabled
+    log_handler.setStream(log_stream)
+    app.logger.disabled = False
+    app.logger.setLevel(logging.INFO)
+
+    try:
+        response = client.post(REGISTRATION_URL, json=VALID_PAYLOAD)
+    finally:
+        log_handler.setStream(original_stream)
+        app.logger.setLevel(original_level)
+        app.logger.disabled = original_disabled
+
+    assert response.status_code == 201
+    log_output = log_stream.getvalue()
+    assert "device_registration_created" in log_output
+    assert DEVICE_UUID not in log_output
+    assert '"android_version"' not in log_output
+    assert '"api_level"' not in log_output

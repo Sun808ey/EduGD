@@ -41,7 +41,12 @@ def test_existing_schema_metadata_and_constraints(
     postgres_session: Session,
 ) -> None:
     inspector = inspect(postgres_session.connection())
-    expected_tables = {"devices", "policies", "device_policy_assignments"}
+    expected_tables = {
+        "devices",
+        "policies",
+        "device_policy_assignments",
+        "device_registration_events",
+    }
     assert expected_tables.issubset(set(inspector.get_table_names()))
 
     for table_name in expected_tables:
@@ -142,6 +147,28 @@ def test_existing_schema_metadata_and_constraints(
         "ck_device_policy_assignments_status",
         "ck_device_policy_assignments_status_timestamp",
         "ck_device_policy_assignments_version_positive",
+    }
+
+    registration_foreign_keys = inspector.get_foreign_keys("device_registration_events")
+    assert len(registration_foreign_keys) == 1
+    assert registration_foreign_keys[0]["constrained_columns"] == ["device_id"]
+    assert registration_foreign_keys[0]["referred_table"] == "devices"
+    assert registration_foreign_keys[0]["options"].get("ondelete") == "RESTRICT"
+
+    registration_columns = {
+        column["name"]
+        for column in inspector.get_columns("device_registration_events")
+        if column["nullable"]
+    }
+    assert registration_columns == set()
+    registration_checks = {
+        constraint["name"]
+        for constraint in inspector.get_check_constraints("device_registration_events")
+    }
+    assert registration_checks == {
+        "ck_device_registration_events_reported_api_level",
+        "ck_device_registration_events_stored_api_level",
+        "ck_device_registration_events_type",
     }
 
 

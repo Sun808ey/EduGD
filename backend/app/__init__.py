@@ -114,9 +114,14 @@ def _validate_startup_configuration(app: Flask) -> None:
 
 
 def _load_models() -> None:
-    from app.models import Device, DevicePolicyAssignment, Policy
+    from app.models import (
+        Device,
+        DevicePolicyAssignment,
+        DeviceRegistrationEvent,
+        Policy,
+    )
 
-    _ = (Device, DevicePolicyAssignment, Policy)
+    _ = (Device, DevicePolicyAssignment, DeviceRegistrationEvent, Policy)
 
 
 def register_blueprints(app: Flask) -> None:

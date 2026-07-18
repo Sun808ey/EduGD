@@ -1,8 +1,13 @@
 from contextlib import closing
+from typing import Any
 
 import psycopg2
 import pytest
+from flask import Flask
+from sqlalchemy import event
 
+from app.extensions import db
+from app.services.readiness import check_readiness
 from test_support.postgres_safety import (
     validate_connected_postgres_test_environment,
     validate_postgres_test_environment,
@@ -55,3 +60,41 @@ def test_approved_postgres_connection_is_read_only_and_uses_tls() -> None:
         ) from None
 
     assert result == (1, True, True, True)
+
+
+@pytest.mark.postgres
+def test_live_postgres_readiness_applies_statement_timeout(
+    postgres_app: Flask,
+) -> None:
+    captured_parameters: list[object] = []
+
+    def capture_readiness_statement(
+        _connection: Any,
+        _cursor: Any,
+        statement: str,
+        parameters: object,
+        _context: Any,
+        _executemany: bool,
+    ) -> None:
+        if "set_config" in statement and "statement_timeout" in statement:
+            captured_parameters.append(parameters)
+
+    with postgres_app.app_context():
+        approved = validate_postgres_test_environment()
+        engine = db.engine
+        with engine.connect() as connection:
+            validate_connected_postgres_test_environment(connection, approved)
+        event.listen(engine, "before_cursor_execute", capture_readiness_statement)
+        try:
+            check_readiness(postgres_app)
+        finally:
+            event.remove(
+                engine,
+                "before_cursor_execute",
+                capture_readiness_statement,
+            )
+
+    assert any(
+        isinstance(parameters, dict) and parameters.get("timeout") == "2000ms"
+        for parameters in captured_parameters
+    )

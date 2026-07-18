@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import cast
 
 import pytest
 from alembic.autogenerate import compare_metadata
@@ -7,6 +8,7 @@ from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from flask_migrate import downgrade, upgrade
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.engine import Connection
 from sqlalchemy.pool import NullPool
 
 from app import create_app
@@ -30,10 +32,13 @@ def _script_directory() -> ScriptDirectory:
     return ScriptDirectory.from_config(configuration)
 
 
-def _current_revision(connection) -> str | None:
+def _current_revision(connection: Connection) -> str | None:
     if not inspect(connection).has_table("alembic_version"):
         return None
-    return connection.scalar(text("SELECT version_num FROM alembic_version"))
+    return cast(
+        str | None,
+        connection.scalar(text("SELECT version_num FROM alembic_version")),
+    )
 
 
 def test_migration_history_is_one_linear_three_revision_chain() -> None:

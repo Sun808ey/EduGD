@@ -24,6 +24,12 @@ APPLICATION_DATABASE_ENVIRONMENTS = (
     ("POSTGRES_TEST_DATABASE_URL", False),
     ("PRODUCTION_DATABASE_URL", True),
 )
+POSTGRES_CONNECTION_TIMEOUT_SECONDS = 3
+POSTGRES_ENGINE_OPTIONS: dict[str, object] = {
+    "connect_args": {"connect_timeout": POSTGRES_CONNECTION_TIMEOUT_SECONDS},
+    "pool_pre_ping": True,
+    "pool_timeout": POSTGRES_CONNECTION_TIMEOUT_SECONDS,
+}
 
 
 def _environment_flag(name: str, default: bool = False) -> bool:
@@ -60,13 +66,14 @@ class Config:
     SENTRY_DSN = os.getenv("SENTRY_DSN")
     SENTRY_ERROR_SAMPLE_RATE = 0.25
     SENTRY_TRACES_SAMPLE_RATE = 0.01
+    READINESS_STATEMENT_TIMEOUT_MS = 2_000
 
 
 class DevelopmentConfig(Config):
     DEBUG = _environment_flag("FLASK_DEBUG")
     DATABASE_ENV_VAR = "DEVELOPMENT_DATABASE_URL"
     REQUIRE_POOLED_DATABASE_URL = True
-    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    SQLALCHEMY_ENGINE_OPTIONS = POSTGRES_ENGINE_OPTIONS
     LOG_LEVEL = "DEBUG" if DEBUG else "INFO"
 
 
@@ -81,7 +88,7 @@ class TestingConfig(Config):
 class PostgresTestingConfig(Config):
     TESTING = True
     DATABASE_ENV_VAR = "POSTGRES_TEST_DATABASE_URL"
-    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    SQLALCHEMY_ENGINE_OPTIONS = POSTGRES_ENGINE_OPTIONS
     LOG_LEVEL = "WARNING"
     RATELIMIT_ENABLED = False
 
@@ -89,7 +96,7 @@ class PostgresTestingConfig(Config):
 class ProductionConfig(Config):
     DATABASE_ENV_VAR = "PRODUCTION_DATABASE_URL"
     REQUIRE_POOLED_DATABASE_URL = True
-    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    SQLALCHEMY_ENGINE_OPTIONS = POSTGRES_ENGINE_OPTIONS
 
 
 CONFIGURATIONS: dict[str, type[Config]] = {

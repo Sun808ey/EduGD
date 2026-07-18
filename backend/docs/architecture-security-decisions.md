@@ -21,6 +21,9 @@ It does not mean later remediation increments have been implemented.
 - `/api/v1/health` remains process liveness.
 - `/api/v1/ready` is approved for bounded database and essential-configuration
   checks that do not expose internals.
+- Readiness is implemented as a fail-closed check of essential runtime
+  configuration, bounded database connectivity, and exact Alembic migration
+  head compatibility. Failures return a generic HTTP 503 response.
 - Future enrollment uses a short-lived, single-use, school-issued pairing token
   stored as a server-side hash.
 - Successful enrollment issues a separate revocable device credential and

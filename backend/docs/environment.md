@@ -72,6 +72,14 @@ check returns only a generic `503 not_ready` response; database errors,
 connection information, configuration names, and migration details are not
 returned to clients.
 
+## Request and device-compatibility limits
+
+Flask applies a 1 MiB global request ceiling. Device registration applies a
+smaller 16 KiB ceiling before JSON parsing. Registration requires canonical
+lowercase hyphenated UUIDv4 text and a matching Android/API pair from Android
+5.0/API 21 through Android 10/API 29; API level is the authoritative
+compatibility value.
+
 ## Python and dependency baseline
 
 - The backend targets Python 3.12 compatibility.

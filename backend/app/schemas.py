@@ -2,16 +2,21 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from flask import Request
-from werkzeug.exceptions import BadRequest
+from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
-REGISTRATION_FIELDS = frozenset({"device_uuid", "android_version"})
-ANDROID_VERSION_MAX_LENGTH = 32
+from app.device_identity import (
+    parse_canonical_uuid4,
+    validate_android_compatibility,
+)
+
+REGISTRATION_FIELDS = frozenset({"device_uuid", "android_version", "api_level"})
 
 
 @dataclass(frozen=True, slots=True)
 class DeviceRegistrationData:
     device_uuid: UUID
     android_version: str
+    api_level: int
 
 
 class DeviceRegistrationValidationError(ValueError):
@@ -32,6 +37,11 @@ def validate_device_registration_request(
 
     try:
         payload = incoming_request.get_json(silent=False)
+    except RequestEntityTooLarge as error:
+        raise DeviceRegistrationValidationError(
+            "request body must not exceed 16 KiB",
+            status_code=413,
+        ) from error
     except BadRequest as error:
         raise DeviceRegistrationValidationError(
             "request body must contain valid JSON"
@@ -49,40 +59,42 @@ def validate_device_registration_request(
         raise DeviceRegistrationValidationError("device_uuid is required")
     if "android_version" not in payload:
         raise DeviceRegistrationValidationError("android_version is required")
+    if "api_level" not in payload:
+        raise DeviceRegistrationValidationError("api_level is required")
 
     device_uuid = _validate_device_uuid(payload["device_uuid"])
-    android_version = _validate_android_version(payload["android_version"])
+    android_version, api_level = _validate_android_version(
+        payload["android_version"],
+        payload["api_level"],
+    )
 
     return DeviceRegistrationData(
         device_uuid=device_uuid,
         android_version=android_version,
+        api_level=api_level,
     )
 
 
 def _validate_device_uuid(value: object) -> UUID:
-    if not isinstance(value, str) or not value:
-        raise DeviceRegistrationValidationError("device_uuid must be a valid UUID")
-
     try:
-        return UUID(value)
-    except (AttributeError, ValueError) as error:
+        return parse_canonical_uuid4(value)
+    except ValueError as error:
         raise DeviceRegistrationValidationError(
-            "device_uuid must be a valid UUID"
+            "device_uuid must be a canonical UUID version 4"
         ) from error
 
 
-def _validate_android_version(value: object) -> str:
-    if not isinstance(value, str) or not value.strip():
+def _validate_android_version(
+    android_version: object,
+    api_level: object,
+) -> tuple[str, int]:
+    try:
+        return validate_android_compatibility(android_version, api_level)
+    except ValueError as error:
         raise DeviceRegistrationValidationError(
-            "android_version must be a non-empty string"
-        )
-
-    normalized_value = value.strip()
-    if len(normalized_value) > ANDROID_VERSION_MAX_LENGTH:
-        raise DeviceRegistrationValidationError(
-            "android_version must not exceed 32 characters"
-        )
-    return normalized_value
+            "android_version and api_level must identify Android 5.0 through "
+            "10.0 (API 21 through 29)"
+        ) from error
 
 
 __all__ = [

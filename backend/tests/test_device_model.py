@@ -48,6 +48,7 @@ def test_device_model_contract() -> None:
     assert ("device_uuid",) in indexes
 
     assert table.c.android_version.nullable is False
+    assert table.c.api_level.nullable is False
     assert table.c.status.nullable is False
     assert table.c.status.default.arg == "active"
     assert table.c.status.server_default.arg == "active"
@@ -57,6 +58,8 @@ def test_device_model_contract() -> None:
         if isinstance(constraint, CheckConstraint)
     }
     assert "ck_devices_status" in status_constraints
+    assert "ck_devices_api_level_supported" in status_constraints
+    assert "ck_devices_android_api_match" in status_constraints
 
     assert table.c.registered_at.nullable is False
     assert table.c.last_sync_at.nullable is True
@@ -91,6 +94,7 @@ def test_device_accepts_approved_statuses(status: str) -> None:
     device = Device(
         device_uuid=uuid4(),
         android_version="10",
+        api_level=29,
         status=status,
     )
 
@@ -102,8 +106,47 @@ def test_device_rejects_invalid_status_in_model() -> None:
         Device(
             device_uuid=uuid4(),
             android_version="10",
+            api_level=29,
             status="lost",
         )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("android_version", "11", "unsupported Android version"),
+        ("api_level", 30, "unsupported Android API level"),
+        ("api_level", True, "unsupported Android API level"),
+    ],
+)
+def test_device_rejects_unsupported_android_metadata(
+    field: str,
+    value: object,
+    message: str,
+) -> None:
+    values: dict[str, object] = {
+        "device_uuid": uuid4(),
+        "android_version": "10",
+        "api_level": 29,
+    }
+    values[field] = value
+
+    with pytest.raises(ValueError, match=message):
+        Device(**values)
+
+
+def test_database_rejects_android_api_mismatch(app: Flask) -> None:
+    with app.app_context():
+        with pytest.raises(IntegrityError):
+            db.session.execute(
+                insert(Device).values(
+                    device_uuid=uuid4(),
+                    android_version="10",
+                    api_level=28,
+                )
+            )
+            db.session.commit()
+        db.session.rollback()
 
 
 def test_database_rejects_invalid_device_status(app: Flask) -> None:
@@ -113,6 +156,7 @@ def test_database_rejects_invalid_device_status(app: Flask) -> None:
                 insert(Device).values(
                     device_uuid=uuid4(),
                     android_version="10",
+                    api_level=29,
                     status="lost",
                 )
             )
@@ -136,11 +180,11 @@ def test_sqlite_enforces_foreign_keys(app: Flask) -> None:
         db.session.rollback()
 
 
-def test_device_status_migration_downgrades_and_upgrades_on_sqlite(
+def test_device_identity_migration_downgrades_and_upgrades_on_sqlite(
     app: Flask,
 ) -> None:
     with app.app_context():
-        downgrade(revision="3a6f4a9eb4f2")
+        downgrade(revision="7c91b8e2d4a6")
         downgraded_checks = {
             constraint["name"]
             for constraint in inspect(db.engine).get_check_constraints("devices")
@@ -152,5 +196,7 @@ def test_device_status_migration_downgrades_and_upgrades_on_sqlite(
             for constraint in inspect(db.engine).get_check_constraints("devices")
         }
 
-    assert "ck_devices_status" not in downgraded_checks
-    assert "ck_devices_status" in upgraded_checks
+    assert "ck_devices_api_level_supported" not in downgraded_checks
+    assert "ck_devices_android_api_match" not in downgraded_checks
+    assert "ck_devices_api_level_supported" in upgraded_checks
+    assert "ck_devices_android_api_match" in upgraded_checks

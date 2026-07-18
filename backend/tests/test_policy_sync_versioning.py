@@ -20,6 +20,7 @@ def create_device_with_policy(*, assign_policy: bool = True) -> None:
     device = Device(
         device_uuid=UUID(DEVICE_UUID),
         android_version="10",
+        api_level=29,
         status="active",
     )
     db.session.add(device)

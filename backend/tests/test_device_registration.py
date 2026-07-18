@@ -17,16 +17,12 @@ REGISTRATION_URL = "/api/v1/devices/register"
 VALID_PAYLOAD = {
     "device_uuid": DEVICE_UUID,
     "android_version": "10",
+    "api_level": 29,
 }
 
 
 def test_registers_new_device(client: FlaskClient, app: Flask) -> None:
-    payload = {
-        **VALID_PAYLOAD,
-        "device_uuid": DEVICE_UUID.upper(),
-    }
-
-    response = client.post(REGISTRATION_URL, json=payload)
+    response = client.post(REGISTRATION_URL, json=VALID_PAYLOAD)
 
     assert response.status_code == 201
     assert response.get_json() == {
@@ -34,6 +30,7 @@ def test_registers_new_device(client: FlaskClient, app: Flask) -> None:
         "device": {
             "device_uuid": DEVICE_UUID,
             "android_version": "10",
+            "api_level": 29,
             "status": "active",
         },
     }
@@ -42,6 +39,7 @@ def test_registers_new_device(client: FlaskClient, app: Flask) -> None:
         device = db.session.execute(select(Device)).scalar_one()
         assert device.device_uuid == UUID(DEVICE_UUID)
         assert device.android_version == "10"
+        assert device.api_level == 29
         assert device.status == "active"
         assert device.registered_at is not None
         assert device.created_at is not None
@@ -62,6 +60,7 @@ def test_identical_registration_is_idempotent(
         "device": {
             "device_uuid": DEVICE_UUID,
             "android_version": "10",
+            "api_level": 29,
             "status": "active",
         },
     }
@@ -80,7 +79,7 @@ def test_existing_uuid_with_different_data_is_rejected(
 
     response = client.post(
         REGISTRATION_URL,
-        json={**VALID_PAYLOAD, "android_version": "9"},
+        json={**VALID_PAYLOAD, "android_version": "9", "api_level": 28},
     )
 
     assert response.status_code == 409
@@ -105,7 +104,7 @@ def test_existing_uuid_with_different_data_is_rejected(
         (
             {"json": {**VALID_PAYLOAD, "device_uuid": "invalid"}},
             400,
-            "device_uuid must be a valid UUID",
+            "device_uuid must be a canonical UUID version 4",
         ),
         (
             {"data": "{}", "content_type": "text/plain"},
@@ -156,6 +155,25 @@ def test_registration_database_failure_rolls_back(
         assert db.session.execute(select(Device)).scalar_one_or_none() is None
 
 
+def test_registration_rejects_body_over_endpoint_limit(
+    client: FlaskClient,
+) -> None:
+    oversized_payload = {
+        **VALID_PAYLOAD,
+        "padding": "x" * (16 * 1_024),
+    }
+
+    response = client.post(REGISTRATION_URL, json=oversized_payload)
+
+    assert response.status_code == 413
+    assert response.get_json() == {"error": "request body must not exceed 16 KiB"}
+
+
+def test_request_size_configuration(app: Flask) -> None:
+    assert app.config["MAX_CONTENT_LENGTH"] == 1 * 1_024 * 1_024
+    assert app.config["REGISTRATION_MAX_CONTENT_LENGTH"] == 16 * 1_024
+
+
 def test_unique_constraint_race_returns_idempotent_result(
     app: Flask,
     monkeypatch: pytest.MonkeyPatch,
@@ -163,6 +181,7 @@ def test_unique_constraint_race_returns_idempotent_result(
     existing_device = Device(
         device_uuid=UUID(DEVICE_UUID),
         android_version="10",
+        api_level=29,
         status="active",
     )
     lookup_results = iter([None, existing_device])
@@ -187,6 +206,7 @@ def test_unique_constraint_race_returns_idempotent_result(
             DeviceRegistrationData(
                 device_uuid=UUID(DEVICE_UUID),
                 android_version="10",
+                api_level=29,
             )
         )
 

@@ -22,6 +22,7 @@ def create_device(*, status: str = "active") -> Device:
     device = Device(
         device_uuid=UUID(DEVICE_UUID),
         android_version="10",
+        api_level=29,
         status=status,
     )
     db.session.add(device)
@@ -58,7 +59,7 @@ def test_policy_sync_route_returns_active_policy(
         device = create_device()
         assign_active_policy(device)
 
-    response = client.get(f"/api/v1/sync/policies/{DEVICE_UUID.upper()}")
+    response = client.get(SYNC_URL)
 
     assert response.status_code == 200
     assert response.content_type == "application/json"
@@ -120,6 +121,26 @@ def test_policy_sync_route_blocks_inactive_device(
 
 def test_policy_sync_route_rejects_invalid_uuid(client: FlaskClient) -> None:
     response = client.get("/api/v1/sync/policies/not-a-uuid")
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "invalid device UUID"}
+
+
+@pytest.mark.parametrize(
+    "device_uuid",
+    [
+        DEVICE_UUID.upper(),
+        "{550e8400-e29b-41d4-a716-446655440000}",
+        "550e8400e29b41d4a716446655440000",
+        "00000000-0000-0000-0000-000000000000",
+        "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    ],
+)
+def test_policy_sync_route_rejects_noncanonical_or_non_v4_uuid(
+    client: FlaskClient,
+    device_uuid: str,
+) -> None:
+    response = client.get(f"/api/v1/sync/policies/{device_uuid}")
 
     assert response.status_code == 400
     assert response.get_json() == {"error": "invalid device UUID"}

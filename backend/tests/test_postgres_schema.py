@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -7,6 +8,7 @@ from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.dialects.postgresql import UUID as POSTGRES_UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.sqltypes import DateTime
 
 from app.models import Device, DevicePolicyAssignment, Policy
 
@@ -17,7 +19,7 @@ def _device() -> Device:
     return Device(device_uuid=uuid4(), android_version="test-only")
 
 
-def _policy(**overrides) -> Policy:
+def _policy(**overrides: object) -> Policy:
     values = {
         "policy_uuid": uuid4(),
         "name": "Test policy",
@@ -28,7 +30,7 @@ def _policy(**overrides) -> Policy:
     return Policy(**values)
 
 
-def _expect_integrity_error(session: Session, model) -> None:
+def _expect_integrity_error(session: Session, model: object) -> None:
     with pytest.raises(IntegrityError):
         with session.begin_nested():
             session.add(model)
@@ -116,7 +118,9 @@ def test_existing_schema_metadata_and_constraints(
         (policy_columns, {"created_at", "updated_at"}),
         (assignment_columns, {"assigned_at", "superseded_at"}),
     ):
-        assert all(columns[name]["type"].timezone for name in timestamp_names)
+        assert all(
+            cast(DateTime, columns[name]["type"]).timezone for name in timestamp_names
+        )
 
     policy_checks = {
         constraint["name"] for constraint in inspector.get_check_constraints("policies")
@@ -152,8 +156,11 @@ def test_uuid_json_primary_keys_uniqueness_and_timestamps(
 
     assert isinstance(device.id, int)
     assert isinstance(policy.id, int)
-    assert postgres_session.get(Device, device.id).device_uuid == device_uuid
+    stored_device = postgres_session.get(Device, device.id)
     stored_policy = postgres_session.get(Policy, policy.id)
+    assert stored_device is not None
+    assert stored_policy is not None
+    assert stored_device.device_uuid == device_uuid
     assert stored_policy.policy_uuid == policy_uuid
     assert stored_policy.blocked_apps == ["org.example.learning"]
     assert isinstance(stored_policy.policy_uuid, UUID)

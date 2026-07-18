@@ -3,6 +3,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session
 
 from app.models import Device
 from test_support.postgres_safety import (
@@ -15,7 +16,7 @@ pytestmark = pytest.mark.postgres
 
 
 def test_fixture_commit_remains_in_outer_transaction(
-    postgres_session,
+    postgres_session: Session,
     postgres_engine: Engine,
 ) -> None:
     probe_uuid = uuid4()

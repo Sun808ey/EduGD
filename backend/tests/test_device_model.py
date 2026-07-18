@@ -1,10 +1,25 @@
 from datetime import timedelta
+from uuid import uuid4
 
-from sqlalchemy import DateTime, Index, UniqueConstraint, Uuid
+import pytest
+from flask import Flask
+from flask_migrate import downgrade, upgrade
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Index,
+    UniqueConstraint,
+    Uuid,
+    insert,
+    inspect,
+    text,
+)
 from sqlalchemy.dialects import postgresql, sqlite
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.schema import CreateTable
 
-from app.models import Device, utc_now
+from app.extensions import db
+from app.models import DEVICE_STATUSES, Device, DevicePolicyAssignment, utc_now
 
 
 def test_device_model_contract() -> None:
@@ -36,6 +51,12 @@ def test_device_model_contract() -> None:
     assert table.c.status.nullable is False
     assert table.c.status.default.arg == "active"
     assert table.c.status.server_default.arg == "active"
+    status_constraints = {
+        constraint.name
+        for constraint in table.constraints
+        if isinstance(constraint, CheckConstraint)
+    }
+    assert "ck_devices_status" in status_constraints
 
     assert table.c.registered_at.nullable is False
     assert table.c.last_sync_at.nullable is True
@@ -63,3 +84,73 @@ def test_device_timestamp_source_is_utc_aware() -> None:
 
     assert timestamp.tzinfo is not None
     assert timestamp.utcoffset() == timedelta(0)
+
+
+@pytest.mark.parametrize("status", sorted(DEVICE_STATUSES))
+def test_device_accepts_approved_statuses(status: str) -> None:
+    device = Device(
+        device_uuid=uuid4(),
+        android_version="10",
+        status=status,
+    )
+
+    assert device.status == status
+
+
+def test_device_rejects_invalid_status_in_model() -> None:
+    with pytest.raises(ValueError, match="invalid device status"):
+        Device(
+            device_uuid=uuid4(),
+            android_version="10",
+            status="lost",
+        )
+
+
+def test_database_rejects_invalid_device_status(app: Flask) -> None:
+    with app.app_context():
+        with pytest.raises(IntegrityError):
+            db.session.execute(
+                insert(Device).values(
+                    device_uuid=uuid4(),
+                    android_version="10",
+                    status="lost",
+                )
+            )
+            db.session.commit()
+        db.session.rollback()
+
+
+def test_sqlite_enforces_foreign_keys(app: Flask) -> None:
+    with app.app_context():
+        assert db.session.scalar(text("PRAGMA foreign_keys")) == 1
+        with pytest.raises(IntegrityError):
+            db.session.execute(
+                insert(DevicePolicyAssignment).values(
+                    device_id=-1,
+                    policy_id=-1,
+                    policy_version=1,
+                    status="active",
+                )
+            )
+            db.session.commit()
+        db.session.rollback()
+
+
+def test_device_status_migration_downgrades_and_upgrades_on_sqlite(
+    app: Flask,
+) -> None:
+    with app.app_context():
+        downgrade(revision="3a6f4a9eb4f2")
+        downgraded_checks = {
+            constraint["name"]
+            for constraint in inspect(db.engine).get_check_constraints("devices")
+        }
+
+        upgrade(revision="head")
+        upgraded_checks = {
+            constraint["name"]
+            for constraint in inspect(db.engine).get_check_constraints("devices")
+        }
+
+    assert "ck_devices_status" not in downgraded_checks
+    assert "ck_devices_status" in upgraded_checks

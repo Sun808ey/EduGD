@@ -6,6 +6,9 @@ It does not mean later remediation increments have been implemented.
 ## Device lifecycle and identity
 
 - Device statuses are `active`, `suspended`, and `retired`.
+- Device status values are enforced by both ORM validation and the
+  `ck_devices_status` database constraint. SQLite test connections enable
+  foreign-key enforcement.
 - The Android DPC creates and securely persists one canonical lowercase,
   hyphenated, non-nil version-4 UUID.
 - The server rejects uppercase, braced, URN, compact, nil, and non-v4 UUIDs.

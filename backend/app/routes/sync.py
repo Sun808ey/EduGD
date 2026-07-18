@@ -1,6 +1,7 @@
 from flask import Blueprint, Response, jsonify, request
 
 from app.services.policy_sync import (
+    DeviceBlockedError,
     DeviceNotFoundError,
     InvalidCurrentVersionError,
     InvalidDeviceUUIDError,
@@ -28,6 +29,16 @@ def synchronize_policy(device_uuid: str) -> tuple[Response, int]:
         return jsonify({"error": "invalid device UUID"}), 400
     except DeviceNotFoundError:
         return jsonify({"error": "device not found"}), 404
+    except DeviceBlockedError:
+        return (
+            jsonify(
+                {
+                    "error": "device is not active",
+                    "operation": "blocked",
+                }
+            ),
+            403,
+        )
 
     return jsonify(payload), 200
 

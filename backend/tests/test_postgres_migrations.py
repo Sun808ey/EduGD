@@ -20,7 +20,7 @@ from test_support.postgres_safety import (
 
 pytestmark = [pytest.mark.postgres, pytest.mark.migration]
 MIGRATIONS_DIRECTORY = Path(__file__).resolve().parents[1] / "migrations"
-HEAD_REVISION = "3a6f4a9eb4f2"
+HEAD_REVISION = "7c91b8e2d4a6"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -41,12 +41,13 @@ def _current_revision(connection: Connection) -> str | None:
     )
 
 
-def test_migration_history_is_one_linear_three_revision_chain() -> None:
+def test_migration_history_is_one_linear_four_revision_chain() -> None:
     script = _script_directory()
     revisions = list(script.walk_revisions())
 
     assert script.get_heads() == [HEAD_REVISION]
     assert [revision.revision for revision in revisions] == [
+        "7c91b8e2d4a6",
         "3a6f4a9eb4f2",
         "203748fda298",
         "a2b94c33c0a3",

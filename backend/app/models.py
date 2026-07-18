@@ -23,6 +23,7 @@ from app.extensions import db
 ANDROID_PACKAGE_PATTERN = re.compile(
     r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$"
 )
+DEVICE_STATUSES = frozenset({"active", "suspended", "retired"})
 
 
 def utc_now() -> datetime:
@@ -34,6 +35,10 @@ class Device(db.Model):
     __table_args__ = (
         UniqueConstraint("device_uuid", name="uq_devices_device_uuid"),
         Index("ix_devices_device_uuid", "device_uuid"),
+        CheckConstraint(
+            "status IN ('active', 'suspended', 'retired')",
+            name="ck_devices_status",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -75,6 +80,12 @@ class Device(db.Model):
         back_populates="device",
         order_by="DevicePolicyAssignment.assigned_at",
     )
+
+    @validates("status")
+    def validate_status(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in DEVICE_STATUSES:
+            raise ValueError("invalid device status")
+        return value
 
 
 class Policy(db.Model):
@@ -217,4 +228,4 @@ class DevicePolicyAssignment(db.Model):
     policy: Mapped[Policy] = relationship(back_populates="device_assignments")
 
 
-__all__ = ["Device", "DevicePolicyAssignment", "Policy"]
+__all__ = ["DEVICE_STATUSES", "Device", "DevicePolicyAssignment", "Policy"]

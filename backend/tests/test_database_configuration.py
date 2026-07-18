@@ -163,17 +163,19 @@ def test_separate_neon_branches_are_accepted(
     validate_database_separation()
 
 
-def test_postgres_environments_enable_stale_connection_protection() -> None:
-    assert DevelopmentConfig.SQLALCHEMY_ENGINE_OPTIONS == {
+def test_postgres_environments_use_bounded_resilient_connections() -> None:
+    bounded_postgres_options = {
+        "connect_args": {"connect_timeout": 3},
         "pool_pre_ping": True,
+        "pool_timeout": 3,
     }
-    assert PostgresTestingConfig.SQLALCHEMY_ENGINE_OPTIONS == {
-        "pool_pre_ping": True,
-    }
-    assert ProductionConfig.SQLALCHEMY_ENGINE_OPTIONS == {
-        "pool_pre_ping": True,
-    }
+    assert DevelopmentConfig.SQLALCHEMY_ENGINE_OPTIONS == bounded_postgres_options
+    assert PostgresTestingConfig.SQLALCHEMY_ENGINE_OPTIONS == bounded_postgres_options
+    assert ProductionConfig.SQLALCHEMY_ENGINE_OPTIONS == bounded_postgres_options
     assert TestingConfig.SQLALCHEMY_ENGINE_OPTIONS == {}
+    assert DevelopmentConfig.READINESS_STATEMENT_TIMEOUT_MS == 2_000
+    assert PostgresTestingConfig.READINESS_STATEMENT_TIMEOUT_MS == 2_000
+    assert ProductionConfig.READINESS_STATEMENT_TIMEOUT_MS == 2_000
 
 
 def test_production_fails_closed_without_required_secrets(

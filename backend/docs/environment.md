@@ -59,6 +59,19 @@ migration variable.
 SQLite in memory remains limited to fast unit tests that do not depend on
 PostgreSQL behavior.
 
+## Liveness and readiness
+
+- `GET /api/v1/health` reports process liveness without checking dependencies.
+- `GET /api/v1/ready` reports readiness only when essential configuration is
+  present, the database responds, and its Alembic revision matches the current
+  application migration head.
+
+PostgreSQL connection acquisition and establishment use three-second bounds.
+Readiness statements use a two-second PostgreSQL statement timeout. A failed
+check returns only a generic `503 not_ready` response; database errors,
+connection information, configuration names, and migration details are not
+returned to clients.
+
 ## Python and dependency baseline
 
 - The backend targets Python 3.12 compatibility.

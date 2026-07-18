@@ -5,14 +5,17 @@ import pytest
 from flask import Flask, request
 from flask.ctx import RequestContext
 
+from app.device_identity import ANDROID_VERSION_BY_API_LEVEL
 from app.schemas import (
     DeviceRegistrationValidationError,
     validate_device_registration_request,
 )
 
-VALID_PAYLOAD = {
-    "device_uuid": "550E8400-E29B-41D4-A716-446655440000",
+DEVICE_UUID = "550e8400-e29b-41d4-a716-446655440000"
+VALID_PAYLOAD: dict[str, Any] = {
+    "device_uuid": DEVICE_UUID,
     "android_version": "10",
+    "api_level": 29,
 }
 
 
@@ -29,14 +32,35 @@ def request_context(
     )
 
 
-def test_valid_registration_request_is_normalized(app: Flask) -> None:
-    payload = {**VALID_PAYLOAD, "android_version": " 10 "}
+def test_valid_registration_request_is_preserved(app: Flask) -> None:
+    with request_context(app, payload=VALID_PAYLOAD):
+        validated = validate_device_registration_request(request)
+
+    assert str(validated.device_uuid) == VALID_PAYLOAD["device_uuid"]
+    assert validated.android_version == "10"
+    assert validated.api_level == 29
+
+
+@pytest.mark.parametrize(
+    ("api_level", "android_version"),
+    sorted(ANDROID_VERSION_BY_API_LEVEL.items()),
+)
+def test_registration_accepts_supported_android_compatibility(
+    app: Flask,
+    api_level: int,
+    android_version: str,
+) -> None:
+    payload = {
+        **VALID_PAYLOAD,
+        "android_version": android_version,
+        "api_level": api_level,
+    }
 
     with request_context(app, payload=payload):
         validated = validate_device_registration_request(request)
 
-    assert str(validated.device_uuid) == VALID_PAYLOAD["device_uuid"].lower()
-    assert validated.android_version == "10"
+    assert validated.android_version == android_version
+    assert validated.api_level == api_level
 
 
 @pytest.mark.parametrize(
@@ -92,6 +116,13 @@ def test_registration_requires_json_object(app: Flask, payload: Any) -> None:
             {"device_uuid": VALID_PAYLOAD["device_uuid"]},
             "android_version is required",
         ),
+        (
+            {
+                "device_uuid": VALID_PAYLOAD["device_uuid"],
+                "android_version": "10",
+            },
+            "api_level is required",
+        ),
     ],
 )
 def test_registration_requires_both_fields(
@@ -106,7 +137,21 @@ def test_registration_requires_both_fields(
     assert error.value.message == message
 
 
-@pytest.mark.parametrize("device_uuid", [None, 10, "", "not-a-uuid"])
+@pytest.mark.parametrize(
+    "device_uuid",
+    [
+        None,
+        10,
+        "",
+        "not-a-uuid",
+        "00000000-0000-0000-0000-000000000000",
+        "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+        DEVICE_UUID.upper(),
+        "{550e8400-e29b-41d4-a716-446655440000}",
+        "urn:uuid:550e8400-e29b-41d4-a716-446655440000",
+        "550e8400e29b41d4a716446655440000",
+    ],
+)
 def test_registration_rejects_invalid_uuid(
     app: Flask,
     device_uuid: Any,
@@ -117,33 +162,43 @@ def test_registration_rejects_invalid_uuid(
         with pytest.raises(DeviceRegistrationValidationError) as error:
             validate_device_registration_request(request)
 
-    assert error.value.message == "device_uuid must be a valid UUID"
+    assert error.value.message == "device_uuid must be a canonical UUID version 4"
 
 
-@pytest.mark.parametrize("android_version", [None, 10, "", "   "])
-def test_registration_rejects_invalid_android_version(
+@pytest.mark.parametrize(
+    ("android_version", "api_level"),
+    [
+        (None, 29),
+        (10, 29),
+        ("", 29),
+        (" 10 ", 29),
+        ("4.4", 20),
+        ("11", 30),
+        ("10", 28),
+        ("9", 29),
+        ("10", True),
+        ("10", "29"),
+    ],
+)
+def test_registration_rejects_invalid_android_compatibility(
     app: Flask,
     android_version: Any,
+    api_level: Any,
 ) -> None:
-    payload = {**VALID_PAYLOAD, "android_version": android_version}
+    payload = {
+        **VALID_PAYLOAD,
+        "android_version": android_version,
+        "api_level": api_level,
+    }
 
     with request_context(app, payload=payload):
         with pytest.raises(DeviceRegistrationValidationError) as error:
             validate_device_registration_request(request)
 
-    assert error.value.message == "android_version must be a non-empty string"
-
-
-def test_registration_rejects_android_version_over_model_limit(
-    app: Flask,
-) -> None:
-    payload = {**VALID_PAYLOAD, "android_version": "1" * 33}
-
-    with request_context(app, payload=payload):
-        with pytest.raises(DeviceRegistrationValidationError) as error:
-            validate_device_registration_request(request)
-
-    assert error.value.message == "android_version must not exceed 32 characters"
+    assert error.value.message == (
+        "android_version and api_level must identify Android 5.0 through "
+        "10.0 (API 21 through 29)"
+    )
 
 
 @pytest.mark.parametrize("field", ["id", "status", "created_at", "extra"])

@@ -27,6 +27,7 @@ def create_device(*, status: str = "active") -> Device:
     device = Device(
         device_uuid=UUID(DEVICE_UUID),
         android_version="10",
+        api_level=29,
         status=status,
     )
     db.session.add(device)
@@ -106,7 +107,7 @@ def test_policy_sync_returns_no_policy_payload(app: Flask) -> None:
     with app.app_context():
         create_device()
 
-        payload = get_policy_sync_payload(DEVICE_UUID.upper())
+        payload = get_policy_sync_payload(DEVICE_UUID)
 
     assert payload == {
         "device_uuid": DEVICE_UUID,
@@ -121,7 +122,7 @@ def test_policy_sync_returns_active_policy(app: Flask) -> None:
         device = create_device()
         assign_policy(device)
 
-        first_payload = get_policy_sync_payload(DEVICE_UUID.upper())
+        first_payload = get_policy_sync_payload(DEVICE_UUID)
         second_payload = get_policy_sync_payload(DEVICE_UUID)
 
     expected_payload = {

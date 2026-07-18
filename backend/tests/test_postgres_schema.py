@@ -16,7 +16,7 @@ pytestmark = pytest.mark.postgres
 
 
 def _device() -> Device:
-    return Device(device_uuid=uuid4(), android_version="test-only")
+    return Device(device_uuid=uuid4(), android_version="10", api_level=29)
 
 
 def _policy(**overrides: object) -> Policy:
@@ -128,7 +128,11 @@ def test_existing_schema_metadata_and_constraints(
     device_checks = {
         constraint["name"] for constraint in inspector.get_check_constraints("devices")
     }
-    assert device_checks == {"ck_devices_status"}
+    assert device_checks == {
+        "ck_devices_android_api_match",
+        "ck_devices_api_level_supported",
+        "ck_devices_status",
+    }
     assignment_checks = {
         constraint["name"]
         for constraint in inspector.get_check_constraints("device_policy_assignments")
@@ -146,7 +150,7 @@ def test_uuid_json_primary_keys_uniqueness_and_timestamps(
 ) -> None:
     device_uuid = uuid4()
     policy_uuid = uuid4()
-    device = Device(device_uuid=device_uuid, android_version="test-only")
+    device = Device(device_uuid=device_uuid, android_version="10", api_level=29)
     policy = _policy(policy_uuid=policy_uuid)
     postgres_session.add_all([device, policy])
     postgres_session.flush()
@@ -181,7 +185,7 @@ def test_uuid_json_primary_keys_uniqueness_and_timestamps(
 
     _expect_integrity_error(
         postgres_session,
-        Device(device_uuid=device_uuid, android_version="duplicate"),
+        Device(device_uuid=device_uuid, android_version="10", api_level=29),
     )
     _expect_integrity_error(
         postgres_session,
@@ -193,7 +197,8 @@ def test_uuid_json_primary_keys_uniqueness_and_timestamps(
                 insert(Device).values(
                     id=device.id,
                     device_uuid=uuid4(),
-                    android_version="duplicate-primary-key",
+                    android_version="10",
+                    api_level=29,
                 )
             )
 
@@ -201,10 +206,15 @@ def test_uuid_json_primary_keys_uniqueness_and_timestamps(
 def test_not_null_foreign_keys_and_restrict_delete(
     postgres_session: Session,
 ) -> None:
-    _expect_integrity_error(
-        postgres_session,
-        Device(device_uuid=uuid4(), android_version=None),
-    )
+    with pytest.raises(IntegrityError):
+        with postgres_session.begin_nested():
+            postgres_session.execute(
+                insert(Device).values(
+                    device_uuid=uuid4(),
+                    android_version=None,
+                    api_level=29,
+                )
+            )
     _expect_integrity_error(
         postgres_session,
         DevicePolicyAssignment(device_id=-1, policy_id=-1),
@@ -233,10 +243,22 @@ def test_existing_check_constraints(postgres_session: Session) -> None:
             postgres_session.execute(
                 insert(Device).values(
                     device_uuid=uuid4(),
-                    android_version="test-only",
+                    android_version="10",
+                    api_level=29,
                     status="invalid",
                 )
             )
+    for android_version, api_level in (("10", 28), ("11", 30)):
+        with pytest.raises(IntegrityError):
+            with postgres_session.begin_nested():
+                postgres_session.execute(
+                    insert(Device).values(
+                        device_uuid=uuid4(),
+                        android_version=android_version,
+                        api_level=api_level,
+                        status="active",
+                    )
+                )
     _expect_integrity_error(postgres_session, _policy(version=0))
     device = _device()
     policy = _policy()

@@ -14,6 +14,9 @@ It does not mean later remediation increments have been implemented.
 - The server rejects uppercase, braced, URN, compact, nil, and non-v4 UUIDs.
 - Supported devices run Android 5.0 through 10.0, API 21 through 29.
 - Both Android version and API level are stored; API level is authoritative.
+- Registration and synchronization accept only canonical lowercase hyphenated
+  non-nil UUIDv4 text. Registration enforces exact approved Android/API pairs,
+  and database constraints preserve the same compatibility boundary.
 - An authenticated OS upgrade updates device metadata and appends an immutable
   audit event. A reported downgrade is rejected and flagged for review.
 - Suspended and retired devices receive HTTP 403 with operation `blocked` and

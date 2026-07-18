@@ -20,7 +20,9 @@ def test_fixture_commit_remains_in_outer_transaction(
     postgres_engine: Engine,
 ) -> None:
     probe_uuid = uuid4()
-    postgres_session.add(Device(device_uuid=probe_uuid, android_version="test-only"))
+    postgres_session.add(
+        Device(device_uuid=probe_uuid, android_version="10", api_level=29)
+    )
     postgres_session.commit()
 
     assert (
@@ -42,7 +44,7 @@ def test_isolated_session_rolls_back_and_closes_completely(
     probe_uuid = uuid4()
 
     with isolated_postgres_session(postgres_engine, approved) as session:
-        session.add(Device(device_uuid=probe_uuid, android_version="test-only"))
+        session.add(Device(device_uuid=probe_uuid, android_version="10", api_level=29))
         session.commit()
         assert (
             session.scalar(select(Device).where(Device.device_uuid == probe_uuid))

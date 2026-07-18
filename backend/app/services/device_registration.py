@@ -15,12 +15,14 @@ from app.schemas import DeviceRegistrationData
 class RegisteredDeviceData:
     device_uuid: str
     android_version: str
+    api_level: int
     status: str
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> dict[str, str | int]:
         return {
             "device_uuid": self.device_uuid,
             "android_version": self.android_version,
+            "api_level": self.api_level,
             "status": self.status,
         }
 
@@ -53,6 +55,7 @@ def register_device(
         device = Device(
             device_uuid=registration_data.device_uuid,
             android_version=registration_data.android_version,
+            api_level=registration_data.api_level,
             status="active",
         )
         db.session.add(device)
@@ -99,7 +102,10 @@ def _result_for_existing_device(
     existing_device: Device,
     registration_data: DeviceRegistrationData,
 ) -> DeviceRegistrationResult:
-    if existing_device.android_version != registration_data.android_version:
+    if (
+        existing_device.android_version != registration_data.android_version
+        or existing_device.api_level != registration_data.api_level
+    ):
         raise DeviceRegistrationConflictError(
             "device UUID already registered with different data"
         )
@@ -114,6 +120,7 @@ def _serialize_device(device: Device) -> RegisteredDeviceData:
     return RegisteredDeviceData(
         device_uuid=str(device.device_uuid),
         android_version=device.android_version,
+        api_level=device.api_level,
         status=device.status,
     )
 

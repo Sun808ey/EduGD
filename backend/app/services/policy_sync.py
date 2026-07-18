@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
+from app.device_identity import parse_canonical_uuid4
 from app.extensions import db
 from app.models import Device, DevicePolicyAssignment, Policy
 
@@ -88,12 +89,9 @@ def get_version_aware_policy_sync_payload(
 
 
 def _canonicalize_device_uuid(device_uuid: object) -> UUID:
-    if not isinstance(device_uuid, str) or not device_uuid:
-        raise InvalidDeviceUUIDError()
-
     try:
-        return UUID(device_uuid)
-    except (AttributeError, ValueError) as error:
+        return parse_canonical_uuid4(device_uuid)
+    except ValueError as error:
         raise InvalidDeviceUUIDError() from error
 
 

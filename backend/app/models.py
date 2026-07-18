@@ -18,6 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
+from app.device_identity import ANDROID_VERSION_BY_API_LEVEL
 from app.extensions import db
 
 ANDROID_PACKAGE_PATTERN = re.compile(
@@ -39,6 +40,22 @@ class Device(db.Model):
             "status IN ('active', 'suspended', 'retired')",
             name="ck_devices_status",
         ),
+        CheckConstraint(
+            "api_level BETWEEN 21 AND 29",
+            name="ck_devices_api_level_supported",
+        ),
+        CheckConstraint(
+            "(android_version = '5.0' AND api_level = 21) OR "
+            "(android_version = '5.1' AND api_level = 22) OR "
+            "(android_version = '6.0' AND api_level = 23) OR "
+            "(android_version = '7.0' AND api_level = 24) OR "
+            "(android_version = '7.1' AND api_level = 25) OR "
+            "(android_version = '8.0' AND api_level = 26) OR "
+            "(android_version = '8.1' AND api_level = 27) OR "
+            "(android_version = '9' AND api_level = 28) OR "
+            "(android_version = '10' AND api_level = 29)",
+            name="ck_devices_android_api_match",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -47,6 +64,7 @@ class Device(db.Model):
         nullable=False,
     )
     android_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    api_level: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -85,6 +103,25 @@ class Device(db.Model):
     def validate_status(self, _key: str, value: object) -> str:
         if not isinstance(value, str) or value not in DEVICE_STATUSES:
             raise ValueError("invalid device status")
+        return value
+
+    @validates("android_version")
+    def validate_android_version(self, _key: str, value: object) -> str:
+        if (
+            not isinstance(value, str)
+            or value not in ANDROID_VERSION_BY_API_LEVEL.values()
+        ):
+            raise ValueError("unsupported Android version")
+        return value
+
+    @validates("api_level")
+    def validate_api_level(self, _key: str, value: object) -> int:
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or value not in ANDROID_VERSION_BY_API_LEVEL
+        ):
+            raise ValueError("unsupported Android API level")
         return value
 
 

@@ -1,4 +1,4 @@
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request
 
 from app.schemas import (
     DeviceRegistrationValidationError,
@@ -20,6 +20,7 @@ def devices() -> Response:
 
 @device_bp.post("/devices/register")
 def register_device_endpoint() -> tuple[Response, int]:
+    request.max_content_length = current_app.config["REGISTRATION_MAX_CONTENT_LENGTH"]
     try:
         registration_data = validate_device_registration_request(request)
     except DeviceRegistrationValidationError as error:

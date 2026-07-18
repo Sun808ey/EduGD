@@ -72,6 +72,7 @@ def test_assignment_replacement_preserves_history(app: Flask) -> None:
         device = Device(
             device_uuid=uuid4(),
             android_version="10",
+            api_level=29,
             status="active",
         )
         first_policy = Policy(

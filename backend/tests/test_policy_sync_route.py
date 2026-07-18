@@ -18,11 +18,11 @@ BLOCKED_APPS = [
 ]
 
 
-def create_device() -> Device:
+def create_device(*, status: str = "active") -> Device:
     device = Device(
         device_uuid=UUID(DEVICE_UUID),
         android_version="10",
-        status="active",
+        status=status,
     )
     db.session.add(device)
     db.session.commit()
@@ -95,6 +95,27 @@ def test_policy_sync_route_rejects_unknown_device(client: FlaskClient) -> None:
 
     assert response.status_code == 404
     assert response.get_json() == {"error": "device not found"}
+
+
+@pytest.mark.parametrize("status", ["suspended", "retired"])
+@pytest.mark.parametrize("query", ["", "?current_version=5"])
+def test_policy_sync_route_blocks_inactive_device(
+    client: FlaskClient,
+    app: Flask,
+    status: str,
+    query: str,
+) -> None:
+    with app.app_context():
+        device = create_device(status=status)
+        assign_active_policy(device)
+
+    response = client.get(f"{SYNC_URL}{query}")
+
+    assert response.status_code == 403
+    assert response.get_json() == {
+        "error": "device is not active",
+        "operation": "blocked",
+    }
 
 
 def test_policy_sync_route_rejects_invalid_uuid(client: FlaskClient) -> None:

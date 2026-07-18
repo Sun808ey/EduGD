@@ -9,6 +9,7 @@ from sqlalchemy import event
 from app.extensions import db
 from app.models import Device, DevicePolicyAssignment, Policy, utc_now
 from app.services.policy_sync import (
+    DeviceBlockedError,
     DeviceNotFoundError,
     InvalidDeviceUUIDError,
     get_policy_sync_payload,
@@ -22,11 +23,11 @@ BLOCKED_APPS = [
 ]
 
 
-def create_device() -> Device:
+def create_device(*, status: str = "active") -> Device:
     device = Device(
         device_uuid=UUID(DEVICE_UUID),
         android_version="10",
-        status="active",
+        status=status,
     )
     db.session.add(device)
     db.session.commit()
@@ -77,6 +78,28 @@ def test_policy_sync_rejects_unknown_device(app: Flask) -> None:
     with app.app_context():
         with pytest.raises(DeviceNotFoundError, match="device not found"):
             get_policy_sync_payload(DEVICE_UUID)
+
+
+@pytest.mark.parametrize("status", ["suspended", "retired"])
+def test_policy_sync_blocks_inactive_device_without_changing_policy(
+    app: Flask,
+    status: str,
+) -> None:
+    with app.app_context():
+        device = create_device(status=status)
+        _policy, assignment = assign_policy(device)
+
+        with pytest.raises(DeviceBlockedError, match="device is not active"):
+            get_policy_sync_payload(DEVICE_UUID)
+
+        db.session.expire_all()
+        stored_device = db.session.get(Device, device.id)
+        stored_assignment = db.session.get(DevicePolicyAssignment, assignment.id)
+
+    assert stored_device is not None
+    assert stored_device.status == status
+    assert stored_assignment is not None
+    assert stored_assignment.status == "active"
 
 
 def test_policy_sync_returns_no_policy_payload(app: Flask) -> None:

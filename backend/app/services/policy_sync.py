@@ -21,6 +21,11 @@ class DeviceNotFoundError(LookupError):
         super().__init__("device not found")
 
 
+class DeviceBlockedError(PermissionError):
+    def __init__(self) -> None:
+        super().__init__("device is not active")
+
+
 def get_policy_sync_payload(device_uuid: object) -> dict[str, object]:
     canonical_uuid = _canonicalize_device_uuid(device_uuid)
 
@@ -28,6 +33,8 @@ def get_policy_sync_payload(device_uuid: object) -> dict[str, object]:
         device = _find_device(canonical_uuid)
         if device is None:
             raise DeviceNotFoundError()
+        if device.status != "active":
+            raise DeviceBlockedError()
 
         assignment = _find_active_assignment(device.id)
         if assignment is None:
@@ -132,6 +139,7 @@ def _no_policy_payload(device_uuid: UUID) -> dict[str, object]:
 
 
 __all__ = [
+    "DeviceBlockedError",
     "DeviceNotFoundError",
     "InvalidCurrentVersionError",
     "InvalidDeviceUUIDError",

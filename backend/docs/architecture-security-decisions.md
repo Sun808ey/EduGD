@@ -52,6 +52,14 @@ It does not mean later remediation increments have been implemented.
 - Sentry stays inactive without `SENTRY_DSN`, distinguishes environments,
   excludes secrets, credentials, and request bodies, and uses conservative
   sampling.
+- Startup hardening implements structured JSON application logs with secret,
+  bearer-token, and URL-credential redaction.
+- Production startup requires distinct Flask and JWT secrets of at least 32
+  characters and rejects debug or testing mode.
+- Development and testing use process-local random secret defaults when
+  explicit values are absent.
+- Flask-Limiter is initialized without applying route policies; registration
+  and authenticated-device limits remain separate approved work.
 
 ## Quality and database isolation
 

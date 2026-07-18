@@ -53,6 +53,13 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     DATABASE_ENV_VAR: str | None = None
     REQUIRE_POOLED_DATABASE_URL = False
+    LOG_LEVEL = "INFO"
+    RATELIMIT_DEFAULT: list[str] = []
+    RATELIMIT_ENABLED = True
+    RATELIMIT_STORAGE_URI = "memory://"
+    SENTRY_DSN = os.getenv("SENTRY_DSN")
+    SENTRY_ERROR_SAMPLE_RATE = 0.25
+    SENTRY_TRACES_SAMPLE_RATE = 0.01
 
 
 class DevelopmentConfig(Config):
@@ -60,18 +67,23 @@ class DevelopmentConfig(Config):
     DATABASE_ENV_VAR = "DEVELOPMENT_DATABASE_URL"
     REQUIRE_POOLED_DATABASE_URL = True
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    LOG_LEVEL = "DEBUG" if DEBUG else "INFO"
 
 
 class TestingConfig(Config):
     TESTING = True
     DATABASE_ENV_VAR = None
     SQLALCHEMY_DATABASE_URI = "sqlite+pysqlite:///:memory:"
+    LOG_LEVEL = "WARNING"
+    RATELIMIT_ENABLED = False
 
 
 class PostgresTestingConfig(Config):
     TESTING = True
     DATABASE_ENV_VAR = "POSTGRES_TEST_DATABASE_URL"
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    LOG_LEVEL = "WARNING"
+    RATELIMIT_ENABLED = False
 
 
 class ProductionConfig(Config):

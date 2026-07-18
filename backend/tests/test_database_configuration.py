@@ -193,8 +193,8 @@ def test_production_starts_with_database_and_required_secrets(
     application = create_app(
         "production",
         {
-            "SECRET_KEY": "test-only-flask-secret",
-            "JWT_SECRET_KEY": "test-only-jwt-secret",
+            "SECRET_KEY": "f" * 32,
+            "JWT_SECRET_KEY": "j" * 32,
         },
     )
 

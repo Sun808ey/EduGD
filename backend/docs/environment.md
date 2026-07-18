@@ -16,9 +16,24 @@ file or in Git.
 - `SECRET_KEY` is the Flask application secret.
 - `JWT_SECRET_KEY` is reserved for the separately approved authentication
   design.
-- `SENTRY_DSN` enables Sentry only after its approved remediation increment.
+- `SENTRY_DSN` enables the approved Sentry integration outside test
+  environments.
 
-All three variables must remain unset in committed files.
+All three variables must remain unset in committed files. Production requires
+distinct `SECRET_KEY` and `JWT_SECRET_KEY` values of at least 32 characters.
+Development and test startup generate distinct process-local random values
+when either secret is absent; generated values are never logged.
+
+Sentry remains inactive without `SENTRY_DSN` and is always inactive in the
+`testing` and `postgres-testing` environments. When enabled, it labels events
+as development or production, excludes request bodies and default PII, removes
+request and breadcrumb data before sending, redacts configured secrets, and
+uses a 25 percent error-event sample rate with a 1 percent trace sample rate.
+
+Application logs use one-line JSON records with timestamp, severity, logger,
+environment, message, and optional event name. Configured secrets, bearer
+tokens, and URL credentials are redacted. Exception logs include the exception
+type without rendering the potentially sensitive exception message.
 
 ## Database variables
 
@@ -52,10 +67,6 @@ PostgreSQL behavior.
 - `requirements.txt` remains the authoritative pinned dependency set until an
   approved dependency-management change.
 
-The following declared integrations are intentionally retained but currently
-unused:
-
-- `Flask-Limiter`, pending application-startup and route-limit remediation.
-- `sentry-sdk`, pending approved Sentry initialization.
-
-They must not be removed merely because they are not yet initialized.
+`Flask-Limiter` is initialized during application startup with no global or
+route limits. It is disabled in test configurations. Approved endpoint rate
+policies remain deferred to their own implementation scope.

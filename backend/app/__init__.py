@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from secrets import token_urlsafe
 from typing import Any
 
 from flask import Flask
@@ -13,7 +14,8 @@ from app.config import (
     validate_migration_target,
 )
 from app.errors import register_error_handlers
-from app.extensions import db, jwt, migrate
+from app.extensions import db, jwt, limiter, migrate
+from app.observability import configure_sentry, configure_structured_logging
 from app.routes import BLUEPRINTS
 
 
@@ -35,6 +37,8 @@ def create_app(
     if config_overrides:
         app.config.update(config_overrides)
 
+    _apply_nonproduction_secret_defaults(app)
+    configure_structured_logging(app)
     _validate_database_configuration(app, configuration.DATABASE_ENV_VAR)
     validate_database_separation()
     migration_database_uri = resolve_migration_database_uri(
@@ -47,11 +51,16 @@ def create_app(
             app.config["SQLALCHEMY_DATABASE_URI"],
             migration_database_uri,
         )
-    _validate_production_secrets(app)
+    _validate_startup_configuration(app)
+    configure_sentry(app)
     _initialize_extensions(app)
     register_blueprints(app)
     register_error_handlers(app)
     _register_existing_root_route(app)
+    app.logger.info(
+        "Application startup completed",
+        extra={"event": "application_startup"},
+    )
 
     return app
 
@@ -75,15 +84,33 @@ def _initialize_extensions(app: Flask) -> None:
     _load_models()
     migrate.init_app(app, db, compare_type=True)
     jwt.init_app(app)
+    limiter.init_app(app)
 
 
-def _validate_production_secrets(app: Flask) -> None:
+def _apply_nonproduction_secret_defaults(app: Flask) -> None:
+    if app.config["APP_ENV"] == "production":
+        return
+    for setting in ("SECRET_KEY", "JWT_SECRET_KEY"):
+        if not app.config.get(setting):
+            app.config[setting] = token_urlsafe(32)
+
+
+def _validate_startup_configuration(app: Flask) -> None:
     if app.config["APP_ENV"] != "production":
         return
 
     required_settings = ("SECRET_KEY", "JWT_SECRET_KEY")
     if any(not app.config.get(setting) for setting in required_settings):
         raise RuntimeError("Required production secrets must be configured")
+    if any(
+        not isinstance(app.config[setting], str) or len(app.config[setting]) < 32
+        for setting in required_settings
+    ):
+        raise RuntimeError("Production secrets must be at least 32 characters")
+    if app.config["SECRET_KEY"] == app.config["JWT_SECRET_KEY"]:
+        raise RuntimeError("Production secrets must be distinct")
+    if app.config["DEBUG"] or app.config["TESTING"]:
+        raise RuntimeError("Production startup cannot enable debug or testing mode")
 
 
 def _load_models() -> None:

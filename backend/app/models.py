@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     UniqueConstraint,
     Uuid,
@@ -31,6 +32,24 @@ DEVICE_REGISTRATION_EVENT_TYPES = frozenset(
         "duplicate",
         "upgrade_requires_authentication",
         "downgrade_rejected",
+    }
+)
+ENROLLMENT_TOKEN_STATUSES = frozenset(
+    {"active", "consumed", "revoked", "expired", "locked"}
+)
+DEVICE_CREDENTIAL_STATUSES = frozenset({"active", "revoked", "superseded"})
+DEVICE_CREDENTIAL_ALGORITHMS = frozenset({"RSA_2048_SHA256"})
+DEVICE_ENROLLMENT_EVENT_CATEGORIES = frozenset(
+    {
+        "token_issued",
+        "token_revoked",
+        "enrollment_succeeded",
+        "enrollment_failed",
+        "credential_rotated",
+        "credential_revoked",
+        "authentication_failed",
+        "legacy_authentication_used",
+        "legacy_authentication_disabled",
     }
 )
 
@@ -265,6 +284,344 @@ class DeviceRegistrationEvent(db.Model):
         return value
 
 
+class EnrollmentToken(db.Model):
+    __tablename__ = "enrollment_tokens"
+    __table_args__ = (
+        UniqueConstraint("token_uuid", name="uq_enrollment_tokens_uuid"),
+        CheckConstraint(
+            "status IN ('active', 'consumed', 'revoked', 'expired', 'locked')",
+            name="ck_enrollment_tokens_status",
+        ),
+        CheckConstraint(
+            "failed_attempts BETWEEN 0 AND 5",
+            name="ck_enrollment_tokens_failed_attempts",
+        ),
+        CheckConstraint(
+            "pepper_version >= 1",
+            name="ck_enrollment_tokens_pepper_version",
+        ),
+        CheckConstraint(
+            "expires_at > created_at",
+            name="ck_enrollment_tokens_expiry",
+        ),
+        CheckConstraint(
+            "(status = 'consumed' AND consumed_at IS NOT NULL AND "
+            "consumed_by_device_id IS NOT NULL) OR "
+            "(status <> 'consumed' AND consumed_at IS NULL AND "
+            "consumed_by_device_id IS NULL)",
+            name="ck_enrollment_tokens_consumption_state",
+        ),
+        CheckConstraint(
+            "(status = 'revoked' AND revoked_at IS NOT NULL AND "
+            "revoked_by IS NOT NULL AND revocation_reason IS NOT NULL) OR "
+            "(status <> 'revoked' AND revoked_at IS NULL AND "
+            "revoked_by IS NULL AND revocation_reason IS NULL)",
+            name="ck_enrollment_tokens_revocation_state",
+        ),
+        Index("ix_enrollment_tokens_status_expires", "status", "expires_at"),
+        Index("ix_enrollment_tokens_bound_device", "bound_device_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        nullable=False,
+        default=uuid4,
+    )
+    verifier: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    pepper_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+    )
+    bound_device_id: Mapped[int | None] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="active",
+        server_default="active",
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    failed_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    consumed_by_device_id: Mapped[int | None] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    issued_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    reason: Mapped[str] = mapped_column(String(512), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    revoked_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    revocation_reason: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
+
+    @validates("status")
+    def validate_status(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in ENROLLMENT_TOKEN_STATUSES:
+            raise ValueError("invalid enrollment token status")
+        return value
+
+    @validates("verifier")
+    def validate_verifier(self, _key: str, value: object) -> bytes:
+        if not isinstance(value, bytes) or len(value) != 32:
+            raise ValueError("enrollment token verifier must contain 32 bytes")
+        return value
+
+
+class DeviceCredential(db.Model):
+    __tablename__ = "device_credentials"
+    __table_args__ = (
+        UniqueConstraint("credential_uuid", name="uq_device_credentials_uuid"),
+        UniqueConstraint(
+            "public_key_fingerprint",
+            name="uq_device_credentials_public_key_fingerprint",
+        ),
+        CheckConstraint(
+            "algorithm IN ('RSA_2048_SHA256')",
+            name="ck_device_credentials_algorithm",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'revoked', 'superseded')",
+            name="ck_device_credentials_status",
+        ),
+        CheckConstraint(
+            "(status = 'active' AND revoked_at IS NULL AND revoked_by IS NULL "
+            "AND revocation_reason IS NULL AND superseded_at IS NULL AND "
+            "superseded_by_id IS NULL) OR "
+            "(status = 'revoked' AND revoked_at IS NOT NULL AND "
+            "revoked_by IS NOT NULL AND revocation_reason IS NOT NULL AND "
+            "superseded_at IS NULL AND superseded_by_id IS NULL) OR "
+            "(status = 'superseded' AND revoked_at IS NULL AND "
+            "revoked_by IS NULL AND revocation_reason IS NULL AND "
+            "superseded_at IS NOT NULL AND superseded_by_id IS NOT NULL)",
+            name="ck_device_credentials_lifecycle",
+        ),
+        Index(
+            "uq_device_credentials_active_device",
+            "device_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ),
+        Index("ix_device_credentials_device_status", "device_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    credential_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        nullable=False,
+        default=uuid4,
+    )
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    enrollment_token_id: Mapped[int | None] = mapped_column(
+        ForeignKey("enrollment_tokens.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    algorithm: Mapped[str] = mapped_column(String(32), nullable=False)
+    public_key_der: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    public_key_fingerprint: Mapped[bytes] = mapped_column(
+        LargeBinary(32),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="active",
+        server_default="active",
+    )
+    issued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    revoked_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    revocation_reason: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    superseded_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("device_credentials.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+
+    @validates("algorithm")
+    def validate_algorithm(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in DEVICE_CREDENTIAL_ALGORITHMS:
+            raise ValueError("invalid device credential algorithm")
+        return value
+
+    @validates("status")
+    def validate_status(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in DEVICE_CREDENTIAL_STATUSES:
+            raise ValueError("invalid device credential status")
+        return value
+
+    @validates("public_key_fingerprint")
+    def validate_public_key_fingerprint(self, _key: str, value: object) -> bytes:
+        if not isinstance(value, bytes) or len(value) != 32:
+            raise ValueError("public key fingerprint must contain 32 bytes")
+        return value
+
+
+class DeviceRequestNonce(db.Model):
+    __tablename__ = "device_request_nonces"
+    __table_args__ = (
+        UniqueConstraint(
+            "credential_id",
+            "nonce_hash",
+            name="uq_device_request_nonces_credential_hash",
+        ),
+        CheckConstraint(
+            "expires_at > observed_at",
+            name="ck_device_request_nonces_expiry",
+        ),
+        Index("ix_device_request_nonces_expires_at", "expires_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    credential_id: Mapped[int] = mapped_column(
+        ForeignKey("device_credentials.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    nonce_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    @validates("nonce_hash")
+    def validate_nonce_hash(self, _key: str, value: object) -> bytes:
+        if not isinstance(value, bytes) or len(value) != 32:
+            raise ValueError("device request nonce hash must contain 32 bytes")
+        return value
+
+
+class DeviceEnrollmentEvent(db.Model):
+    __tablename__ = "device_enrollment_events"
+    __table_args__ = (
+        UniqueConstraint("event_uuid", name="uq_device_enrollment_events_uuid"),
+        CheckConstraint(
+            "category IN ('token_issued', 'token_revoked', "
+            "'enrollment_succeeded', 'enrollment_failed', "
+            "'credential_rotated', 'credential_revoked', "
+            "'authentication_failed', 'legacy_authentication_used', "
+            "'legacy_authentication_disabled')",
+            name="ck_device_enrollment_events_category",
+        ),
+        Index(
+            "ix_device_enrollment_events_device_created",
+            "device_id",
+            "created_at",
+        ),
+        Index(
+            "ix_device_enrollment_events_credential_created",
+            "credential_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        nullable=False,
+        default=uuid4,
+    )
+    device_id: Mapped[int | None] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    credential_id: Mapped[int | None] = mapped_column(
+        ForeignKey("device_credentials.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    token_id: Mapped[int | None] = mapped_column(
+        ForeignKey("enrollment_tokens.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    failure_class: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    administrator_subject: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    public_key_fingerprint: Mapped[bytes | None] = mapped_column(
+        LargeBinary(32),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+    @validates("category")
+    def validate_category(self, _key: str, value: object) -> str:
+        if (
+            not isinstance(value, str)
+            or value not in DEVICE_ENROLLMENT_EVENT_CATEGORIES
+        ):
+            raise ValueError("invalid device enrollment event category")
+        return value
+
+    @validates("public_key_fingerprint")
+    def validate_public_key_fingerprint(
+        self,
+        _key: str,
+        value: object,
+    ) -> bytes | None:
+        if value is not None and (not isinstance(value, bytes) or len(value) != 32):
+            raise ValueError("public key fingerprint must contain 32 bytes")
+        return value
+
+
 class DevicePolicyAssignment(db.Model):
     __tablename__ = "device_policy_assignments"
     __table_args__ = (
@@ -333,10 +690,18 @@ class DevicePolicyAssignment(db.Model):
 
 
 __all__ = [
+    "DEVICE_CREDENTIAL_ALGORITHMS",
+    "DEVICE_CREDENTIAL_STATUSES",
+    "DEVICE_ENROLLMENT_EVENT_CATEGORIES",
     "DEVICE_REGISTRATION_EVENT_TYPES",
     "DEVICE_STATUSES",
+    "ENROLLMENT_TOKEN_STATUSES",
     "Device",
+    "DeviceCredential",
+    "DeviceEnrollmentEvent",
     "DevicePolicyAssignment",
     "DeviceRegistrationEvent",
+    "DeviceRequestNonce",
+    "EnrollmentToken",
     "Policy",
 ]

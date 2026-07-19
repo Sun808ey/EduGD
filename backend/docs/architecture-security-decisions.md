@@ -52,6 +52,9 @@ It does not mean later remediation increments have been implemented.
   `docs/device-enrollment-authentication-design.md`.
 - Enrollment implementation remains separately approval-gated one sub-step at
   a time.
+- Enrollment persistence tables are introduced without changing existing
+  device rows. Credential absence derives `legacy_pending`; one active device
+  credential derives `enrolled`, avoiding a duplicated enrollment-state column.
 
 ## Policies, assignments, and synchronization
 

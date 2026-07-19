@@ -6,6 +6,7 @@ from typing import Any
 
 from flask import Flask
 
+from app.administrator_authorization import configure_administrator_jwt
 from app.cli import register_cli_commands
 from app.config import (
     get_configuration,
@@ -55,6 +56,7 @@ def create_app(
     _validate_startup_configuration(app)
     configure_sentry(app)
     _initialize_extensions(app)
+    configure_administrator_jwt()
     register_cli_commands(app)
     register_blueprints(app)
     register_error_handlers(app)
@@ -92,7 +94,11 @@ def _initialize_extensions(app: Flask) -> None:
 def _apply_nonproduction_secret_defaults(app: Flask) -> None:
     if app.config["APP_ENV"] == "production":
         return
-    for setting in ("SECRET_KEY", "JWT_SECRET_KEY"):
+    for setting in (
+        "SECRET_KEY",
+        "JWT_SECRET_KEY",
+        "ADMIN_AUDIT_PSEUDONYM_KEY",
+    ):
         if not app.config.get(setting):
             app.config[setting] = token_urlsafe(32)
 
@@ -101,7 +107,11 @@ def _validate_startup_configuration(app: Flask) -> None:
     if app.config["APP_ENV"] != "production":
         return
 
-    required_settings = ("SECRET_KEY", "JWT_SECRET_KEY")
+    required_settings = (
+        "SECRET_KEY",
+        "JWT_SECRET_KEY",
+        "ADMIN_AUDIT_PSEUDONYM_KEY",
+    )
     if any(not app.config.get(setting) for setting in required_settings):
         raise RuntimeError("Required production secrets must be configured")
     if any(
@@ -109,7 +119,9 @@ def _validate_startup_configuration(app: Flask) -> None:
         for setting in required_settings
     ):
         raise RuntimeError("Production secrets must be at least 32 characters")
-    if app.config["SECRET_KEY"] == app.config["JWT_SECRET_KEY"]:
+    if len({app.config[setting] for setting in required_settings}) != len(
+        required_settings
+    ):
         raise RuntimeError("Production secrets must be distinct")
     if app.config["DEBUG"] or app.config["TESTING"]:
         raise RuntimeError("Production startup cannot enable debug or testing mode")

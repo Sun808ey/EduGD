@@ -197,6 +197,7 @@ def test_production_starts_with_database_and_required_secrets(
         {
             "SECRET_KEY": "f" * 32,
             "JWT_SECRET_KEY": "j" * 32,
+            "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
         },
     )
 

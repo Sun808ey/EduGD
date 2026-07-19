@@ -3,11 +3,15 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import CheckConstraint, Index, UniqueConstraint, Uuid
+from flask import Flask
+from flask_migrate import downgrade, upgrade
+from sqlalchemy import CheckConstraint, Index, UniqueConstraint, Uuid, inspect
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.schema import CreateIndex
 
+from app.extensions import db
 from app.models import (
+    Device,
     DeviceCredential,
     DeviceEnrollmentEvent,
     DeviceRequestNonce,
@@ -242,3 +246,56 @@ def test_enrollment_models_generate_internal_uuids_without_storing_secrets() -> 
     assert token.verifier == b"v" * 32
     assert credential.public_key_der == b"public-key-der"
     assert event.category == "enrollment_succeeded"
+
+
+def test_migration_preserves_and_classifies_existing_device(app: Flask) -> None:
+    legacy_device_uuid = uuid4()
+
+    with app.app_context():
+        downgrade(revision="b4e7c1d3f5a9")
+        legacy_device = Device(
+            device_uuid=legacy_device_uuid,
+            android_version="10",
+            api_level=29,
+        )
+        db.session.add(legacy_device)
+        db.session.commit()
+        legacy_device_id = legacy_device.id
+
+        upgrade(revision="head")
+        db.session.expire_all()
+        migrated_device = db.session.get(Device, legacy_device_id)
+
+        assert migrated_device is not None
+        assert migrated_device.device_uuid == legacy_device_uuid
+        assert migrated_device.enrollment_state == "legacy_pending"
+
+        credential = DeviceCredential(
+            device_id=migrated_device.id,
+            algorithm="RSA_2048_SHA256",
+            public_key_der=b"public-key-der",
+            public_key_fingerprint=b"f" * 32,
+        )
+        db.session.add(credential)
+        db.session.commit()
+        db.session.expire(migrated_device, ["credentials"])
+
+        assert migrated_device.enrollment_state == "enrolled"
+
+
+def test_enrollment_tables_downgrade_and_upgrade_on_sqlite(app: Flask) -> None:
+    enrollment_tables = {
+        "enrollment_tokens",
+        "device_credentials",
+        "device_request_nonces",
+        "device_enrollment_events",
+    }
+
+    with app.app_context():
+        assert enrollment_tables.issubset(set(inspect(db.engine).get_table_names()))
+
+        downgrade(revision="b4e7c1d3f5a9")
+        assert enrollment_tables.isdisjoint(set(inspect(db.engine).get_table_names()))
+
+        upgrade(revision="head")
+        assert enrollment_tables.issubset(set(inspect(db.engine).get_table_names()))

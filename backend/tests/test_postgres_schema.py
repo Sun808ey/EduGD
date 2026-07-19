@@ -10,7 +10,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.sqltypes import DateTime
 
-from app.models import Device, DevicePolicyAssignment, Policy
+from app.models import (
+    Device,
+    DeviceCredential,
+    DevicePolicyAssignment,
+    Policy,
+)
 
 pytestmark = pytest.mark.postgres
 
@@ -46,6 +51,10 @@ def test_existing_schema_metadata_and_constraints(
         "policies",
         "device_policy_assignments",
         "device_registration_events",
+        "enrollment_tokens",
+        "device_credentials",
+        "device_request_nonces",
+        "device_enrollment_events",
     }
     assert expected_tables.issubset(set(inspector.get_table_names()))
 
@@ -170,6 +179,83 @@ def test_existing_schema_metadata_and_constraints(
         "ck_device_registration_events_stored_api_level",
         "ck_device_registration_events_type",
     }
+
+
+def test_enrollment_authentication_schema_constraints(
+    postgres_session: Session,
+) -> None:
+    inspector = inspect(postgres_session.connection())
+
+    expected_checks = {
+        "enrollment_tokens": {
+            "ck_enrollment_tokens_consumption_state",
+            "ck_enrollment_tokens_expiry",
+            "ck_enrollment_tokens_failed_attempts",
+            "ck_enrollment_tokens_pepper_version",
+            "ck_enrollment_tokens_revocation_state",
+            "ck_enrollment_tokens_status",
+        },
+        "device_credentials": {
+            "ck_device_credentials_algorithm",
+            "ck_device_credentials_lifecycle",
+            "ck_device_credentials_status",
+        },
+        "device_request_nonces": {"ck_device_request_nonces_expiry"},
+        "device_enrollment_events": {"ck_device_enrollment_events_category"},
+    }
+    for table_name, constraint_names in expected_checks.items():
+        assert {
+            constraint["name"]
+            for constraint in inspector.get_check_constraints(table_name)
+        } == constraint_names
+
+    for table_name in expected_checks:
+        assert {
+            foreign_key["options"].get("ondelete")
+            for foreign_key in inspector.get_foreign_keys(table_name)
+        } <= {"RESTRICT"}
+
+    credential_indexes = {
+        index["name"]: index for index in inspector.get_indexes("device_credentials")
+    }
+    active_index = credential_indexes["uq_device_credentials_active_device"]
+    assert active_index["unique"] is True
+    assert active_index["column_names"] == ["device_id"]
+    active_predicate = str(active_index["dialect_options"]["postgresql_where"])
+    assert "status" in active_predicate
+    assert "'active'" in active_predicate
+
+    for table_name, uuid_column in (
+        ("enrollment_tokens", "token_uuid"),
+        ("device_credentials", "credential_uuid"),
+        ("device_enrollment_events", "event_uuid"),
+    ):
+        columns = {
+            column["name"]: column for column in inspector.get_columns(table_name)
+        }
+        assert isinstance(columns[uuid_column]["type"], POSTGRES_UUID)
+
+
+def test_existing_device_enrollment_classification_on_postgres(
+    postgres_session: Session,
+) -> None:
+    device = _device()
+    postgres_session.add(device)
+    postgres_session.flush()
+
+    assert device.enrollment_state == "legacy_pending"
+
+    credential = DeviceCredential(
+        device_id=device.id,
+        algorithm="RSA_2048_SHA256",
+        public_key_der=b"public-key-der",
+        public_key_fingerprint=b"f" * 32,
+    )
+    postgres_session.add(credential)
+    postgres_session.flush()
+    postgres_session.expire(device, ["credentials"])
+
+    assert device.enrollment_state == "enrolled"
 
 
 def test_uuid_json_primary_keys_uniqueness_and_timestamps(

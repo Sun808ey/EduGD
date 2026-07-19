@@ -52,6 +52,7 @@ DEVICE_ENROLLMENT_EVENT_CATEGORIES = frozenset(
         "legacy_authentication_disabled",
     }
 )
+DEVICE_ENROLLMENT_STATES = frozenset({"legacy_pending", "enrolled"})
 
 
 def utc_now() -> datetime:
@@ -129,6 +130,17 @@ class Device(db.Model):
         back_populates="device",
         order_by="DeviceRegistrationEvent.created_at",
     )
+    credentials: Mapped[list["DeviceCredential"]] = relationship(
+        back_populates="device",
+        foreign_keys="DeviceCredential.device_id",
+        order_by="DeviceCredential.issued_at",
+    )
+
+    @property
+    def enrollment_state(self) -> str:
+        if any(credential.status == "active" for credential in self.credentials):
+            return "enrolled"
+        return "legacy_pending"
 
     @validates("status")
     def validate_status(self, _key: str, value: object) -> str:
@@ -485,6 +497,11 @@ class DeviceCredential(db.Model):
         nullable=True,
     )
 
+    device: Mapped[Device] = relationship(
+        back_populates="credentials",
+        foreign_keys=[device_id],
+    )
+
     @validates("algorithm")
     def validate_algorithm(self, _key: str, value: object) -> str:
         if not isinstance(value, str) or value not in DEVICE_CREDENTIAL_ALGORITHMS:
@@ -693,6 +710,7 @@ __all__ = [
     "DEVICE_CREDENTIAL_ALGORITHMS",
     "DEVICE_CREDENTIAL_STATUSES",
     "DEVICE_ENROLLMENT_EVENT_CATEGORIES",
+    "DEVICE_ENROLLMENT_STATES",
     "DEVICE_REGISTRATION_EVENT_TYPES",
     "DEVICE_STATUSES",
     "ENROLLMENT_TOKEN_STATUSES",

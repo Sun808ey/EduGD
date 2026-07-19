@@ -55,6 +55,16 @@ It does not mean later remediation increments have been implemented.
 - Enrollment persistence tables are introduced without changing existing
   device rows. Credential absence derives `legacy_pending`; one active device
   credential derives `enrolled`, avoiding a duplicated enrollment-state column.
+- Local administrator authentication uses CLI-bootstrapped PostgreSQL accounts,
+  15-minute header-only JWT access tokens, and database-authoritative sessions,
+  account status, and permissions. JWT claims do not grant permissions.
+- Administrator login, logout, and identity routes use `/api/v1/admin/auth`,
+  return `Cache-Control: no-store`, and use one generic authentication failure.
+  Login is limited to 10 attempts per minute per source address, and five
+  consecutive account failures produce a 15-minute database lock.
+- Authentication audit events retain only keyed source-address pseudonyms and
+  JTI digests. Passwords, JWTs, submitted unknown usernames, raw source
+  addresses, and request bodies are not persisted or logged.
 
 ## Policies, assignments, and synchronization
 

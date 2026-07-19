@@ -14,15 +14,17 @@ file or in Git.
 ## Secrets and monitoring
 
 - `SECRET_KEY` is the Flask application secret.
-- `JWT_SECRET_KEY` is reserved for the separately approved authentication
-  design.
+- `JWT_SECRET_KEY` signs short-lived administrator access JWTs.
+- `ADMIN_AUDIT_PSEUDONYM_KEY` creates keyed source-address pseudonyms for
+  administrator authentication events.
 - `SENTRY_DSN` enables the approved Sentry integration outside test
   environments.
 
-All three variables must remain unset in committed files. Production requires
-distinct `SECRET_KEY` and `JWT_SECRET_KEY` values of at least 32 characters.
-Development and test startup generate distinct process-local random values
-when either secret is absent; generated values are never logged.
+All secret variables must remain unset in committed files. Production requires
+distinct `SECRET_KEY`, `JWT_SECRET_KEY`, and `ADMIN_AUDIT_PSEUDONYM_KEY` values
+of at least 32 characters. Development and test startup generate distinct
+process-local random values when any is absent; generated values are never
+logged.
 
 Sentry remains inactive without `SENTRY_DSN` and is always inactive in the
 `testing` and `postgres-testing` environments. When enabled, it labels events
@@ -74,11 +76,11 @@ returned to clients.
 
 ## Request and device-compatibility limits
 
-Flask applies a 1 MiB global request ceiling. Device registration applies a
-smaller 16 KiB ceiling before JSON parsing. Registration requires canonical
-lowercase hyphenated UUIDv4 text and a matching Android/API pair from Android
-5.0/API 21 through Android 10/API 29; API level is the authoritative
-compatibility value.
+Flask applies a 1 MiB global request ceiling. Device registration and
+administrator login apply smaller 16 KiB ceilings before JSON parsing.
+Registration requires canonical lowercase hyphenated UUIDv4 text and a
+matching Android/API pair from Android 5.0/API 21 through Android 10/API 29;
+API level is the authoritative compatibility value.
 
 ## Python and dependency baseline
 
@@ -88,6 +90,7 @@ compatibility value.
 - `requirements.txt` remains the authoritative pinned dependency set until an
   approved dependency-management change.
 
-`Flask-Limiter` is initialized during application startup with no global or
-route limits. It is disabled in test configurations. Approved endpoint rate
-policies remain deferred to their own implementation scope.
+`Flask-Limiter` is initialized during application startup with no global
+limits. Administrator login is limited to 10 attempts per minute per source
+address. The limiter remains disabled by default in test configurations;
+focused tests explicitly enable it to verify the route policy.

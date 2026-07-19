@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import timedelta
 from pathlib import Path
 from typing import cast
 
@@ -54,6 +55,16 @@ class Config:
     TESTING = False
     SECRET_KEY = os.getenv("SECRET_KEY")
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    ADMIN_AUDIT_PSEUDONYM_KEY = os.getenv("ADMIN_AUDIT_PSEUDONYM_KEY")
+    JWT_ALGORITHM = "HS256"
+    JWT_DECODE_ALGORITHMS = ["HS256"]
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
+    JWT_TOKEN_LOCATION = ("headers",)
+    JWT_HEADER_TYPE = "Bearer"
+    JWT_ENCODE_ISSUER = "edug-school-policy-api"
+    JWT_DECODE_ISSUER = "edug-school-policy-api"
+    JWT_ENCODE_AUDIENCE = "edug-school-administration"
+    JWT_DECODE_AUDIENCE = "edug-school-administration"
     SQLALCHEMY_DATABASE_URI: str | None = None
     SQLALCHEMY_ENGINE_OPTIONS: dict[str, object] = {}
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -69,6 +80,7 @@ class Config:
     READINESS_STATEMENT_TIMEOUT_MS = 2_000
     MAX_CONTENT_LENGTH = 1 * 1_024 * 1_024
     REGISTRATION_MAX_CONTENT_LENGTH = 16 * 1_024
+    ADMIN_AUTH_MAX_CONTENT_LENGTH = 16 * 1_024
 
 
 class DevelopmentConfig(Config):

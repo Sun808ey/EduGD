@@ -10,9 +10,10 @@ approval-gated.
 
 Implementation status: the four persistence models, migration
 `f2a9d4c7e1b3`, and trusted-operator CLI bootstrap/recovery commands are now
-implemented. No administrator HTTP authentication, JWT issuance, login,
-enrollment-token administration, or administrator record has been created by
-that implementation work.
+implemented. Administrator login, logout, identity inspection, database-backed
+session validation, login rate limiting, and reusable permission authorization
+are also implemented. Enrollment-token administration remains absent, and no
+administrator record was created by the implementation work.
 
 The design is for the single-school proof-of-concept deployment. It must be
 revisited before multiple schools share one backend because every administrator,

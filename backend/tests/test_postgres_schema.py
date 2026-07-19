@@ -55,6 +55,10 @@ def test_existing_schema_metadata_and_constraints(
         "device_credentials",
         "device_request_nonces",
         "device_enrollment_events",
+        "administrators",
+        "administrator_permissions",
+        "administrator_sessions",
+        "administrator_authentication_events",
     }
     assert expected_tables.issubset(set(inspector.get_table_names()))
 
@@ -256,6 +260,79 @@ def test_existing_device_enrollment_classification_on_postgres(
     postgres_session.expire(device, ["credentials"])
 
     assert device.enrollment_state == "enrolled"
+
+
+def test_administrator_authentication_schema_constraints(
+    postgres_session: Session,
+) -> None:
+    inspector = inspect(postgres_session.connection())
+    expected_checks = {
+        "administrators": {
+            "ck_administrators_display_name_bounded",
+            "ck_administrators_failed_attempts",
+            "ck_administrators_lifecycle",
+            "ck_administrators_password_verifier",
+            "ck_administrators_status",
+            "ck_administrators_username_bounded",
+        },
+        "administrator_permissions": {
+            "ck_administrator_permissions_grant_actor",
+            "ck_administrator_permissions_operator_bounded",
+            "ck_administrator_permissions_permission",
+            "ck_administrator_permissions_reason_bounded",
+        },
+        "administrator_sessions": {
+            "ck_administrator_sessions_expiry",
+            "ck_administrator_sessions_jti_digest_length",
+            "ck_administrator_sessions_revocation_metadata_bounded",
+            "ck_administrator_sessions_revocation_state",
+            "ck_administrator_sessions_source_pseudonym_length",
+        },
+        "administrator_authentication_events": {
+            "ck_administrator_authentication_events_actor",
+            "ck_administrator_authentication_events_category",
+            "ck_administrator_authentication_events_failure_bounded",
+            "ck_administrator_authentication_events_metadata_bounded",
+            "ck_administrator_authentication_events_source_pseudonym_length",
+        },
+    }
+    for table_name, constraint_names in expected_checks.items():
+        assert {
+            constraint["name"]
+            for constraint in inspector.get_check_constraints(table_name)
+        } == constraint_names
+
+    for table_name in (
+        "administrator_permissions",
+        "administrator_sessions",
+        "administrator_authentication_events",
+    ):
+        assert {
+            foreign_key["options"].get("ondelete")
+            for foreign_key in inspector.get_foreign_keys(table_name)
+        } == {"RESTRICT"}
+
+    administrator_uniques = {
+        constraint["name"]: constraint["column_names"]
+        for constraint in inspector.get_unique_constraints("administrators")
+    }
+    assert administrator_uniques["uq_administrators_uuid"] == ["administrator_uuid"]
+    assert administrator_uniques["uq_administrators_username"] == ["username"]
+
+    session_uniques = {
+        constraint["name"]: constraint["column_names"]
+        for constraint in inspector.get_unique_constraints("administrator_sessions")
+    }
+    assert session_uniques["uq_administrator_sessions_jti_digest"] == ["jti_digest"]
+
+    for table_name, uuid_column in (
+        ("administrators", "administrator_uuid"),
+        ("administrator_authentication_events", "event_uuid"),
+    ):
+        columns = {
+            column["name"]: column for column in inspector.get_columns(table_name)
+        }
+        assert isinstance(columns[uuid_column]["type"], POSTGRES_UUID)
 
 
 def test_uuid_json_primary_keys_uniqueness_and_timestamps(

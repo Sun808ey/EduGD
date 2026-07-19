@@ -53,10 +53,536 @@ DEVICE_ENROLLMENT_EVENT_CATEGORIES = frozenset(
     }
 )
 DEVICE_ENROLLMENT_STATES = frozenset({"legacy_pending", "enrolled"})
+ADMINISTRATOR_STATUSES = frozenset({"active", "disabled", "locked"})
+ADMINISTRATOR_PERMISSIONS = frozenset(
+    {
+        "administrator.manage",
+        "enrollment_token.issue",
+        "enrollment_token.revoke",
+    }
+)
+ADMINISTRATOR_AUTHENTICATION_EVENT_CATEGORIES = frozenset(
+    {
+        "bootstrap",
+        "login_succeeded",
+        "login_failed",
+        "account_locked",
+        "account_unlocked",
+        "password_reset",
+        "logout",
+        "session_revoked",
+        "account_disabled",
+        "permission_granted",
+        "permission_revoked",
+        "authorization_failed",
+    }
+)
+ADMINISTRATOR_USERNAME_PATTERN = re.compile(r"^[a-z0-9._-]{3,64}$")
+ADMINISTRATOR_FAILURE_CLASS_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def _validate_printable_text(value: object, field: str, maximum: int) -> str:
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= maximum
+        or not value.isprintable()
+    ):
+        raise ValueError(f"{field} must contain 1 to {maximum} printable characters")
+    return value
+
+
+class Administrator(db.Model):
+    __tablename__ = "administrators"
+    __table_args__ = (
+        UniqueConstraint(
+            "administrator_uuid",
+            name="uq_administrators_uuid",
+        ),
+        UniqueConstraint("username", name="uq_administrators_username"),
+        CheckConstraint(
+            "status IN ('active', 'disabled', 'locked')",
+            name="ck_administrators_status",
+        ),
+        CheckConstraint(
+            "length(username) BETWEEN 3 AND 64 AND username = lower(username)",
+            name="ck_administrators_username_bounded",
+        ),
+        CheckConstraint(
+            "length(display_name) BETWEEN 1 AND 120",
+            name="ck_administrators_display_name_bounded",
+        ),
+        CheckConstraint(
+            "length(password_verifier) BETWEEN 1 AND 512 AND "
+            "password_verifier LIKE 'scrypt:%'",
+            name="ck_administrators_password_verifier",
+        ),
+        CheckConstraint(
+            "failed_attempts BETWEEN 0 AND 5",
+            name="ck_administrators_failed_attempts",
+        ),
+        CheckConstraint(
+            "(status = 'active' AND failed_attempts BETWEEN 0 AND 4 AND "
+            "lock_expires_at IS NULL AND disabled_at IS NULL) OR "
+            "(status = 'locked' AND failed_attempts = 5 AND "
+            "lock_expires_at IS NOT NULL AND lock_expires_at > updated_at AND "
+            "disabled_at IS NULL) OR "
+            "(status = 'disabled' AND lock_expires_at IS NULL AND "
+            "disabled_at IS NOT NULL)",
+            name="ck_administrators_lifecycle",
+        ),
+        Index("ix_administrators_status", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    administrator_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        nullable=False,
+        default=uuid4,
+    )
+    username: Mapped[str] = mapped_column(String(64), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    password_verifier: Mapped[str] = mapped_column(String(512), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="active",
+        server_default="active",
+    )
+    failed_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    lock_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        onupdate=utc_now,
+        server_default=func.now(),
+    )
+    password_changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    disabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    permissions: Mapped[list["AdministratorPermission"]] = relationship(
+        back_populates="administrator",
+        foreign_keys="AdministratorPermission.administrator_id",
+        order_by="AdministratorPermission.granted_at",
+    )
+    sessions: Mapped[list["AdministratorSession"]] = relationship(
+        back_populates="administrator",
+        foreign_keys="AdministratorSession.administrator_id",
+        order_by="AdministratorSession.issued_at",
+    )
+    authentication_events: Mapped[list["AdministratorAuthenticationEvent"]] = (
+        relationship(
+            back_populates="administrator",
+            foreign_keys="AdministratorAuthenticationEvent.administrator_id",
+            order_by="AdministratorAuthenticationEvent.created_at",
+        )
+    )
+
+    @validates("username")
+    def validate_username(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or not ADMINISTRATOR_USERNAME_PATTERN.fullmatch(
+            value
+        ):
+            raise ValueError("invalid administrator username")
+        return value
+
+    @validates("display_name")
+    def validate_display_name(self, _key: str, value: object) -> str:
+        return _validate_printable_text(value, "administrator display name", 120)
+
+    @validates("password_verifier")
+    def validate_password_verifier(self, _key: str, value: object) -> str:
+        if (
+            not isinstance(value, str)
+            or not 1 <= len(value) <= 512
+            or not value.startswith("scrypt:")
+        ):
+            raise ValueError("invalid administrator password verifier")
+        return value
+
+    @validates("status")
+    def validate_status(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in ADMINISTRATOR_STATUSES:
+            raise ValueError("invalid administrator status")
+        return value
+
+    @validates("failed_attempts")
+    def validate_failed_attempts(self, _key: str, value: object) -> int:
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 5:
+            raise ValueError("administrator failed attempts must be between 0 and 5")
+        return value
+
+
+class AdministratorPermission(db.Model):
+    __tablename__ = "administrator_permissions"
+    __table_args__ = (
+        UniqueConstraint(
+            "administrator_id",
+            "permission",
+            name="uq_administrator_permissions_administrator_permission",
+        ),
+        CheckConstraint(
+            "permission IN ('administrator.manage', "
+            "'enrollment_token.issue', 'enrollment_token.revoke')",
+            name="ck_administrator_permissions_permission",
+        ),
+        CheckConstraint(
+            "(granted_by_administrator_id IS NOT NULL AND "
+            "trusted_operator_subject IS NULL) OR "
+            "(granted_by_administrator_id IS NULL AND "
+            "trusted_operator_subject IS NOT NULL)",
+            name="ck_administrator_permissions_grant_actor",
+        ),
+        CheckConstraint(
+            "length(reason) BETWEEN 1 AND 512",
+            name="ck_administrator_permissions_reason_bounded",
+        ),
+        CheckConstraint(
+            "trusted_operator_subject IS NULL OR "
+            "length(trusted_operator_subject) BETWEEN 1 AND 255",
+            name="ck_administrator_permissions_operator_bounded",
+        ),
+        Index("ix_administrator_permissions_administrator", "administrator_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    administrator_id: Mapped[int] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    permission: Mapped[str] = mapped_column(String(64), nullable=False)
+    granted_by_administrator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    trusted_operator_subject: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    reason: Mapped[str] = mapped_column(String(512), nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+    administrator: Mapped[Administrator] = relationship(
+        back_populates="permissions",
+        foreign_keys=[administrator_id],
+    )
+    granted_by_administrator: Mapped[Administrator | None] = relationship(
+        foreign_keys=[granted_by_administrator_id],
+    )
+
+    @validates("permission")
+    def validate_permission(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in ADMINISTRATOR_PERMISSIONS:
+            raise ValueError("invalid administrator permission")
+        return value
+
+    @validates("trusted_operator_subject")
+    def validate_trusted_operator_subject(
+        self,
+        _key: str,
+        value: object,
+    ) -> str | None:
+        if value is None:
+            return None
+        return _validate_printable_text(value, "trusted operator subject", 255)
+
+    @validates("reason")
+    def validate_reason(self, _key: str, value: object) -> str:
+        return _validate_printable_text(value, "permission grant reason", 512)
+
+
+class AdministratorSession(db.Model):
+    __tablename__ = "administrator_sessions"
+    __table_args__ = (
+        UniqueConstraint("jti_digest", name="uq_administrator_sessions_jti_digest"),
+        CheckConstraint(
+            "expires_at > issued_at",
+            name="ck_administrator_sessions_expiry",
+        ),
+        CheckConstraint(
+            "length(jti_digest) = 32",
+            name="ck_administrator_sessions_jti_digest_length",
+        ),
+        CheckConstraint(
+            "source_address_pseudonym IS NULL OR length(source_address_pseudonym) = 32",
+            name="ck_administrator_sessions_source_pseudonym_length",
+        ),
+        CheckConstraint(
+            "(revoked_at IS NULL AND revoked_by_administrator_id IS NULL AND "
+            "revoked_by_operator_subject IS NULL AND revocation_reason IS NULL) OR "
+            "(revoked_at IS NOT NULL AND revoked_at >= issued_at AND "
+            "revocation_reason IS NOT NULL AND "
+            "((revoked_by_administrator_id IS NOT NULL AND "
+            "revoked_by_operator_subject IS NULL) OR "
+            "(revoked_by_administrator_id IS NULL AND "
+            "revoked_by_operator_subject IS NOT NULL)))",
+            name="ck_administrator_sessions_revocation_state",
+        ),
+        CheckConstraint(
+            "(revoked_by_operator_subject IS NULL OR "
+            "length(revoked_by_operator_subject) BETWEEN 1 AND 255) AND "
+            "(revocation_reason IS NULL OR "
+            "length(revocation_reason) BETWEEN 1 AND 512)",
+            name="ck_administrator_sessions_revocation_metadata_bounded",
+        ),
+        Index(
+            "ix_administrator_sessions_administrator_expires",
+            "administrator_id",
+            "expires_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    administrator_id: Mapped[int] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    jti_digest: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    source_address_pseudonym: Mapped[bytes | None] = mapped_column(
+        LargeBinary(32),
+        nullable=True,
+    )
+    issued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    revoked_by_administrator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    revoked_by_operator_subject: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    revocation_reason: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
+
+    administrator: Mapped[Administrator] = relationship(
+        back_populates="sessions",
+        foreign_keys=[administrator_id],
+    )
+    revoked_by_administrator: Mapped[Administrator | None] = relationship(
+        foreign_keys=[revoked_by_administrator_id],
+    )
+
+    @validates("jti_digest")
+    def validate_jti_digest(self, _key: str, value: object) -> bytes:
+        if not isinstance(value, bytes) or len(value) != 32:
+            raise ValueError("administrator session JTI digest must contain 32 bytes")
+        return value
+
+    @validates("source_address_pseudonym")
+    def validate_source_address_pseudonym(
+        self,
+        _key: str,
+        value: object,
+    ) -> bytes | None:
+        if value is not None and (not isinstance(value, bytes) or len(value) != 32):
+            raise ValueError("source address pseudonym must contain 32 bytes")
+        return value
+
+    @validates("revoked_by_operator_subject")
+    def validate_revoked_by_operator_subject(
+        self,
+        _key: str,
+        value: object,
+    ) -> str | None:
+        if value is None:
+            return None
+        return _validate_printable_text(value, "revoking operator subject", 255)
+
+    @validates("revocation_reason")
+    def validate_revocation_reason(
+        self,
+        _key: str,
+        value: object,
+    ) -> str | None:
+        if value is None:
+            return None
+        return _validate_printable_text(value, "session revocation reason", 512)
+
+
+class AdministratorAuthenticationEvent(db.Model):
+    __tablename__ = "administrator_authentication_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "event_uuid",
+            name="uq_administrator_authentication_events_uuid",
+        ),
+        CheckConstraint(
+            "category IN ('bootstrap', 'login_succeeded', 'login_failed', "
+            "'account_locked', 'account_unlocked', 'password_reset', 'logout', "
+            "'session_revoked', 'account_disabled', 'permission_granted', "
+            "'permission_revoked', 'authorization_failed')",
+            name="ck_administrator_authentication_events_category",
+        ),
+        CheckConstraint(
+            "acting_administrator_id IS NULL OR trusted_operator_subject IS NULL",
+            name="ck_administrator_authentication_events_actor",
+        ),
+        CheckConstraint(
+            "failure_class IS NULL OR length(failure_class) BETWEEN 1 AND 64",
+            name="ck_administrator_authentication_events_failure_bounded",
+        ),
+        CheckConstraint(
+            "source_address_pseudonym IS NULL OR length(source_address_pseudonym) = 32",
+            name="ck_administrator_authentication_events_source_pseudonym_length",
+        ),
+        CheckConstraint(
+            "(trusted_operator_subject IS NULL OR "
+            "length(trusted_operator_subject) BETWEEN 1 AND 255) AND "
+            "(reason IS NULL OR length(reason) BETWEEN 1 AND 512)",
+            name="ck_administrator_authentication_events_metadata_bounded",
+        ),
+        Index(
+            "ix_administrator_authentication_events_administrator_created",
+            "administrator_id",
+            "created_at",
+        ),
+        Index(
+            "ix_administrator_authentication_events_category_created",
+            "category",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        nullable=False,
+        default=uuid4,
+    )
+    administrator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("administrator_sessions.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    failure_class: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_address_pseudonym: Mapped[bytes | None] = mapped_column(
+        LargeBinary(32),
+        nullable=True,
+    )
+    acting_administrator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    trusted_operator_subject: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+    administrator: Mapped[Administrator | None] = relationship(
+        back_populates="authentication_events",
+        foreign_keys=[administrator_id],
+    )
+    session: Mapped[AdministratorSession | None] = relationship(
+        foreign_keys=[session_id],
+    )
+    acting_administrator: Mapped[Administrator | None] = relationship(
+        foreign_keys=[acting_administrator_id],
+    )
+
+    @validates("category")
+    def validate_category(self, _key: str, value: object) -> str:
+        if (
+            not isinstance(value, str)
+            or value not in ADMINISTRATOR_AUTHENTICATION_EVENT_CATEGORIES
+        ):
+            raise ValueError("invalid administrator authentication event category")
+        return value
+
+    @validates("failure_class")
+    def validate_failure_class(
+        self,
+        _key: str,
+        value: object,
+    ) -> str | None:
+        if value is not None and (
+            not isinstance(value, str)
+            or not ADMINISTRATOR_FAILURE_CLASS_PATTERN.fullmatch(value)
+        ):
+            raise ValueError("invalid administrator authentication failure class")
+        return value
+
+    @validates("source_address_pseudonym")
+    def validate_source_address_pseudonym(
+        self,
+        _key: str,
+        value: object,
+    ) -> bytes | None:
+        if value is not None and (not isinstance(value, bytes) or len(value) != 32):
+            raise ValueError("source address pseudonym must contain 32 bytes")
+        return value
+
+    @validates("trusted_operator_subject")
+    def validate_trusted_operator_subject(
+        self,
+        _key: str,
+        value: object,
+    ) -> str | None:
+        if value is None:
+            return None
+        return _validate_printable_text(value, "trusted operator subject", 255)
+
+    @validates("reason")
+    def validate_reason(self, _key: str, value: object) -> str | None:
+        if value is None:
+            return None
+        return _validate_printable_text(value, "authentication event reason", 512)
 
 
 class Device(db.Model):
@@ -707,6 +1233,13 @@ class DevicePolicyAssignment(db.Model):
 
 
 __all__ = [
+    "ADMINISTRATOR_AUTHENTICATION_EVENT_CATEGORIES",
+    "ADMINISTRATOR_PERMISSIONS",
+    "ADMINISTRATOR_STATUSES",
+    "Administrator",
+    "AdministratorAuthenticationEvent",
+    "AdministratorPermission",
+    "AdministratorSession",
     "DEVICE_CREDENTIAL_ALGORITHMS",
     "DEVICE_CREDENTIAL_STATUSES",
     "DEVICE_ENROLLMENT_EVENT_CATEGORIES",

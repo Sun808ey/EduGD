@@ -6,6 +6,7 @@ from typing import Any
 
 from flask import Flask
 
+from app.cli import register_cli_commands
 from app.config import (
     get_configuration,
     resolve_database_uri,
@@ -54,6 +55,7 @@ def create_app(
     _validate_startup_configuration(app)
     configure_sentry(app)
     _initialize_extensions(app)
+    register_cli_commands(app)
     register_blueprints(app)
     register_error_handlers(app)
     _register_existing_root_route(app)
@@ -115,6 +117,10 @@ def _validate_startup_configuration(app: Flask) -> None:
 
 def _load_models() -> None:
     from app.models import (
+        Administrator,
+        AdministratorAuthenticationEvent,
+        AdministratorPermission,
+        AdministratorSession,
         Device,
         DeviceCredential,
         DeviceEnrollmentEvent,
@@ -126,6 +132,10 @@ def _load_models() -> None:
     )
 
     _ = (
+        Administrator,
+        AdministratorAuthenticationEvent,
+        AdministratorPermission,
+        AdministratorSession,
         Device,
         DeviceCredential,
         DeviceEnrollmentEvent,

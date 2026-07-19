@@ -315,6 +315,12 @@ POST /api/v1/admin/enrollment-tokens/<token_uuid>/revoke
 POST /api/v1/admin/devices/<device_uuid>/credentials/revoke
 ```
 
+The proposed administrator identity, session, authorization, bootstrap,
+recovery, and audit boundary is specified in the
+[administrator authentication design](administrator-authentication-design.md).
+That design must be accepted and implemented before either enrollment-token
+route is exposed.
+
 ## Credential revocation and recovery
 
 Revocation is immediate for server communication. A revoked credential cannot

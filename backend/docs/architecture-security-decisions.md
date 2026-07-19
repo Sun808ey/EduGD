@@ -41,8 +41,17 @@ It does not mean later remediation increments have been implemented.
   stored as a server-side hash.
 - Successful enrollment issues a separate revocable device credential and
   includes replay protection.
-- Enrollment implementation requires separate approval of its detailed design
-  and migration plan.
+- The approved detailed design uses a ten-minute, single-use 256-bit pairing
+  token stored as a keyed verifier and a device-generated non-exportable
+  RSA-2048 Android Keystore key. The server stores only the public key.
+- Protected requests use a signed canonical request, five-minute timestamp
+  window, and unique nonce. UUID-only fallback ends after an explicitly
+  approved legacy migration cutoff.
+- The complete protocol, persistence proposal, API contracts, threat model,
+  revocation model, and legacy migration plan are recorded in
+  `docs/device-enrollment-authentication-design.md`.
+- Enrollment implementation remains separately approval-gated one sub-step at
+  a time.
 
 ## Policies, assignments, and synchronization
 

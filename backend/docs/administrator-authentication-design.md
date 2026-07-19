@@ -8,6 +8,12 @@ routes, administrator records, passwords, sessions, migrations, pairing-token
 issuance, or runtime authentication behavior. Implementation remains separately
 approval-gated.
 
+Implementation status: the four persistence models, migration
+`f2a9d4c7e1b3`, and trusted-operator CLI bootstrap/recovery commands are now
+implemented. No administrator HTTP authentication, JWT issuance, login,
+enrollment-token administration, or administrator record has been created by
+that implementation work.
+
 The design is for the single-school proof-of-concept deployment. It must be
 revisited before multiple schools share one backend because every administrator,
 role, session, token, device, and audit query would then need a tenant boundary.
@@ -222,6 +228,11 @@ commands require a bounded reason and identify the trusted operator through an
 explicit non-secret subject. Bootstrap refuses to run when an administrator
 already exists unless a separately approved recovery procedure is used.
 Commands use a database transaction and append an event before commit.
+
+`bootstrap` requires `--username`, `--display-name`, `--operator`, and
+`--reason`. The three recovery commands accept the canonical username argument
+and require `--operator` and `--reason`. No command defines a `--password`
+option; bootstrap and reset obtain it only from the hidden confirmation prompt.
 
 Production deployment documentation must restrict these commands to trusted
 host operators. They must never be exposed as web routes or executed by the

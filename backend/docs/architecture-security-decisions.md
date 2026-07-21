@@ -47,6 +47,11 @@ It does not mean later remediation increments have been implemented.
 - Protected requests use a signed canonical request, five-minute timestamp
   window, and unique nonce. UUID-only fallback ends after an explicitly
   approved legacy migration cutoff.
+- Enrollment and protected requests use the byte-exact `DEVICE-ENROLL-V1` and
+  `DEVICE-AUTH-V1` formats, strict RFC 4648 base64url and RFC 3986
+  canonicalization rules, and shared machine-readable interoperability vectors.
+- Rollout advances fail-closed through `legacy`, `new_devices_required`, and
+  `all_required`; table deployment alone never silently changes enforcement.
 - The complete protocol, persistence proposal, API contracts, threat model,
   revocation model, and legacy migration plan are recorded in
   `docs/device-enrollment-authentication-design.md`.

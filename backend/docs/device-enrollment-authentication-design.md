@@ -73,14 +73,46 @@ the relevant validation and cryptographic checks succeed.
 
 ## Cryptographic choices
 
+### Normative encoding and signature rules
+
+The words **must**, **reject**, and **exactly** in this section are normative.
+All signed messages use UTF-8, exactly one line-feed byte (`0x0a`) between
+fields, and no final line-feed. Every field is already validated and
+canonicalized before message construction; field values may not contain a
+carriage return, line feed, or NUL byte.
+
+- UUIDs use canonical lowercase hyphenated text.
+- Decimal integers use ASCII digits with no sign or leading zeroes, except the
+  value zero is encoded as `0`.
+- SHA-256 digests use exactly 64 lowercase hexadecimal characters.
+- Binary values use RFC 4648 base64url without padding. Decoders reject `=`,
+  whitespace, non-url-safe alphabet characters, and non-canonical encodings.
+- Nonces decode to exactly 16 bytes and pairing-token secrets decode to exactly
+  32 bytes.
+- `RSA_2048_SHA256` means an RSA public key with a 2048-bit modulus and public
+  exponent 65537, encoded as one complete DER SubjectPublicKeyInfo value with
+  no trailing bytes. Signatures use RSASSA-PKCS1-v1_5 with SHA-256 (Android
+  `SHA256withRSA`) and decode to exactly 256 bytes. RSA-PSS is not accepted
+  under this algorithm identifier.
+- A parser rejects an input instead of repairing, trimming, case-folding, or
+  accepting an alternate representation.
+
+The machine-readable interoperability vectors in
+[`device-auth-v1-test-vectors.json`](device-auth-v1-test-vectors.json) are part
+of this specification. Android and Flask implementations must reproduce every
+canonical message, digest, HMAC verifier, and RSA signature verification result
+before either enrollment or signed-request enforcement can be enabled.
+
 ### Pairing token
 
 - Generate 32 cryptographically random bytes.
 - Encode the secret using unpadded base64url.
 - Present it as `<token_uuid>.<secret>` so the UUID can select one verifier row
   without searching token hashes.
-- Store `HMAC-SHA-256(pepper, token_uuid || secret)` and a pepper-version
-  identifier; never store the presented token.
+- Store
+  `HMAC-SHA-256(pepper, ASCII(canonical_token_uuid) || 0x00 || raw_secret)` and
+  a pepper-version identifier; never store the presented token. The separator
+  and fixed-width decoded secret make the verifier input unambiguous.
 - Keep the pepper in a production secret named `PAIRING_TOKEN_PEPPER`, distinct
   from Flask and JWT secrets. Production must fail closed if token issuance or
   consumption is enabled without it.
@@ -144,9 +176,8 @@ authorization role for enrollment administration are separately approved.
    canonical UUIDv4 if one does not already exist.
 2. The DPC generates the RSA key pair in Android Keystore.
 3. The DPC computes the SHA-256 fingerprint of the public key.
-4. The DPC creates an enrollment nonce and signs the enrollment canonical
-   message containing the device UUID, token UUID, public-key fingerprint,
-   Android version, API level, and nonce.
+4. The DPC creates an enrollment nonce and signs the exact enrollment canonical
+   message specified below.
 5. The DPC submits the token, public key, metadata, nonce, and proof-of-possession
    signature over TLS.
 6. The server validates request size and shape before decoding cryptographic
@@ -163,6 +194,37 @@ authorization role for enrollment administration are separately approved.
 
 If any database or cryptographic step fails, the transaction rolls back and the
 token remains available unless the failure-attempt limit is atomically reached.
+
+### Enrollment proof canonical message
+
+The proof-of-possession input is exactly:
+
+```text
+DEVICE-ENROLL-V1
+<device UUID lowercase>
+<token UUID lowercase>
+<credential algorithm identifier>
+<SHA-256 of exact public-key SPKI DER, lowercase hex>
+<Android version from the validated Android/API pair>
+<API level decimal>
+<nonce base64url>
+```
+
+`DEVICE-ENROLL-V1` is a fixed domain-separation label. The server splits the
+presented pairing token at its single `.` character, strictly decodes its
+secret, and requires its token UUID to equal the UUID in the message. It
+strictly decodes and parses the supplied public key, recomputes the fingerprint
+over the exact accepted DER bytes, validates the Android version/API pair, and
+then reconstructs the message from those server-validated values. It never
+verifies a client-supplied message blob or client-supplied fingerprint without
+recomputation.
+
+The enrollment nonce is unique per DPC attempt. Successful replay is prevented
+by atomic single-use token consumption. Concurrent identical submissions are
+serialized by the token-row lock: exactly one may commit, and all later
+submissions receive the generic enrollment failure. A failed proof increments
+the token attempt counter in its own bounded transaction; infrastructure or
+server failures do not consume an attempt.
 
 ## Proposed enrollment contract
 
@@ -242,9 +304,43 @@ DEVICE-AUTH-V1
 <device UUID lowercase>
 ```
 
-The server must reject duplicate query keys unless the endpoint explicitly
-defines them, percent-decode and re-encode using one documented algorithm, and
-verify the body hash before deserializing a protected request body.
+`canonical path` and `canonical sorted query string` are derived from the raw
+origin-form request target, before framework form-decoding, as follows:
+
+The production WSGI/proxy chain must preserve the exact origin-form target in a
+trusted server variable such as `RAW_URI` or `REQUEST_URI`. Signed routes fail
+closed when that value is absent, altered, absolute-form, or inconsistent with
+the matched route. Implementations must not reconstruct it from Flask
+`request.path` or `request.args`, because those values may already have decoded
+or normalized security-relevant bytes. This preservation requirement is an
+enforcement-mode startup and deployment integration test.
+
+1. Split the raw target at the first literal `?`; an absent query becomes the
+   empty string. Fragments are invalid in an HTTP request target.
+2. The path must start with `/`. Strictly percent-decode each `%HH` triplet to
+   bytes; hex digits are case-insensitive on input. Reject malformed escapes,
+   NUL, backslash, control bytes, invalid UTF-8, dot-segments (`.` or `..`),
+   empty interior segments, and percent-encoded `/` or `\`. These rejections
+   prevent proxy/router path normalization from changing the signed resource.
+3. Re-encode the decoded UTF-8 path bytes using RFC 3986 unreserved characters
+   (`A-Z a-z 0-9 - . _ ~`) unchanged, preserve literal path separators `/`, and
+   encode every other byte as uppercase `%HH`.
+4. Split a non-empty raw query only on literal `&`. Every component must contain
+   at least one literal `=`; split at the first one to separate a non-empty name
+   from its value. Values may be empty. Strictly percent-decode both sides. A
+   literal `+` is a plus byte, never a space. Reject malformed escapes, NUL,
+   control bytes, invalid UTF-8, blank names, duplicate decoded names, and any
+   parameter not declared by the endpoint contract.
+5. Re-encode each decoded name and value with the RFC 3986 rule above but
+   without preserving `/`. Sort pairs lexicographically by encoded name and
+   then encoded value using unsigned ASCII byte order. Join each pair with `=`
+   and pairs with `&`. The empty query is the empty canonical field.
+
+The body hash is SHA-256 over the exact HTTP entity bytes as received, before
+JSON or form parsing. Requests without an entity use the SHA-256 of zero bytes.
+The server compares the computed digest to the bounded header in constant time
+before deserializing a protected body. The method is the uppercase method token;
+only methods explicitly allowed by the matched route are accepted.
 
 Authentication order is:
 
@@ -259,6 +355,12 @@ Authentication order is:
    constraint and ten-minute expiry;
 9. reject a unique collision as replay; and
 10. evaluate device status and endpoint authorization.
+
+Header bounds are: 36 ASCII characters for each UUID, 10 decimal characters
+for timestamps through year 2286, 22 base64url characters for a 16-byte nonce,
+64 lowercase hexadecimal characters for the body digest, and 342 base64url
+characters for a 256-byte RSA signature. Multiple instances, folded values,
+leading/trailing whitespace, and non-canonical representations are rejected.
 
 Nonce insertion and the protected state change must share a transaction for
 write requests. A failed request uses a new nonce when retried. The DPC uses the
@@ -275,6 +377,10 @@ All authentication failures use the same response:
 
 The response is HTTP 401 with `Cache-Control: no-store`. Internal append-only
 events retain a bounded failure category without storing signatures or tokens.
+Successful authentication records `authentication_succeeded`; failures record
+`authentication_failed`. Rate limiting and event sampling must never suppress a
+security transition event such as issuance, token consumption, rotation, or
+revocation.
 
 ## Protected API contracts
 
@@ -384,30 +490,63 @@ creates a new credential; it never reactivates or reveals the old credential.
 - public-key fingerprint, never the key, token, signature, or verifier;
 - append-only retention for forensic reconstruction.
 
+The permitted event categories are `token_issued`, `token_revoked`,
+`token_consumed`, `enrollment_succeeded`, `enrollment_failed`,
+`authentication_succeeded`, `authentication_failed`, `credential_rotated`,
+`credential_revoked`, `legacy_authentication_used`, and
+`legacy_authentication_disabled`. Successful enrollment writes
+`token_consumed` and `enrollment_succeeded` in the same transaction. The
+application runtime database role receives `INSERT` and required `SELECT`, but
+not `UPDATE`, `DELETE`, or `TRUNCATE`, on this table; schema-owner privileges are
+reserved for reviewed migrations. Remediation 11 must align the model and
+database category constraint with this list before any enrollment route is
+enabled.
+
 Foreign keys use `RESTRICT` for forensic records. Raw long-lived secrets are
 not stored. Every status column receives explicit model validation and database
 check constraints.
 
 ## Existing-device migration plan
 
-1. Add enrollment-token, credential, nonce, and enrollment-event tables without
-   changing current route enforcement.
-2. Treat every existing device with no active credential as `legacy_pending`;
-   derive this state from credential absence rather than rewriting its UUID.
-3. Release the Android DPC update that creates a Keystore key and supports the
-   enrollment protocol.
-4. Require administrators to issue device-bound migration tokens for existing
-   devices after confirming physical custody and inventory identity.
-5. Allow a time-bounded compatibility window in which `legacy_pending` devices
-   may use the old synchronization route. Every such request emits a deprecated
-   authentication event and never permits metadata changes.
-6. New device registrations require pairing-token enrollment from the moment
-   the new tables are deployed; there is no UUID-only path for new devices.
+Rollout uses one fail-closed server mode, persisted in deployment configuration
+and reported internally by readiness without exposing it publicly:
+
+- `legacy`: enrollment administration and authenticated-device routes are
+  disabled; existing behavior is temporarily preserved while schema and DPC
+  support are staged.
+- `new_devices_required`: every device UUID absent at the mode transition must
+  use pairing-token enrollment. UUID-only registration is disabled. Devices
+  already present at the recorded transition are the only devices eligible for
+  the bounded synchronization compatibility path.
+- `all_required`: every protected device request requires a valid credential;
+  no UUID-only fallback exists.
+
+The ordered rollout is:
+
+1. Deploy enrollment-token, credential, nonce, and enrollment-event tables in
+   `legacy` mode without changing route enforcement. Treat credential absence
+   as derived `legacy_pending`; do not rewrite existing device UUIDs.
+2. Release and verify the Android DPC update that implements the normative
+   Keystore and wire protocol and passes the shared test vectors.
+3. Enable administrator token issuance only after its authentication,
+   authorization, pepper, audit, and revocation controls pass verification.
+4. Record the immutable set or cutoff timestamp identifying devices that
+   existed before enforcement. Issue only device-bound migration tokens after
+   physical-custody and inventory confirmation.
+5. In one reviewed application deployment, switch to
+   `new_devices_required`. From that transition onward, new registrations have
+   no UUID-only path. A startup/readiness check must fail closed if this mode is
+   selected without the required pepper, tables, migration head, and routes.
+6. Permit the time-bounded UUID-only synchronization compatibility path solely
+   for recorded pre-transition `legacy_pending` devices. It never permits
+   registration, metadata changes, credential rotation, or log upload, and
+   every use appends `legacy_authentication_used`.
 7. Monitor enrollment coverage without logging credentials or request bodies.
-8. At an explicitly approved cutoff, remove UUID-only synchronization. Pending
-   devices receive generic HTTP 401 and retain their last local policy.
-9. Remove compatibility code only after the cutoff and regression verification;
-   do not delete legacy device or forensic history.
+   Mode changes and failed downgrade attempts append immutable events.
+8. At the explicitly approved cutoff, atomically switch to `all_required`.
+   Pending devices receive generic HTTP 401 and retain their last local policy.
+9. Remove compatibility code only after cutoff regression verification; never
+   delete legacy device or forensic history.
 
 The cutoff date, compatibility-window acceptance, and administrator issuance
 mechanism require explicit approval before implementation. Production,
@@ -432,6 +571,11 @@ Mandatory negative tests include stolen/expired/consumed/revoked tokens,
 concurrent token use, altered public keys, invalid proofs, credential/device
 mismatch, stale timestamps, reused nonces, altered paths/queries/bodies,
 revoked credentials, clock skew, database rollback, and secret-free logs.
+Both the Android and Flask suites must consume the shared vectors and add
+negative cases for padded or non-canonical base64url, malformed percent escapes,
+encoded separators, duplicate or unknown query parameters, literal `+`, invalid
+UTF-8, dot-segments, alternate UUID forms, leading-zero timestamps, wrong RSA
+padding, and a signature produced for the other protocol domain label.
 
 ## Explicitly rejected alternatives
 

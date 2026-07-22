@@ -5,10 +5,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import uuid4
 
+import pytest
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from flask import Flask
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.device_cryptography import (
     encode_base64url,
@@ -178,6 +180,80 @@ def test_enrollment_consumes_token_and_stores_only_public_credential(
         assert credential.public_key_der
         assert device.legacy_enrollment_eligible is False
         assert {"token_consumed", "enrollment_succeeded"}.issubset(categories)
+
+
+def test_consumed_pairing_token_cannot_be_replayed(app: Flask) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    access_token = _bootstrap_and_login(app)
+    pairing_token = _issue_token(app, access_token)
+    private_key, public_key, fingerprint = _key_material()
+    payload = _enrollment_payload(
+        pairing_token,
+        private_key,
+        public_key,
+        fingerprint,
+    )
+
+    enrolled = app.test_client().post("/api/v1/devices/register", json=payload)
+    replayed = app.test_client().post("/api/v1/devices/register", json=payload)
+
+    assert enrolled.status_code == 201
+    assert replayed.status_code == 401
+    assert replayed.get_json() == {"error": "enrollment_failed"}
+    assert replayed.headers["Cache-Control"] == "no-store"
+    assert pairing_token not in replayed.get_data(as_text=True)
+    with app.app_context():
+        token = db.session.execute(select(EnrollmentToken)).scalar_one()
+        assert token.status == "consumed"
+        assert len(db.session.execute(select(Device)).scalars().all()) == 1
+        categories = list(
+            db.session.execute(select(DeviceEnrollmentEvent.category)).scalars()
+        )
+        assert categories.count("token_consumed") == 1
+        assert categories.count("enrollment_succeeded") == 1
+
+
+def test_consumption_database_failure_rolls_back_without_consuming_token(
+    app: Flask,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    access_token = _bootstrap_and_login(app)
+    pairing_token = _issue_token(app, access_token)
+    private_key, public_key, fingerprint = _key_material()
+    payload = _enrollment_payload(
+        pairing_token,
+        private_key,
+        public_key,
+        fingerprint,
+    )
+
+    with app.app_context():
+        original_commit = db.session.commit
+
+        def fail_commit() -> None:
+            raise SQLAlchemyError("forced enrollment commit failure")
+
+        monkeypatch.setattr(db.session, "commit", fail_commit)
+        response = app.test_client().post("/api/v1/devices/register", json=payload)
+        monkeypatch.setattr(db.session, "commit", original_commit)
+
+        assert response.status_code == 500
+        assert response.get_json() == {"error": "internal_server_error"}
+        assert response.headers["Cache-Control"] == "no-store"
+        assert pairing_token not in response.get_data(as_text=True)
+        token = db.session.execute(select(EnrollmentToken)).scalar_one()
+        assert token.status == "active"
+        assert token.consumed_at is None
+        assert token.consumed_by_device_id is None
+        assert db.session.execute(select(Device)).scalar_one_or_none() is None
+        assert (
+            db.session.execute(select(DeviceCredential)).scalar_one_or_none() is None
+        )
+        categories = list(
+            db.session.execute(select(DeviceEnrollmentEvent.category)).scalars()
+        )
+        assert categories == ["token_issued"]
 
 
 def test_token_issuance_requires_administrator_permission(app: Flask) -> None:

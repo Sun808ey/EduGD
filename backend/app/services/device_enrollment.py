@@ -5,6 +5,7 @@ import hmac
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Never
 from uuid import UUID, uuid4
 
 from flask import current_app
@@ -187,7 +188,6 @@ def enroll_device(data: DeviceEnrollmentData) -> EnrollmentResult:
     if token is None:
         _record_failed_enrollment(None, None, "invalid_token")
     now = utc_now()
-    assert token is not None
     if token.status != "active":
         _record_failed_enrollment(token, token.bound_device_id, "inactive_token")
     if _as_utc(token.expires_at) <= now:
@@ -395,7 +395,7 @@ def _record_failed_enrollment(
     token: EnrollmentToken | None,
     device_id: int | None,
     failure_class: str,
-) -> None:
+) -> Never:
     if token is not None and token.status == "active":
         token.failed_attempts = min(token.failed_attempts + 1, 5)
         if token.failed_attempts >= 5:

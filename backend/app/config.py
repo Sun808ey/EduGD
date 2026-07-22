@@ -56,6 +56,11 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY")
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
     ADMIN_AUDIT_PSEUDONYM_KEY = os.getenv("ADMIN_AUDIT_PSEUDONYM_KEY")
+    PAIRING_TOKEN_PEPPER = os.getenv("PAIRING_TOKEN_PEPPER")
+    PAIRING_TOKEN_PEPPER_VERSION = int(os.getenv("PAIRING_TOKEN_PEPPER_VERSION", "1"))
+    PAIRING_TOKEN_PEPPERS: dict[int, str] | None = None
+    DEVICE_ENROLLMENT_MODE = os.getenv("DEVICE_ENROLLMENT_MODE", "legacy").lower()
+    ENROLLMENT_ADMIN_ENABLED = _environment_flag("ENROLLMENT_ADMIN_ENABLED")
     JWT_ALGORITHM = "HS256"
     JWT_DECODE_ALGORITHMS = ["HS256"]
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
@@ -81,6 +86,10 @@ class Config:
     MAX_CONTENT_LENGTH = 1 * 1_024 * 1_024
     REGISTRATION_MAX_CONTENT_LENGTH = 16 * 1_024
     ADMIN_AUTH_MAX_CONTENT_LENGTH = 16 * 1_024
+    DEVICE_AUTH_MAX_HEADER_LENGTH = 512
+    DEVICE_AUTH_CLOCK_SKEW_SECONDS = 300
+    DEVICE_AUTH_NONCE_TTL_SECONDS = 600
+    ENROLLMENT_TOKEN_TTL_SECONDS = 600
 
 
 class DevelopmentConfig(Config):
@@ -97,6 +106,8 @@ class TestingConfig(Config):
     SQLALCHEMY_DATABASE_URI = "sqlite+pysqlite:///:memory:"
     LOG_LEVEL = "WARNING"
     RATELIMIT_ENABLED = False
+    PAIRING_TOKEN_PEPPER = "testing-pairing-token-pepper-value"
+    ENROLLMENT_ADMIN_ENABLED = True
 
 
 class PostgresTestingConfig(Config):

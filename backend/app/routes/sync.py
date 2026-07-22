@@ -1,5 +1,10 @@
 from flask import Blueprint, Response, jsonify, request
 
+from app.extensions import limiter
+from app.services.device_authentication import (
+    credential_rate_limit_key,
+    device_authentication_required,
+)
 from app.services.policy_sync import (
     DeviceBlockedError,
     DeviceNotFoundError,
@@ -13,6 +18,8 @@ sync_bp = Blueprint("sync", __name__)
 
 
 @sync_bp.get("/sync/policies/<device_uuid>")
+@device_authentication_required(allowed_query_names=frozenset({"current_version"}))
+@limiter.limit("60 per minute", key_func=credential_rate_limit_key)
 def synchronize_policy(device_uuid: str) -> tuple[Response, int]:
     try:
         current_version = _parse_current_version()

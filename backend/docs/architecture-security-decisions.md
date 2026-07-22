@@ -55,8 +55,9 @@ It does not mean later remediation increments have been implemented.
 - The complete protocol, persistence proposal, API contracts, threat model,
   revocation model, and legacy migration plan are recorded in
   `docs/device-enrollment-authentication-design.md`.
-- Enrollment implementation remains separately approval-gated one sub-step at
-  a time.
+- Remediation 11 server implementation is approved and present. Production
+  rollout remains gated on an approved PostgreSQL migration/concurrency run and
+  Android interoperability validation against the shared wire vectors.
 - Enrollment persistence tables are introduced without changing existing
   device rows. Credential absence derives `legacy_pending`; one active device
   credential derives `enrolled`, avoiding a duplicated enrollment-state column.

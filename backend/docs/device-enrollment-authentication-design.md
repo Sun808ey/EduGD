@@ -2,11 +2,13 @@
 
 ## Status and scope
 
-This is the approved Remediation 10 design artifact. It defines a future
-implementation but does not authorize or implement authentication routes,
-models, migrations, administrator identity, token issuance, or Android-client
-changes. Every Remediation 11 implementation sub-step remains separately
-approval-gated.
+This began as the approved Remediation 10 design artifact. Remediation 11 is now
+approved and its server-side persistence, migration, token administration,
+enrollment, signed synchronization, rotation, revocation, and automated tests
+are implemented in this repository. The migration has not been applied to a
+production database. Live PostgreSQL migration/concurrency verification and an
+Android client implementation remain deployment proof gates, not silently
+assumed completed work.
 
 The design applies to the single-school proof-of-concept deployment. A future
 multi-school deployment must add explicit tenant ownership to every token,
@@ -412,6 +414,23 @@ and proof of possession. Rotation atomically creates the replacement, marks the
 old credential `superseded`, and appends an event. It never returns a private
 key or bearer secret.
 
+The new-key proof uses the same normative encoding and RSA rules and signs this
+exact message:
+
+```text
+DEVICE-ROTATE-V1
+<device UUID lowercase>
+<current credential UUID lowercase>
+<new credential algorithm identifier>
+<SHA-256 of exact new public-key SPKI DER, lowercase hex>
+<new-key nonce base64url>
+```
+
+`DEVICE-ROTATE-V1` is a distinct domain-separation label. The complete HTTP
+request, including this proof, is independently signed by the current active
+credential using `DEVICE-AUTH-V1`. Thus rotation requires simultaneous proof of
+the current private key and the replacement private key.
+
 Proposed administrator operations, blocked until administrator authentication
 is approved:
 
@@ -554,7 +573,7 @@ development, and test migrations remain separately gated.
 
 ## Required implementation increments and tests
 
-Remediation 11 must remain split into separately approved sub-steps:
+Remediation 11 was implemented in these reviewed sub-steps:
 
 1. persistence models and constraints;
 2. reviewed migration and existing-device classification;
@@ -566,6 +585,9 @@ Remediation 11 must remain split into separately approved sub-steps:
 8. compatibility cutoff; and
 9. PostgreSQL concurrency, migration, cryptographic test vectors, redaction,
    replay, expiry, revocation, and rollback tests.
+
+The PostgreSQL cases are safety-gated and must run against an explicitly
+approved disposable test branch before rollout.
 
 Mandatory negative tests include stolen/expired/consumed/revoked tokens,
 concurrent token use, altered public keys, invalid proofs, credential/device

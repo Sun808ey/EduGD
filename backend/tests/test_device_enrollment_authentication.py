@@ -1,0 +1,680 @@
+import hashlib
+import json
+import secrets
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
+from uuid import uuid4
+
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from flask import Flask
+from sqlalchemy import select
+
+from app.device_cryptography import (
+    encode_base64url,
+    enrollment_message,
+    request_message,
+    rotation_message,
+)
+from app.extensions import db
+from app.models import (
+    Device,
+    DeviceCredential,
+    DeviceEnrollmentEvent,
+    DeviceRequestNonce,
+    EnrollmentToken,
+)
+from app.services.administrator_authentication import bootstrap_administrator
+
+USERNAME = "device.enrollment.admin"
+PASSWORD = "OfflineSchool!2026"
+DEVICE_UUID = "550e8400-e29b-41d4-a716-446655440000"
+
+
+def _bootstrap_and_login(app: Flask) -> str:
+    with app.app_context():
+        bootstrap_administrator(
+            username=USERNAME,
+            display_name="Device Enrollment Administrator",
+            password=PASSWORD,
+            operator_subject="test-operator",
+            reason="device enrollment tests",
+        )
+    response = app.test_client().post(
+        "/api/v1/admin/auth/login",
+        json={"username": USERNAME, "password": PASSWORD},
+    )
+    assert response.status_code == 200
+    payload = cast(dict[str, Any], response.get_json())
+    return cast(str, payload["access_token"])
+
+
+def _issue_token(app: Flask, access_token: str, bound_uuid: str | None = None) -> str:
+    payload: dict[str, str] = {"reason": "school-owned device provisioning"}
+    if bound_uuid is not None:
+        payload["bound_device_uuid"] = bound_uuid
+    response = app.test_client().post(
+        "/api/v1/admin/enrollment-tokens",
+        json=payload,
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 201
+    assert response.headers["Cache-Control"] == "no-store"
+    response_payload = cast(dict[str, Any], response.get_json())
+    return cast(str, response_payload["pairing_token"])
+
+
+def _key_material() -> tuple[rsa.RSAPrivateKey, str, bytes]:
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    der = private_key.public_key().public_bytes(
+        serialization.Encoding.DER,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    return private_key, encode_base64url(der), hashlib.sha256(der).digest()
+
+
+def _enrollment_payload(
+    pairing_token: str,
+    private_key: rsa.RSAPrivateKey,
+    public_key: str,
+    fingerprint: bytes,
+) -> dict[str, Any]:
+    token_uuid = pairing_token.split(".", 1)[0]
+    nonce = encode_base64url(secrets.token_bytes(16))
+    message = enrollment_message(
+        device_uuid=DEVICE_UUID,
+        token_uuid=token_uuid,
+        algorithm="RSA_2048_SHA256",
+        public_key_fingerprint=fingerprint,
+        android_version="10",
+        api_level=29,
+        nonce=nonce,
+    )
+    proof = private_key.sign(message, padding.PKCS1v15(), hashes.SHA256())
+    return {
+        "device_uuid": DEVICE_UUID,
+        "android_version": "10",
+        "api_level": 29,
+        "pairing_token": pairing_token,
+        "credential": {
+            "algorithm": "RSA_2048_SHA256",
+            "public_key": public_key,
+            "nonce": nonce,
+            "proof": encode_base64url(proof),
+        },
+    }
+
+
+def _signed_headers(
+    private_key: rsa.RSAPrivateKey,
+    credential_uuid: str,
+    *,
+    method: str = "GET",
+    path: str | None = None,
+    query: str = "",
+    body: bytes = b"",
+    nonce: str | None = None,
+) -> tuple[dict[str, str], str]:
+    path = path or f"/api/v1/sync/policies/{DEVICE_UUID}"
+    nonce = nonce or encode_base64url(secrets.token_bytes(16))
+    timestamp = str(int(datetime.now(UTC).timestamp()))
+    body_hash = hashlib.sha256(body).hexdigest()
+    message = request_message(
+        method=method,
+        canonical_path=path,
+        canonical_query=query,
+        body_hash=body_hash,
+        timestamp=timestamp,
+        nonce=nonce,
+        credential_uuid=credential_uuid,
+        device_uuid=DEVICE_UUID,
+    )
+    signature = private_key.sign(message, padding.PKCS1v15(), hashes.SHA256())
+    return (
+        {
+            "Authorization": f"DeviceCredential {credential_uuid}",
+            "X-Device-Timestamp": timestamp,
+            "X-Device-Nonce": nonce,
+            "X-Device-Body-SHA256": body_hash,
+            "X-Device-Signature": encode_base64url(signature),
+        },
+        nonce,
+    )
+
+
+def _enroll(app: Flask) -> tuple[str, rsa.RSAPrivateKey, str]:
+    access_token = _bootstrap_and_login(app)
+    pairing_token = _issue_token(app, access_token)
+    private_key, public_key, fingerprint = _key_material()
+    response = app.test_client().post(
+        "/api/v1/devices/register",
+        json=_enrollment_payload(
+            pairing_token,
+            private_key,
+            public_key,
+            fingerprint,
+        ),
+    )
+    assert response.status_code == 201
+    return response.get_json()["credential_uuid"], private_key, access_token
+
+
+def test_enrollment_consumes_token_and_stores_only_public_credential(
+    app: Flask,
+) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    credential_uuid, _, _ = _enroll(app)
+
+    with app.app_context():
+        token = db.session.execute(select(EnrollmentToken)).scalar_one()
+        credential = db.session.execute(select(DeviceCredential)).scalar_one()
+        device = db.session.execute(select(Device)).scalar_one()
+        categories = set(
+            db.session.execute(select(DeviceEnrollmentEvent.category)).scalars()
+        )
+        assert token.status == "consumed"
+        assert len(token.verifier) == 32
+        assert credential_uuid == str(credential.credential_uuid)
+        assert credential.public_key_der
+        assert device.legacy_enrollment_eligible is False
+        assert {"token_consumed", "enrollment_succeeded"}.issubset(categories)
+
+
+def test_token_issuance_requires_administrator_permission(app: Flask) -> None:
+    response = app.test_client().post(
+        "/api/v1/admin/enrollment-tokens",
+        json={"reason": "unauthorized request"},
+    )
+
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "authentication_failed"}
+    with app.app_context():
+        assert db.session.execute(select(EnrollmentToken)).scalar_one_or_none() is None
+
+
+def test_invalid_proof_fails_generically_and_increments_attempt_count(
+    app: Flask,
+) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    access_token = _bootstrap_and_login(app)
+    pairing_token = _issue_token(app, access_token)
+    private_key, public_key, fingerprint = _key_material()
+    payload = _enrollment_payload(pairing_token, private_key, public_key, fingerprint)
+    payload["credential"]["proof"] = encode_base64url(b"x" * 256)
+
+    response = app.test_client().post("/api/v1/devices/register", json=payload)
+
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "enrollment_failed"}
+    assert pairing_token not in response.get_data(as_text=True)
+    with app.app_context():
+        token = db.session.execute(select(EnrollmentToken)).scalar_one()
+        assert token.failed_attempts == 1
+        assert db.session.execute(select(Device)).scalar_one_or_none() is None
+
+
+def test_signed_sync_succeeds_and_replayed_nonce_fails(app: Flask) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    credential_uuid, private_key, _ = _enroll(app)
+    headers, _ = _signed_headers(private_key, credential_uuid)
+    target = f"/api/v1/sync/policies/{DEVICE_UUID}"
+
+    success = app.test_client().get(
+        target,
+        headers=headers,
+        environ_overrides={"RAW_URI": target},
+    )
+    replay = app.test_client().get(
+        target,
+        headers=headers,
+        environ_overrides={"RAW_URI": target},
+    )
+
+    assert success.status_code == 200
+    assert replay.status_code == 401
+    assert replay.get_json() == {"error": "authentication_failed"}
+    assert replay.headers["Cache-Control"] == "no-store"
+    with app.app_context():
+        assert db.session.execute(select(DeviceRequestNonce)).scalars().all()
+
+
+def test_uuid_only_sync_is_rejected_for_new_device(app: Flask) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    _enroll(app)
+
+    response = app.test_client().get(f"/api/v1/sync/policies/{DEVICE_UUID}")
+
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "authentication_failed"}
+
+
+def test_administrator_revocation_immediately_blocks_sync(app: Flask) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    credential_uuid, private_key, access_token = _enroll(app)
+    revoke = app.test_client().post(
+        f"/api/v1/admin/devices/{DEVICE_UUID}/credentials/revoke",
+        json={"reason": "device reported missing"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    headers, _ = _signed_headers(private_key, credential_uuid)
+    target = f"/api/v1/sync/policies/{DEVICE_UUID}"
+
+    response = app.test_client().get(
+        target,
+        headers=headers,
+        environ_overrides={"RAW_URI": target},
+    )
+    fallback_attempt = app.test_client().get(target)
+
+    assert revoke.status_code == 200
+    assert response.status_code == 401
+    assert fallback_attempt.status_code == 401
+
+
+def test_credential_rotation_requires_both_current_and_new_key_proof(
+    app: Flask,
+) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    credential_uuid, old_private_key, _ = _enroll(app)
+    new_private_key, new_public_key, fingerprint = _key_material()
+    rotation_nonce = encode_base64url(secrets.token_bytes(16))
+    proof_message = rotation_message(
+        device_uuid=DEVICE_UUID,
+        current_credential_uuid=credential_uuid,
+        algorithm="RSA_2048_SHA256",
+        public_key_fingerprint=fingerprint,
+        nonce=rotation_nonce,
+    )
+    payload = {
+        "algorithm": "RSA_2048_SHA256",
+        "public_key": new_public_key,
+        "nonce": rotation_nonce,
+        "proof": encode_base64url(
+            new_private_key.sign(
+                proof_message,
+                padding.PKCS1v15(),
+                hashes.SHA256(),
+            )
+        ),
+    }
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    path = f"/api/v1/devices/{DEVICE_UUID}/credentials/rotate"
+    headers, _ = _signed_headers(
+        old_private_key,
+        credential_uuid,
+        method="POST",
+        path=path,
+        body=body,
+    )
+    headers["Content-Type"] = "application/json"
+
+    response = app.test_client().post(
+        path,
+        data=body,
+        headers=headers,
+        environ_overrides={"RAW_URI": path},
+    )
+
+    assert response.status_code == 201
+    replacement_uuid = response.get_json()["credential_uuid"]
+    new_headers, _ = _signed_headers(new_private_key, replacement_uuid)
+    sync_path = f"/api/v1/sync/policies/{DEVICE_UUID}"
+    assert (
+        app.test_client()
+        .get(
+            sync_path,
+            headers=new_headers,
+            environ_overrides={"RAW_URI": sync_path},
+        )
+        .status_code
+        == 200
+    )
+
+
+def test_revoked_pairing_token_cannot_enroll(app: Flask) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    access_token = _bootstrap_and_login(app)
+    pairing_token = _issue_token(app, access_token)
+    token_uuid = pairing_token.split(".", 1)[0]
+    revoke = app.test_client().post(
+        f"/api/v1/admin/enrollment-tokens/{token_uuid}/revoke",
+        json={"reason": "provisioning cancelled"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    private_key, public_key, fingerprint = _key_material()
+
+    response = app.test_client().post(
+        "/api/v1/devices/register",
+        json=_enrollment_payload(
+            pairing_token,
+            private_key,
+            public_key,
+            fingerprint,
+        ),
+    )
+
+    assert revoke.status_code == 200
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "enrollment_failed"}
+
+
+def test_signed_query_tampering_and_stale_timestamp_fail_closed(app: Flask) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    credential_uuid, private_key, _ = _enroll(app)
+    path = f"/api/v1/sync/policies/{DEVICE_UUID}"
+    headers, _ = _signed_headers(
+        private_key,
+        credential_uuid,
+        path=path,
+        query="current_version=4",
+    )
+    tampered_target = f"{path}?current_version=5"
+    tampered = app.test_client().get(
+        tampered_target,
+        headers=headers,
+        environ_overrides={"RAW_URI": tampered_target},
+    )
+    stale_headers, _ = _signed_headers(private_key, credential_uuid, path=path)
+    stale_headers["X-Device-Timestamp"] = "1000000000"
+    stale = app.test_client().get(
+        path,
+        headers=stale_headers,
+        environ_overrides={"RAW_URI": path},
+    )
+
+    assert tampered.status_code == 401
+    assert stale.status_code == 401
+
+
+def test_legacy_device_fallback_is_bounded_to_transition_eligible_rows(
+    app: Flask,
+) -> None:
+    legacy_response = app.test_client().post(
+        "/api/v1/devices/register",
+        json={
+            "device_uuid": DEVICE_UUID,
+            "android_version": "10",
+            "api_level": 29,
+        },
+    )
+    assert legacy_response.status_code == 201
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+
+    allowed = app.test_client().get(f"/api/v1/sync/policies/{DEVICE_UUID}")
+    app.config["DEVICE_ENROLLMENT_MODE"] = "all_required"
+    blocked = app.test_client().get(f"/api/v1/sync/policies/{DEVICE_UUID}")
+
+    assert allowed.status_code == 200
+    assert blocked.status_code == 401
+
+
+def test_bound_recovery_token_replaces_a_revoked_credential(app: Flask) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    _, _, access_token = _enroll(app)
+    revoke = app.test_client().post(
+        f"/api/v1/admin/devices/{DEVICE_UUID}/credentials/revoke",
+        json={"reason": "private key unavailable"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    pairing_token = _issue_token(app, access_token, DEVICE_UUID)
+    private_key, public_key, fingerprint = _key_material()
+    recovery = app.test_client().post(
+        "/api/v1/devices/register",
+        json=_enrollment_payload(
+            pairing_token,
+            private_key,
+            public_key,
+            fingerprint,
+        ),
+    )
+
+    assert revoke.status_code == 200
+    assert recovery.status_code == 201
+    revoke_replacement = app.test_client().post(
+        f"/api/v1/admin/devices/{DEVICE_UUID}/credentials/revoke",
+        json={"reason": "replacement device retired"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    fallback = app.test_client().get(f"/api/v1/sync/policies/{DEVICE_UUID}")
+    assert revoke_replacement.status_code == 200
+    assert fallback.status_code == 401
+    with app.app_context():
+        statuses = list(
+            db.session.execute(
+                select(DeviceCredential.status).order_by(DeviceCredential.issued_at)
+            ).scalars()
+        )
+        assert statuses == ["revoked", "revoked"]
+
+
+def test_five_invalid_token_secrets_atomically_lock_pairing_token(app: Flask) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    access_token = _bootstrap_and_login(app)
+    pairing_token = _issue_token(app, access_token)
+    token_uuid = pairing_token.split(".", 1)[0]
+    private_key, public_key, fingerprint = _key_material()
+
+    for _ in range(5):
+        invalid_token = f"{token_uuid}.{encode_base64url(secrets.token_bytes(32))}"
+        response = app.test_client().post(
+            "/api/v1/devices/register",
+            json=_enrollment_payload(
+                invalid_token,
+                private_key,
+                public_key,
+                fingerprint,
+            ),
+        )
+        assert response.status_code == 401
+
+    with app.app_context():
+        token = db.session.execute(select(EnrollmentToken)).scalar_one()
+        assert token.failed_attempts == 5
+        assert token.status == "locked"
+
+
+def test_legacy_mode_never_allows_uuid_only_credential_rotation(app: Flask) -> None:
+    registration = app.test_client().post(
+        "/api/v1/devices/register",
+        json={
+            "device_uuid": DEVICE_UUID,
+            "android_version": "10",
+            "api_level": 29,
+        },
+    )
+
+    response = app.test_client().post(
+        f"/api/v1/devices/{DEVICE_UUID}/credentials/rotate",
+        json={"algorithm": "RSA_2048_SHA256"},
+    )
+
+    assert registration.status_code == 201
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "authentication_failed"}
+
+
+def test_administrator_enrollment_routes_use_bounded_error_contracts(
+    app: Flask,
+) -> None:
+    access_token = _bootstrap_and_login(app)
+    authorization = {"Authorization": f"Bearer {access_token}"}
+    missing_uuid = str(uuid4())
+    missing_bound = app.test_client().post(
+        "/api/v1/admin/enrollment-tokens",
+        json={"reason": "missing inventory", "bound_device_uuid": missing_uuid},
+        headers=authorization,
+    )
+    missing_token = app.test_client().post(
+        f"/api/v1/admin/enrollment-tokens/{missing_uuid}/revoke",
+        json={"reason": "not present"},
+        headers=authorization,
+    )
+    missing_credential = app.test_client().post(
+        f"/api/v1/admin/devices/{missing_uuid}/credentials/revoke",
+        json={"reason": "not present"},
+        headers=authorization,
+    )
+    app.config["ENROLLMENT_ADMIN_ENABLED"] = False
+    disabled = app.test_client().post(
+        "/api/v1/admin/enrollment-tokens",
+        json={"reason": "disabled operation"},
+        headers=authorization,
+    )
+
+    assert missing_bound.status_code == 404
+    assert missing_token.status_code == 404
+    assert missing_credential.status_code == 404
+    assert disabled.status_code == 409
+
+
+def test_enrollment_schema_errors_are_generic_and_no_store(app: Flask) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    unsupported = app.test_client().post(
+        "/api/v1/devices/register",
+        data="not-json",
+        content_type="text/plain",
+    )
+    malformed = app.test_client().post(
+        "/api/v1/devices/register",
+        data="{",
+        content_type="application/json",
+    )
+    missing = app.test_client().post("/api/v1/devices/register", json={})
+
+    assert unsupported.status_code == 415
+    assert malformed.status_code == 400
+    assert missing.status_code == 400
+    assert all(
+        response.get_json() == {"error": "invalid_request"}
+        for response in (unsupported, malformed, missing)
+    )
+    assert all(
+        response.headers["Cache-Control"] == "no-store"
+        for response in (unsupported, malformed, missing)
+    )
+
+
+def test_expired_token_is_marked_expired_and_rejected(app: Flask) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    access_token = _bootstrap_and_login(app)
+    pairing_token = _issue_token(app, access_token)
+    with app.app_context():
+        token = db.session.execute(select(EnrollmentToken)).scalar_one()
+        token.created_at = datetime.now(UTC) - timedelta(minutes=20)
+        token.expires_at = datetime.now(UTC) - timedelta(minutes=10)
+        db.session.commit()
+    private_key, public_key, fingerprint = _key_material()
+
+    response = app.test_client().post(
+        "/api/v1/devices/register",
+        json=_enrollment_payload(
+            pairing_token,
+            private_key,
+            public_key,
+            fingerprint,
+        ),
+    )
+
+    assert response.status_code == 401
+    with app.app_context():
+        assert (
+            db.session.execute(select(EnrollmentToken.status)).scalar_one() == "expired"
+        )
+
+
+def test_bound_token_cannot_claim_a_different_existing_identity(app: Flask) -> None:
+    inventory_uuid = str(uuid4())
+    registered = app.test_client().post(
+        "/api/v1/devices/register",
+        json={
+            "device_uuid": inventory_uuid,
+            "android_version": "10",
+            "api_level": 29,
+        },
+    )
+    access_token = _bootstrap_and_login(app)
+    pairing_token = _issue_token(app, access_token, inventory_uuid)
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    private_key, public_key, fingerprint = _key_material()
+
+    response = app.test_client().post(
+        "/api/v1/devices/register",
+        json=_enrollment_payload(
+            pairing_token,
+            private_key,
+            public_key,
+            fingerprint,
+        ),
+    )
+
+    assert registered.status_code == 201
+    assert response.status_code == 401
+
+
+def test_signed_request_rejects_unknown_query_body_hash_and_device_mismatch(
+    app: Flask,
+) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    credential_uuid, private_key, _ = _enroll(app)
+    path = f"/api/v1/sync/policies/{DEVICE_UUID}"
+    headers, _ = _signed_headers(private_key, credential_uuid, path=path)
+    headers["X-Device-Body-SHA256"] = "0" * 64
+    bad_hash = app.test_client().get(
+        path,
+        headers=headers,
+        environ_overrides={"RAW_URI": path},
+    )
+    query_headers, _ = _signed_headers(
+        private_key,
+        credential_uuid,
+        path=path,
+        query="unexpected=1",
+    )
+    query_target = f"{path}?unexpected=1"
+    bad_query = app.test_client().get(
+        query_target,
+        headers=query_headers,
+        environ_overrides={"RAW_URI": query_target},
+    )
+    other_path = f"/api/v1/sync/policies/{uuid4()}"
+    mismatch_headers, _ = _signed_headers(
+        private_key,
+        credential_uuid,
+        path=other_path,
+    )
+    mismatch = app.test_client().get(
+        other_path,
+        headers=mismatch_headers,
+        environ_overrides={"RAW_URI": other_path},
+    )
+
+    assert bad_hash.status_code == 401
+    assert bad_query.status_code == 401
+    assert mismatch.status_code == 401
+
+
+def test_signed_malformed_rotation_body_is_rejected_after_authentication(
+    app: Flask,
+) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    credential_uuid, private_key, _ = _enroll(app)
+    body = b"{}"
+    path = f"/api/v1/devices/{DEVICE_UUID}/credentials/rotate"
+    headers, _ = _signed_headers(
+        private_key,
+        credential_uuid,
+        method="POST",
+        path=path,
+        body=body,
+    )
+    headers["Content-Type"] = "application/json"
+
+    response = app.test_client().post(
+        path,
+        data=body,
+        headers=headers,
+        environ_overrides={"RAW_URI": path},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "invalid_request"}

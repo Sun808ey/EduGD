@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -43,11 +44,13 @@ DEVICE_ENROLLMENT_EVENT_CATEGORIES = frozenset(
     {
         "token_issued",
         "token_revoked",
+        "token_consumed",
         "enrollment_succeeded",
         "enrollment_failed",
         "credential_rotated",
         "credential_revoked",
         "authentication_failed",
+        "authentication_succeeded",
         "legacy_authentication_used",
         "legacy_authentication_disabled",
     }
@@ -59,6 +62,7 @@ ADMINISTRATOR_PERMISSIONS = frozenset(
         "administrator.manage",
         "enrollment_token.issue",
         "enrollment_token.revoke",
+        "device_credential.revoke",
     }
 )
 ADMINISTRATOR_AUTHENTICATION_EVENT_CATEGORIES = frozenset(
@@ -249,7 +253,8 @@ class AdministratorPermission(db.Model):
         ),
         CheckConstraint(
             "permission IN ('administrator.manage', "
-            "'enrollment_token.issue', 'enrollment_token.revoke')",
+            "'enrollment_token.issue', 'enrollment_token.revoke', "
+            "'device_credential.revoke')",
             name="ck_administrator_permissions_permission",
         ),
         CheckConstraint(
@@ -625,6 +630,12 @@ class Device(db.Model):
         default="active",
         server_default="active",
     )
+    legacy_enrollment_eligible: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     registered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -839,6 +850,10 @@ class EnrollmentToken(db.Model):
             name="ck_enrollment_tokens_pepper_version",
         ),
         CheckConstraint(
+            "length(verifier) = 32",
+            name="ck_enrollment_tokens_verifier_length",
+        ),
+        CheckConstraint(
             "expires_at > created_at",
             name="ck_enrollment_tokens_expiry",
         ),
@@ -948,6 +963,14 @@ class DeviceCredential(db.Model):
             name="ck_device_credentials_status",
         ),
         CheckConstraint(
+            "length(public_key_der) BETWEEN 1 AND 512",
+            name="ck_device_credentials_public_key_length",
+        ),
+        CheckConstraint(
+            "length(public_key_fingerprint) = 32",
+            name="ck_device_credentials_fingerprint_length",
+        ),
+        CheckConstraint(
             "(status = 'active' AND revoked_at IS NULL AND revoked_by IS NULL "
             "AND revocation_reason IS NULL AND superseded_at IS NULL AND "
             "superseded_by_id IS NULL) OR "
@@ -956,7 +979,7 @@ class DeviceCredential(db.Model):
             "superseded_at IS NULL AND superseded_by_id IS NULL) OR "
             "(status = 'superseded' AND revoked_at IS NULL AND "
             "revoked_by IS NULL AND revocation_reason IS NULL AND "
-            "superseded_at IS NOT NULL AND superseded_by_id IS NOT NULL)",
+            "superseded_at IS NOT NULL)",
             name="ck_device_credentials_lifecycle",
         ),
         Index(
@@ -1046,6 +1069,12 @@ class DeviceCredential(db.Model):
             raise ValueError("public key fingerprint must contain 32 bytes")
         return value
 
+    @validates("public_key_der")
+    def validate_public_key_der(self, _key: str, value: object) -> bytes:
+        if not isinstance(value, bytes) or not 1 <= len(value) <= 512:
+            raise ValueError("public key DER must contain 1 to 512 bytes")
+        return value
+
 
 class DeviceRequestNonce(db.Model):
     __tablename__ = "device_request_nonces"
@@ -1058,6 +1087,10 @@ class DeviceRequestNonce(db.Model):
         CheckConstraint(
             "expires_at > observed_at",
             name="ck_device_request_nonces_expiry",
+        ),
+        CheckConstraint(
+            "length(nonce_hash) = 32",
+            name="ck_device_request_nonces_hash_length",
         ),
         Index("ix_device_request_nonces_expires_at", "expires_at"),
     )
@@ -1091,11 +1124,16 @@ class DeviceEnrollmentEvent(db.Model):
         UniqueConstraint("event_uuid", name="uq_device_enrollment_events_uuid"),
         CheckConstraint(
             "category IN ('token_issued', 'token_revoked', "
-            "'enrollment_succeeded', 'enrollment_failed', "
+            "'token_consumed', 'enrollment_succeeded', 'enrollment_failed', "
             "'credential_rotated', 'credential_revoked', "
-            "'authentication_failed', 'legacy_authentication_used', "
+            "'authentication_succeeded', 'authentication_failed', "
+            "'legacy_authentication_used', "
             "'legacy_authentication_disabled')",
             name="ck_device_enrollment_events_category",
+        ),
+        CheckConstraint(
+            "public_key_fingerprint IS NULL OR length(public_key_fingerprint) = 32",
+            name="ck_device_enrollment_events_fingerprint_length",
         ),
         Index(
             "ix_device_enrollment_events_device_created",

@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from flask import Flask
 from flask_migrate import downgrade, upgrade
-from sqlalchemy import CheckConstraint, Index, UniqueConstraint, Uuid, inspect
+from sqlalchemy import CheckConstraint, Index, UniqueConstraint, Uuid, inspect, text
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.schema import CreateIndex
 
@@ -57,6 +57,7 @@ def test_enrollment_token_metadata_contract() -> None:
         "ck_enrollment_tokens_pepper_version",
         "ck_enrollment_tokens_revocation_state",
         "ck_enrollment_tokens_status",
+        "ck_enrollment_tokens_verifier_length",
     }
     assert _index_names(EnrollmentToken) == {
         "ix_enrollment_tokens_bound_device",
@@ -83,6 +84,8 @@ def test_device_credential_metadata_contract() -> None:
         "ck_device_credentials_algorithm",
         "ck_device_credentials_lifecycle",
         "ck_device_credentials_status",
+        "ck_device_credentials_public_key_length",
+        "ck_device_credentials_fingerprint_length",
     }
     assert _index_names(DeviceCredential) == {
         "ix_device_credentials_device_status",
@@ -115,7 +118,8 @@ def test_request_nonce_metadata_contract() -> None:
         "uq_device_request_nonces_credential_hash"
     }
     assert _constraint_names(DeviceRequestNonce, CheckConstraint) == {
-        "ck_device_request_nonces_expiry"
+        "ck_device_request_nonces_expiry",
+        "ck_device_request_nonces_hash_length",
     }
     assert _index_names(DeviceRequestNonce) == {"ix_device_request_nonces_expires_at"}
     assert "nonce" not in table.c
@@ -134,7 +138,8 @@ def test_enrollment_event_metadata_contract() -> None:
         "uq_device_enrollment_events_uuid"
     }
     assert _constraint_names(DeviceEnrollmentEvent, CheckConstraint) == {
-        "ck_device_enrollment_events_category"
+        "ck_device_enrollment_events_category",
+        "ck_device_enrollment_events_fingerprint_length",
     }
     assert _index_names(DeviceEnrollmentEvent) == {
         "ix_device_enrollment_events_credential_created",
@@ -253,14 +258,19 @@ def test_migration_preserves_and_classifies_existing_device(app: Flask) -> None:
 
     with app.app_context():
         downgrade(revision="b4e7c1d3f5a9")
-        legacy_device = Device(
-            device_uuid=legacy_device_uuid,
-            android_version="10",
-            api_level=29,
+        db.session.execute(
+            text(
+                "INSERT INTO devices "
+                "(device_uuid, android_version, api_level, status) "
+                "VALUES (:device_uuid, '10', 29, 'active')"
+            ),
+            {"device_uuid": legacy_device_uuid.hex},
         )
-        db.session.add(legacy_device)
         db.session.commit()
-        legacy_device_id = legacy_device.id
+        legacy_device_id = db.session.execute(
+            text("SELECT id FROM devices WHERE device_uuid = :device_uuid"),
+            {"device_uuid": legacy_device_uuid.hex},
+        ).scalar_one()
 
         upgrade(revision="head")
         db.session.expire_all()
@@ -269,6 +279,7 @@ def test_migration_preserves_and_classifies_existing_device(app: Flask) -> None:
         assert migrated_device is not None
         assert migrated_device.device_uuid == legacy_device_uuid
         assert migrated_device.enrollment_state == "legacy_pending"
+        assert migrated_device.legacy_enrollment_eligible is True
 
         credential = DeviceCredential(
             device_id=migrated_device.id,

@@ -259,3 +259,22 @@ def test_structured_logging_redacts_secrets_and_credentials(
     assert audit_key not in captured.err
     assert "test-password" not in captured.err
     assert "<redacted>" in captured.err
+
+
+def test_enrollment_enforcement_requires_pairing_pepper() -> None:
+    with pytest.raises(RuntimeError, match="PAIRING_TOKEN_PEPPER"):
+        create_app(
+            "testing",
+            {
+                "DEVICE_ENROLLMENT_MODE": "all_required",
+                "PAIRING_TOKEN_PEPPER": None,
+            },
+        )
+
+
+def test_unknown_enrollment_mode_fails_startup() -> None:
+    with pytest.raises(RuntimeError, match="DEVICE_ENROLLMENT_MODE"):
+        create_app(
+            "testing",
+            {"DEVICE_ENROLLMENT_MODE": "unsafe_fallback"},
+        )

@@ -104,6 +104,17 @@ def _apply_nonproduction_secret_defaults(app: Flask) -> None:
 
 
 def _validate_startup_configuration(app: Flask) -> None:
+    enrollment_mode = app.config["DEVICE_ENROLLMENT_MODE"]
+    if enrollment_mode not in {"legacy", "new_devices_required", "all_required"}:
+        raise RuntimeError("DEVICE_ENROLLMENT_MODE is invalid")
+    if (app.config["ENROLLMENT_ADMIN_ENABLED"] or enrollment_mode != "legacy") and (
+        not isinstance(app.config.get("PAIRING_TOKEN_PEPPER"), str)
+        or len(app.config["PAIRING_TOKEN_PEPPER"]) < 32
+    ):
+        raise RuntimeError("PAIRING_TOKEN_PEPPER must contain at least 32 characters")
+    if app.config["PAIRING_TOKEN_PEPPER_VERSION"] < 1:
+        raise RuntimeError("PAIRING_TOKEN_PEPPER_VERSION must be positive")
+
     if app.config["APP_ENV"] != "production":
         return
 
@@ -122,6 +133,11 @@ def _validate_startup_configuration(app: Flask) -> None:
     if len({app.config[setting] for setting in required_settings}) != len(
         required_settings
     ):
+        raise RuntimeError("Production secrets must be distinct")
+    pairing_pepper = app.config.get("PAIRING_TOKEN_PEPPER")
+    if pairing_pepper and pairing_pepper in {
+        app.config[setting] for setting in required_settings
+    }:
         raise RuntimeError("Production secrets must be distinct")
     if app.config["DEBUG"] or app.config["TESTING"]:
         raise RuntimeError("Production startup cannot enable debug or testing mode")

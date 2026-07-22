@@ -46,6 +46,16 @@ The approved target configuration uses separate Neon branches and variables:
   and migration test branch.
 - `PRODUCTION_DATABASE_URL` uses the pooled production connection.
 - `MIGRATION_DATABASE_URL` uses a direct Neon connection for migrations.
+- `PAIRING_TOKEN_PEPPER` is a deployment-secret HMAC pepper of at least 32
+  characters. It is required whenever enrollment administration or an
+  enforcing device-enrollment mode is enabled.
+- `PAIRING_TOKEN_PEPPER_VERSION` identifies the current token-verifier pepper.
+  Keep older versions available until every token issued with them has expired
+  or been revoked.
+- `DEVICE_ENROLLMENT_MODE` is one of `legacy`, `new_devices_required`, or
+  `all_required`. Roll out in that order only after the corresponding
+  migration and client-readiness gates pass.
+- `ENROLLMENT_ADMIN_ENABLED` independently gates token administration routes.
 
 Application startup selects its database variable from the active environment.
 Development and production require pooled Neon URLs. PostgreSQL integration

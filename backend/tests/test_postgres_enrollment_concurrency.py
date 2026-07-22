@@ -32,7 +32,13 @@ pytestmark = [pytest.mark.postgres, pytest.mark.concurrency]
 
 def test_pairing_token_is_consumed_exactly_once_under_concurrency(
     postgres_app: Flask,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setitem(
+        postgres_app.config,
+        "PAIRING_TOKEN_PEPPER",
+        "postgres-concurrency-test-pairing-token-pepper",
+    )
     approved = validate_postgres_test_environment(require_destructive=True)
     token_uuid = uuid4()
     device_uuid = uuid4()

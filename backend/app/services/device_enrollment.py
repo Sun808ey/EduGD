@@ -347,33 +347,33 @@ def revoke_device_credential(
     reason: str,
     administrator: Administrator,
 ) -> None:
-    credential = db.session.execute(
-        select(DeviceCredential)
-        .join(Device, Device.id == DeviceCredential.device_id)
-        .where(
-            Device.device_uuid == device_uuid,
-            DeviceCredential.status == "active",
-        )
-        .with_for_update()
-    ).scalar_one_or_none()
-    if credential is None:
-        raise EnrollmentNotFound("active credential not found")
-    now = utc_now()
-    credential.status = "revoked"
-    credential.revoked_at = now
-    credential.revoked_by = str(administrator.administrator_uuid)
-    credential.revocation_reason = reason
-    db.session.add(
-        DeviceEnrollmentEvent(
-            device_id=credential.device_id,
-            credential_id=credential.id,
-            category="credential_revoked",
-            administrator_subject=str(administrator.administrator_uuid),
-            reason=reason,
-            public_key_fingerprint=credential.public_key_fingerprint,
-        )
-    )
     try:
+        credential = db.session.execute(
+            select(DeviceCredential)
+            .join(Device, Device.id == DeviceCredential.device_id)
+            .where(
+                Device.device_uuid == device_uuid,
+                DeviceCredential.status == "active",
+            )
+            .with_for_update()
+        ).scalar_one_or_none()
+        if credential is None:
+            raise EnrollmentNotFound("active credential not found")
+        now = utc_now()
+        credential.status = "revoked"
+        credential.revoked_at = now
+        credential.revoked_by = str(administrator.administrator_uuid)
+        credential.revocation_reason = reason
+        db.session.add(
+            DeviceEnrollmentEvent(
+                device_id=credential.device_id,
+                credential_id=credential.id,
+                category="credential_revoked",
+                administrator_subject=str(administrator.administrator_uuid),
+                reason=reason,
+                public_key_fingerprint=credential.public_key_fingerprint,
+            )
+        )
         db.session.commit()
     except SQLAlchemyError as error:
         db.session.rollback()

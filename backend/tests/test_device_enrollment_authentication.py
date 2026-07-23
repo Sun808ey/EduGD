@@ -3,7 +3,7 @@ import json
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from cryptography.hazmat.primitives import hashes, serialization
@@ -148,38 +148,72 @@ def _enroll(app: Flask) -> tuple[str, rsa.RSAPrivateKey, str]:
     access_token = _bootstrap_and_login(app)
     pairing_token = _issue_token(app, access_token)
     private_key, public_key, fingerprint = _key_material()
+    enrollment_payload = _enrollment_payload(
+        pairing_token,
+        private_key,
+        public_key,
+        fingerprint,
+    )
     response = app.test_client().post(
         "/api/v1/devices/register",
-        json=_enrollment_payload(
-            pairing_token,
-            private_key,
-            public_key,
-            fingerprint,
-        ),
+        json=enrollment_payload,
     )
     assert response.status_code == 201
-    return response.get_json()["credential_uuid"], private_key, access_token
+    assert response.headers["Cache-Control"] == "no-store"
+    response_payload = cast(dict[str, Any], response.get_json())
+    assert set(response_payload) == {
+        "credential_algorithm",
+        "credential_uuid",
+        "device_status",
+        "device_uuid",
+        "enrollment_event_uuid",
+        "server_time",
+    }
+    response_text = response.get_data(as_text=True)
+    assert pairing_token not in response_text
+    assert public_key not in response_text
+    credential_payload = cast(dict[str, Any], enrollment_payload["credential"])
+    assert cast(str, credential_payload["proof"]) not in response_text
+    return cast(str, response_payload["credential_uuid"]), private_key, access_token
 
 
 def test_enrollment_consumes_token_and_stores_only_public_credential(
     app: Flask,
 ) -> None:
     app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
-    credential_uuid, _, _ = _enroll(app)
+    credential_uuid, private_key, _ = _enroll(app)
+    expected_public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.DER,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    expected_fingerprint = hashlib.sha256(expected_public_key).digest()
 
     with app.app_context():
         token = db.session.execute(select(EnrollmentToken)).scalar_one()
         credential = db.session.execute(select(DeviceCredential)).scalar_one()
         device = db.session.execute(select(Device)).scalar_one()
-        categories = set(
-            db.session.execute(select(DeviceEnrollmentEvent.category)).scalars()
-        )
+        success_event = db.session.execute(
+            select(DeviceEnrollmentEvent).where(
+                DeviceEnrollmentEvent.category == "enrollment_succeeded"
+            )
+        ).scalar_one()
         assert token.status == "consumed"
         assert len(token.verifier) == 32
         assert credential_uuid == str(credential.credential_uuid)
-        assert credential.public_key_der
+        assert UUID(credential_uuid).version == 4
+        assert credential.enrollment_token_id == token.id
+        assert credential.algorithm == "RSA_2048_SHA256"
+        assert credential.status == "active"
+        assert credential.public_key_der == expected_public_key
+        assert credential.public_key_fingerprint == expected_fingerprint
+        assert credential.last_used_at is None
+        assert success_event.credential_id == credential.id
+        assert success_event.token_id == token.id
+        assert success_event.device_id == device.id
+        assert success_event.public_key_fingerprint == expected_fingerprint
+        assert "private_key" not in DeviceCredential.__table__.c
+        assert "secret" not in DeviceCredential.__table__.c
         assert device.legacy_enrollment_eligible is False
-        assert {"token_consumed", "enrollment_succeeded"}.issubset(categories)
 
 
 def test_consumed_pairing_token_cannot_be_replayed(app: Flask) -> None:
@@ -286,6 +320,35 @@ def test_invalid_proof_fails_generically_and_increments_attempt_count(
     with app.app_context():
         token = db.session.execute(select(EnrollmentToken)).scalar_one()
         assert token.failed_attempts == 1
+        assert db.session.execute(select(Device)).scalar_one_or_none() is None
+
+
+def test_altered_public_key_cannot_reuse_an_existing_proof(app: Flask) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    access_token = _bootstrap_and_login(app)
+    pairing_token = _issue_token(app, access_token)
+    private_key, public_key, fingerprint = _key_material()
+    payload = _enrollment_payload(pairing_token, private_key, public_key, fingerprint)
+    _, altered_public_key, _ = _key_material()
+    payload["credential"]["public_key"] = altered_public_key
+
+    response = app.test_client().post("/api/v1/devices/register", json=payload)
+
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "enrollment_failed"}
+    assert response.headers["Cache-Control"] == "no-store"
+    assert altered_public_key not in response.get_data(as_text=True)
+    with app.app_context():
+        token = db.session.execute(select(EnrollmentToken)).scalar_one()
+        failure = db.session.execute(
+            select(DeviceEnrollmentEvent).where(
+                DeviceEnrollmentEvent.category == "enrollment_failed"
+            )
+        ).scalar_one()
+        assert token.status == "active"
+        assert token.failed_attempts == 1
+        assert failure.failure_class == "invalid_proof"
+        assert db.session.execute(select(DeviceCredential)).scalar_one_or_none() is None
         assert db.session.execute(select(Device)).scalar_one_or_none() is None
 
 

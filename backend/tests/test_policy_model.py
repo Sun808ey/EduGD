@@ -1,4 +1,4 @@
-from typing import Any
+from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -9,6 +9,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Index,
+    LargeBinary,
     UniqueConstraint,
     Uuid,
     insert,
@@ -19,182 +20,216 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.schema import CreateTable
 
 from app.extensions import db
-from app.models import POLICY_STATUSES, Policy
+from app.models import (
+    POLICY_STATUSES,
+    Policy,
+    PolicyRevision,
+    PolicyRevisionImmutableError,
+    canonical_policy_revision_bytes,
+    policy_revision_content_hash,
+)
 
-VALID_BLOCKED_APPS = [
-    "com.facebook.katana",
-    "com.instagram.android",
-]
+VALID_PAYLOAD = {
+    "schema_version": 1,
+    "blocked_apps": [
+        "com.facebook.katana",
+        "com.instagram.android",
+    ],
+}
 
 
-def test_policy_model_contract() -> None:
+def _revision(policy: Policy, *, version: int = 1) -> PolicyRevision:
+    return PolicyRevision(
+        policy=policy,
+        version=version,
+        payload=VALID_PAYLOAD,
+        content_hash=policy_revision_content_hash(VALID_PAYLOAD),
+        created_by=str(uuid4()),
+    )
+
+
+def test_policy_model_is_stable_identity_and_lifecycle() -> None:
     table = Policy.__table__
 
-    assert table.name == "policies"
+    assert set(table.c.keys()) == {
+        "id",
+        "policy_uuid",
+        "name",
+        "status",
+        "created_at",
+        "updated_at",
+    }
     assert table.c.id.primary_key is True
-    assert table.c.id.nullable is False
-
     assert isinstance(table.c.policy_uuid.type, Uuid)
     assert table.c.policy_uuid.type.as_uuid is True
     assert table.c.policy_uuid.nullable is False
-
-    unique_constraints = {
+    assert ("policy_uuid",) in {
         tuple(constraint.columns.keys())
         for constraint in table.constraints
         if isinstance(constraint, UniqueConstraint)
     }
-    assert ("policy_uuid",) in unique_constraints
-
-    indexes = {
+    assert ("policy_uuid",) in {
         tuple(index.columns.keys())
         for index in table.indexes
         if isinstance(index, Index)
     }
-    assert ("policy_uuid",) in indexes
-
-    assert table.c.name.nullable is False
-    assert table.c.version.nullable is False
-    assert table.c.version.default.arg == 1
-    assert table.c.version.server_default.arg == "1"
-    assert table.c.status.nullable is False
-    assert table.c.status.default.arg == "active"
-    assert table.c.status.server_default.arg == "active"
-
-    assert isinstance(table.c.blocked_apps.type, JSON)
-    assert table.c.blocked_apps.nullable is False
-    assert table.c.blocked_apps.server_default.arg == "[]"
-
-    check_constraints = {
+    assert "status IN ('draft', 'active', 'inactive', 'revoked')" in {
         str(constraint.sqltext)
         for constraint in table.constraints
         if isinstance(constraint, CheckConstraint)
     }
-    check_constraint_names = {
+    assert isinstance(table.c.created_at.type, DateTime)
+    assert table.c.created_at.type.timezone is True
+    assert table.c.updated_at.onupdate is not None
+
+
+def test_policy_revision_model_contract() -> None:
+    table = PolicyRevision.__table__
+
+    assert table.name == "policy_revisions"
+    assert table.c.id.primary_key is True
+    assert isinstance(table.c.revision_uuid.type, Uuid)
+    assert table.c.revision_uuid.type.as_uuid is True
+    assert table.c.policy_id.nullable is False
+    assert isinstance(table.c.payload.type, JSON)
+    assert isinstance(table.c.content_hash.type, LargeBinary)
+    assert table.c.content_hash.type.length == 32
+    assert table.c.created_by.nullable is False
+    assert table.c.created_at.nullable is False
+    assert table.c.created_at.type.timezone is True
+
+    assert {
+        tuple(constraint.columns.keys())
+        for constraint in table.constraints
+        if isinstance(constraint, UniqueConstraint)
+    } >= {
+        ("revision_uuid",),
+        ("policy_id", "version"),
+        ("policy_id", "content_hash"),
+    }
+    assert {
+        foreign_key.target_fullname: foreign_key.ondelete
+        for foreign_key in table.foreign_keys
+    } == {"policies.id": "RESTRICT"}
+    assert {
         constraint.name
         for constraint in table.constraints
         if isinstance(constraint, CheckConstraint)
+    } >= {
+        "ck_policy_revisions_version_positive",
+        "ck_policy_revisions_content_hash_length",
+        "ck_policy_revisions_payload",
     }
-    assert "version >= 1" in check_constraints
-    assert (
-        "status IN ('draft', 'active', 'inactive', 'revoked')"
-        in check_constraints
-    )
-    assert "ck_policies_blocked_apps" in check_constraint_names
 
-    timestamp_columns = (table.c.created_at, table.c.updated_at)
-    assert all(isinstance(column.type, DateTime) for column in timestamp_columns)
-    assert all(column.type.timezone is True for column in timestamp_columns)
-    assert all(column.nullable is False for column in timestamp_columns)
-    assert table.c.updated_at.onupdate is not None
-
-    postgresql_ddl = str(CreateTable(table).compile(dialect=postgresql.dialect()))
+    postgres_ddl = str(CreateTable(table).compile(dialect=postgresql.dialect()))
     sqlite_ddl = str(CreateTable(table).compile(dialect=sqlite.dialect()))
-    assert "UUID" in postgresql_ddl
-    assert "JSON" in postgresql_ddl
-    assert "ck_policies_blocked_apps" in postgresql_ddl
-    assert "CHAR(32)" in sqlite_ddl
-    assert "JSON" in sqlite_ddl
-    assert "ck_policies_blocked_apps" not in sqlite_ddl
+    assert "ck_policy_revisions_payload" in postgres_ddl
+    assert "ck_policy_revisions_payload" not in sqlite_ddl
 
 
-def test_policy_accepts_android_package_identifiers() -> None:
-    policy = Policy(
-        policy_uuid=uuid4(),
-        name="Classroom policy",
-        version=1,
-        status="active",
-        blocked_apps=VALID_BLOCKED_APPS,
+def test_canonical_policy_revision_hash_is_deterministic() -> None:
+    differently_ordered = {
+        "blocked_apps": VALID_PAYLOAD["blocked_apps"],
+        "schema_version": 1,
+    }
+
+    assert canonical_policy_revision_bytes(VALID_PAYLOAD) == (
+        b'{"blocked_apps":["com.facebook.katana",'
+        b'"com.instagram.android"],"schema_version":1}'
     )
-
-    assert policy.blocked_apps == VALID_BLOCKED_APPS
-    assert policy.blocked_apps is not VALID_BLOCKED_APPS
-
-
-def test_valid_in_place_mutation_persists_and_preserves_order(app: Flask) -> None:
-    with app.app_context():
-        policy = Policy(
-            policy_uuid=uuid4(),
-            name="Mutable classroom policy",
-            blocked_apps=["com.instagram.android"],
-        )
-        db.session.add(policy)
-        db.session.commit()
-
-        policy.blocked_apps.insert(0, "com.facebook.katana")
-        policy.blocked_apps.extend(["org.example.learning"])
-        db.session.commit()
-        policy_id = policy.id
-        db.session.expire_all()
-
-        stored = db.session.get(Policy, policy_id)
-        assert stored is not None
-        assert stored.blocked_apps == [
-            "com.facebook.katana",
-            "com.instagram.android",
-            "org.example.learning",
-        ]
+    assert policy_revision_content_hash(VALID_PAYLOAD) == (
+        policy_revision_content_hash(differently_ordered)
+    )
+    assert len(policy_revision_content_hash(VALID_PAYLOAD)) == 32
 
 
 @pytest.mark.parametrize(
-    "operation",
+    "payload",
     [
-        "append_display_name",
-        "extend_duplicate",
-        "insert_invalid",
-        "replace_invalid",
-        "replace_slice_duplicate",
-        "in_place_add_invalid",
-        "in_place_multiply_duplicate",
+        [],
+        {"schema_version": 1},
+        {"schema_version": 2, "blocked_apps": []},
+        {"schema_version": 1, "blocked_apps": [], "extra": True},
+        {"schema_version": 1, "blocked_apps": ["facebook"]},
+        {
+            "schema_version": 1,
+            "blocked_apps": ["com.example.app", "com.example.app"],
+        },
     ],
 )
-def test_invalid_in_place_mutation_is_rejected_atomically(operation: str) -> None:
-    policy = Policy(
-        policy_uuid=uuid4(),
-        name="Atomic blocked-app validation",
-        blocked_apps=VALID_BLOCKED_APPS,
+def test_policy_revision_rejects_invalid_payload(payload: object) -> None:
+    with pytest.raises(ValueError):
+        PolicyRevision(
+            policy_id=1,
+            version=1,
+            payload=payload,
+            content_hash=b"x" * 32,
+            created_by=str(uuid4()),
+        )
+
+
+def test_policy_revision_payload_is_copied() -> None:
+    source = {
+        "schema_version": 1,
+        "blocked_apps": ["com.example.learning"],
+    }
+    revision = PolicyRevision(
+        policy_id=1,
+        version=1,
+        payload=source,
+        content_hash=policy_revision_content_hash(source),
+        created_by=str(uuid4()),
     )
-    original = list(policy.blocked_apps)
+    cast(list[str], source["blocked_apps"]).append("com.example.changed")
 
-    with pytest.raises(ValueError, match="Android package identifiers"):
-        if operation == "append_display_name":
-            policy.blocked_apps.append("facebook")
-        elif operation == "extend_duplicate":
-            policy.blocked_apps.extend(["org.example.learning", original[0]])
-        elif operation == "insert_invalid":
-            policy.blocked_apps.insert(0, "com.invalid-package")
-        elif operation == "replace_invalid":
-            policy.blocked_apps[0] = "instagram"
-        elif operation == "replace_slice_duplicate":
-            policy.blocked_apps[:] = [original[0], original[0]]
-        elif operation == "in_place_add_invalid":
-            policy.blocked_apps += ["com..invalid"]
-        else:
-            policy.blocked_apps *= 2
+    assert revision.payload == {
+        "schema_version": 1,
+        "blocked_apps": ["com.example.learning"],
+    }
 
-    assert policy.blocked_apps == original
+
+def test_orm_rejects_policy_revision_update_and_delete(app: Flask) -> None:
+    with app.app_context():
+        policy = Policy(policy_uuid=uuid4(), name="Immutable policy")
+        revision = _revision(policy)
+        db.session.add_all([policy, revision])
+        db.session.commit()
+
+        revision.created_by = str(uuid4())
+        with pytest.raises(PolicyRevisionImmutableError):
+            db.session.commit()
+        db.session.rollback()
+
+        stored_revision = db.session.get(PolicyRevision, revision.id)
+        assert stored_revision is not None
+        db.session.delete(stored_revision)
+        with pytest.raises(PolicyRevisionImmutableError):
+            db.session.commit()
+        db.session.rollback()
+
+
+def test_database_rejects_duplicate_revision_version_and_content(app: Flask) -> None:
+    with app.app_context():
+        policy = Policy(policy_uuid=uuid4(), name="Unique revisions")
+        db.session.add_all([policy, _revision(policy)])
+        db.session.commit()
+
+        duplicate = _revision(policy, version=2)
+        db.session.add(duplicate)
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()
 
 
 @pytest.mark.parametrize("status", sorted(POLICY_STATUSES))
 def test_policy_accepts_approved_statuses(status: str) -> None:
-    policy = Policy(
-        policy_uuid=uuid4(),
-        name="Approved lifecycle policy",
-        status=status,
-        blocked_apps=[],
-    )
-
-    assert policy.status == status
+    assert Policy(policy_uuid=uuid4(), name="Lifecycle", status=status).status == status
 
 
 @pytest.mark.parametrize("status", ["published", "", None, 1])
 def test_policy_rejects_invalid_status_in_model(status: object) -> None:
     with pytest.raises(ValueError, match="invalid policy status"):
-        Policy(
-            policy_uuid=uuid4(),
-            name="Invalid lifecycle policy",
-            status=status,
-            blocked_apps=[],
-        )
+        Policy(policy_uuid=uuid4(), name="Invalid lifecycle", status=status)
 
 
 def test_database_rejects_invalid_policy_status(app: Flask) -> None:
@@ -205,7 +240,6 @@ def test_database_rejects_invalid_policy_status(app: Flask) -> None:
                     policy_uuid=uuid4(),
                     name="Invalid database policy",
                     status="published",
-                    blocked_apps=[],
                 )
             )
             db.session.commit()
@@ -221,7 +255,6 @@ def test_policy_status_migration_downgrades_and_upgrades_on_sqlite(
             constraint["name"]
             for constraint in inspect(db.engine).get_check_constraints("policies")
         }
-
         upgrade(revision="head")
         upgraded_checks = {
             constraint["name"]
@@ -230,26 +263,3 @@ def test_policy_status_migration_downgrades_and_upgrades_on_sqlite(
 
     assert "ck_policies_status" not in downgraded_checks
     assert "ck_policies_status" in upgraded_checks
-
-
-@pytest.mark.parametrize(
-    "blocked_apps",
-    [
-        ["facebook", "instagram"],
-        ["com.valid.package", "instagram"],
-        ["com.invalid-package"],
-        ["com..invalid"],
-        [10],
-        "com.facebook.katana",
-        ["com.facebook.katana", "com.facebook.katana"],
-    ],
-)
-def test_policy_rejects_invalid_blocked_apps(blocked_apps: Any) -> None:
-    with pytest.raises(ValueError, match="Android package identifiers"):
-        Policy(
-            policy_uuid=uuid4(),
-            name="Invalid policy",
-            version=1,
-            status="active",
-            blocked_apps=blocked_apps,
-        )

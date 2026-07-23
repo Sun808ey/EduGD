@@ -1,6 +1,8 @@
+import json
 import re
 from collections.abc import Iterable
 from datetime import UTC, datetime
+from hashlib import sha256
 from typing import SupportsIndex
 from uuid import UUID, uuid4
 
@@ -16,11 +18,12 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     Uuid,
+    event,
     func,
     text,
 )
 from sqlalchemy.ext.mutable import MutableList
-from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship, validates
 
 from app.device_identity import ANDROID_VERSION_BY_API_LEVEL
 from app.extensions import db
@@ -30,6 +33,7 @@ ANDROID_PACKAGE_PATTERN = re.compile(
 )
 DEVICE_STATUSES = frozenset({"active", "suspended", "retired"})
 POLICY_STATUSES = frozenset({"draft", "active", "inactive", "revoked"})
+POLICY_REVISION_SCHEMA_VERSION = 1
 DEVICE_REGISTRATION_EVENT_TYPES = frozenset(
     {
         "registered",
@@ -104,19 +108,44 @@ def _validate_printable_text(value: object, field: str, maximum: int) -> str:
 
 def _validate_blocked_apps(value: object) -> list[str]:
     if not isinstance(value, list):
-        raise ValueError(
-            "blocked_apps must contain valid Android package identifiers"
-        )
+        raise ValueError("blocked_apps must contain valid Android package identifiers")
     is_valid = all(
         isinstance(package_name, str)
         and ANDROID_PACKAGE_PATTERN.fullmatch(package_name) is not None
         for package_name in value
     )
     if not is_valid or len(value) != len(set(value)):
-        raise ValueError(
-            "blocked_apps must contain valid Android package identifiers"
-        )
+        raise ValueError("blocked_apps must contain valid Android package identifiers")
     return list(value)
+
+
+def validate_policy_revision_payload(value: object) -> dict[str, object]:
+    if not isinstance(value, dict) or set(value) != {
+        "schema_version",
+        "blocked_apps",
+    }:
+        raise ValueError("invalid policy revision payload")
+    if value.get("schema_version") != POLICY_REVISION_SCHEMA_VERSION:
+        raise ValueError("invalid policy revision payload")
+    return {
+        "schema_version": POLICY_REVISION_SCHEMA_VERSION,
+        "blocked_apps": _validate_blocked_apps(value.get("blocked_apps")),
+    }
+
+
+def canonical_policy_revision_bytes(value: object) -> bytes:
+    payload = validate_policy_revision_payload(value)
+    return json.dumps(
+        payload,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+def policy_revision_content_hash(value: object) -> bytes:
+    return sha256(canonical_policy_revision_bytes(value)).digest()
 
 
 class BlockedAppList(MutableList[str]):
@@ -779,15 +808,10 @@ class Policy(db.Model):
     __table_args__ = (
         UniqueConstraint("policy_uuid", name="uq_policies_policy_uuid"),
         Index("ix_policies_policy_uuid", "policy_uuid"),
-        CheckConstraint("version >= 1", name="ck_policies_version_positive"),
         CheckConstraint(
             "status IN ('draft', 'active', 'inactive', 'revoked')",
             name="ck_policies_status",
         ),
-        CheckConstraint(
-            "edug_valid_blocked_apps(blocked_apps)",
-            name="ck_policies_blocked_apps",
-        ).ddl_if(dialect="postgresql"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -796,23 +820,11 @@ class Policy(db.Model):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    version: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=1,
-        server_default="1",
-    )
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
         default="active",
         server_default="active",
-    )
-    blocked_apps: Mapped[list[str]] = mapped_column(
-        BlockedAppList.as_mutable(JSON),
-        nullable=False,
-        default=list,
-        server_default="[]",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -827,24 +839,119 @@ class Policy(db.Model):
         onupdate=utc_now,
         server_default=func.now(),
     )
-    device_assignments: Mapped[list["DevicePolicyAssignment"]] = relationship(
+    revisions: Mapped[list["PolicyRevision"]] = relationship(
         back_populates="policy",
-        order_by="DevicePolicyAssignment.assigned_at",
+        order_by="PolicyRevision.version",
     )
-
-    @validates("blocked_apps")
-    def validate_blocked_apps(
-        self,
-        _key: str,
-        value: object,
-    ) -> list[str]:
-        return _validate_blocked_apps(value)
 
     @validates("status")
     def validate_status(self, _key: str, value: object) -> str:
         if not isinstance(value, str) or value not in POLICY_STATUSES:
             raise ValueError("invalid policy status")
         return value
+
+
+class PolicyRevision(db.Model):
+    __tablename__ = "policy_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "revision_uuid",
+            name="uq_policy_revisions_revision_uuid",
+        ),
+        UniqueConstraint(
+            "policy_id",
+            "version",
+            name="uq_policy_revisions_policy_version",
+        ),
+        UniqueConstraint(
+            "policy_id",
+            "content_hash",
+            name="uq_policy_revisions_policy_content_hash",
+        ),
+        CheckConstraint(
+            "version >= 1",
+            name="ck_policy_revisions_version_positive",
+        ),
+        CheckConstraint(
+            "length(content_hash) = 32",
+            name="ck_policy_revisions_content_hash_length",
+        ),
+        CheckConstraint(
+            "edug_valid_policy_revision_payload(payload)",
+            name="ck_policy_revisions_payload",
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_policy_revisions_policy_created",
+            "policy_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    revision_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        nullable=False,
+        default=uuid4,
+    )
+    policy_id: Mapped[int] = mapped_column(
+        ForeignKey("policies.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    content_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    policy: Mapped[Policy] = relationship(back_populates="revisions")
+    device_assignments: Mapped[list["DevicePolicyAssignment"]] = relationship(
+        back_populates="policy_revision",
+        order_by="DevicePolicyAssignment.assigned_at",
+    )
+
+    @validates("payload")
+    def validate_payload(
+        self,
+        _key: str,
+        value: object,
+    ) -> dict[str, object]:
+        return validate_policy_revision_payload(value)
+
+    @validates("content_hash")
+    def validate_content_hash(self, _key: str, value: object) -> bytes:
+        if not isinstance(value, bytes) or len(value) != 32:
+            raise ValueError("content_hash must contain 32 bytes")
+        return value
+
+    @validates("created_by")
+    def validate_created_by(self, _key: str, value: object) -> str:
+        return _validate_printable_text(value, "created_by", 255)
+
+
+class PolicyRevisionImmutableError(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__("policy revisions are immutable")
+
+
+@event.listens_for(Session, "before_flush")
+def _reject_policy_revision_mutation(
+    session: Session,
+    _flush_context: object,
+    _instances: object,
+) -> None:
+    if any(isinstance(value, PolicyRevision) for value in session.deleted):
+        raise PolicyRevisionImmutableError()
+    if any(
+        isinstance(value, PolicyRevision)
+        and session.is_modified(value, include_collections=False)
+        for value in session.dirty
+    ):
+        raise PolicyRevisionImmutableError()
 
 
 class DeviceRegistrationEvent(db.Model):
@@ -1276,10 +1383,6 @@ class DevicePolicyAssignment(db.Model):
     __tablename__ = "device_policy_assignments"
     __table_args__ = (
         CheckConstraint(
-            "policy_version >= 1",
-            name="ck_device_policy_assignments_version_positive",
-        ),
-        CheckConstraint(
             "status IN ('active', 'superseded')",
             name="ck_device_policy_assignments_status",
         ),
@@ -1300,7 +1403,10 @@ class DevicePolicyAssignment(db.Model):
             "device_id",
             "assigned_at",
         ),
-        Index("ix_device_policy_assignments_policy_id", "policy_id"),
+        Index(
+            "ix_device_policy_assignments_policy_revision_id",
+            "policy_revision_id",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -1308,15 +1414,9 @@ class DevicePolicyAssignment(db.Model):
         ForeignKey("devices.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    policy_id: Mapped[int] = mapped_column(
-        ForeignKey("policies.id", ondelete="RESTRICT"),
+    policy_revision_id: Mapped[int] = mapped_column(
+        ForeignKey("policy_revisions.id", ondelete="RESTRICT"),
         nullable=False,
-    )
-    policy_version: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=1,
-        server_default="1",
     )
     status: Mapped[str] = mapped_column(
         String(32),
@@ -1336,7 +1436,9 @@ class DevicePolicyAssignment(db.Model):
     )
 
     device: Mapped[Device] = relationship(back_populates="policy_assignments")
-    policy: Mapped[Policy] = relationship(back_populates="device_assignments")
+    policy_revision: Mapped[PolicyRevision] = relationship(
+        back_populates="device_assignments"
+    )
 
 
 __all__ = [
@@ -1362,5 +1464,11 @@ __all__ = [
     "DeviceRequestNonce",
     "EnrollmentToken",
     "Policy",
+    "PolicyRevision",
+    "PolicyRevisionImmutableError",
     "POLICY_STATUSES",
+    "POLICY_REVISION_SCHEMA_VERSION",
+    "canonical_policy_revision_bytes",
+    "policy_revision_content_hash",
+    "validate_policy_revision_payload",
 ]

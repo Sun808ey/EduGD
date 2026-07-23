@@ -289,6 +289,43 @@ def test_invalid_proof_fails_generically_and_increments_attempt_count(
         assert db.session.execute(select(Device)).scalar_one_or_none() is None
 
 
+def test_malformed_pairing_token_is_rejected_and_audited_without_identifier(
+    app: Flask,
+) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    access_token = _bootstrap_and_login(app)
+    pairing_token = _issue_token(app, access_token)
+    private_key, public_key, fingerprint = _key_material()
+    payload = _enrollment_payload(
+        pairing_token,
+        private_key,
+        public_key,
+        fingerprint,
+    )
+    payload["pairing_token"] = "malformed-pairing-token"
+
+    response = app.test_client().post("/api/v1/devices/register", json=payload)
+
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "enrollment_failed"}
+    assert response.headers["Cache-Control"] == "no-store"
+    assert "malformed-pairing-token" not in response.get_data(as_text=True)
+    with app.app_context():
+        token = db.session.execute(select(EnrollmentToken)).scalar_one()
+        assert token.status == "active"
+        assert token.failed_attempts == 0
+        failure = db.session.execute(
+            select(DeviceEnrollmentEvent).where(
+                DeviceEnrollmentEvent.category == "enrollment_failed"
+            )
+        ).scalar_one()
+        assert failure.failure_class == "invalid_token"
+        assert failure.token_id is None
+        assert failure.device_id is None
+        assert failure.credential_id is None
+        assert db.session.execute(select(Device)).scalar_one_or_none() is None
+
+
 def test_signed_sync_succeeds_and_replayed_nonce_fails(app: Flask) -> None:
     app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
     credential_uuid, private_key, _ = _enroll(app)

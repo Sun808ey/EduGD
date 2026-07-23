@@ -117,7 +117,6 @@ def authenticate_device_request(
             return context
         _fail(device, None, "missing_credential")
 
-    assert authorization is not None
     credential_uuid = _parse_authorization(authorization)
     credential = db.session.execute(
         select(DeviceCredential).where(
@@ -126,7 +125,6 @@ def authenticate_device_request(
     ).scalar_one_or_none()
     if credential is None or credential.status != "active":
         _fail(device, credential, "invalid_credential")
-    assert credential is not None
     if device is None or credential.device_id != device.id:
         _fail(device, credential, "credential_device_mismatch")
 
@@ -139,6 +137,8 @@ def authenticate_device_request(
         nonce = decode_base64url(nonce_text, decoded_length=16)
         raw_target = _raw_request_target()
         canonical_path, canonical_query = canonicalize_request_target(raw_target)
+        if canonical_path != request.path:
+            raise DeviceCryptographyError("request target does not match route")
         _validate_query_names(canonical_query, allowed_query_names)
         actual_body_hash = hashlib.sha256(request.get_data(cache=True)).hexdigest()
         if not hmac.compare_digest(actual_body_hash, body_hash):

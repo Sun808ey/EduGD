@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import UUID, uuid4
 
@@ -14,7 +14,9 @@ from app.models import (
     Device,
     DeviceCredential,
     DevicePolicyAssignment,
+    DeviceRequestNonce,
     Policy,
+    utc_now,
 )
 
 pytestmark = pytest.mark.postgres
@@ -294,6 +296,42 @@ def test_postgres_rejects_a_second_active_credential_for_one_device(
             algorithm="RSA_2048_SHA256",
             public_key_der=b"second-public-key",
             public_key_fingerprint=b"b" * 32,
+        ),
+    )
+
+
+def test_postgres_rejects_a_replayed_nonce_for_one_credential(
+    postgres_session: Session,
+) -> None:
+    device = _device()
+    postgres_session.add(device)
+    postgres_session.flush()
+    credential = DeviceCredential(
+        device_id=device.id,
+        algorithm="RSA_2048_SHA256",
+        public_key_der=b"nonce-test-public-key",
+        public_key_fingerprint=b"n" * 32,
+    )
+    postgres_session.add(credential)
+    postgres_session.flush()
+    now = utc_now()
+    postgres_session.add(
+        DeviceRequestNonce(
+            credential_id=credential.id,
+            nonce_hash=b"r" * 32,
+            observed_at=now,
+            expires_at=now + timedelta(minutes=10),
+        )
+    )
+    postgres_session.flush()
+
+    _expect_integrity_error(
+        postgres_session,
+        DeviceRequestNonce(
+            credential_id=credential.id,
+            nonce_hash=b"r" * 32,
+            observed_at=now,
+            expires_at=now + timedelta(minutes=10),
         ),
     )
 

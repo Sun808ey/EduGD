@@ -392,7 +392,7 @@ def test_malformed_pairing_token_is_rejected_and_audited_without_identifier(
 def test_signed_sync_succeeds_and_replayed_nonce_fails(app: Flask) -> None:
     app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
     credential_uuid, private_key, _ = _enroll(app)
-    headers, _ = _signed_headers(private_key, credential_uuid)
+    headers, nonce = _signed_headers(private_key, credential_uuid)
     target = f"/api/v1/sync/policies/{DEVICE_UUID}"
 
     success = app.test_client().get(
@@ -411,7 +411,65 @@ def test_signed_sync_succeeds_and_replayed_nonce_fails(app: Flask) -> None:
     assert replay.get_json() == {"error": "authentication_failed"}
     assert replay.headers["Cache-Control"] == "no-store"
     with app.app_context():
-        assert db.session.execute(select(DeviceRequestNonce)).scalars().all()
+        credential = db.session.execute(select(DeviceCredential)).scalar_one()
+        nonce_record = db.session.execute(select(DeviceRequestNonce)).scalar_one()
+        categories = list(
+            db.session.execute(select(DeviceEnrollmentEvent.category)).scalars()
+        )
+        assert credential.last_used_at is not None
+        assert nonce_record.credential_id == credential.id
+        assert len(nonce_record.nonce_hash) == 32
+        assert nonce.encode() not in nonce_record.nonce_hash
+        assert categories.count("authentication_succeeded") == 1
+        assert categories.count("authentication_failed") == 1
+
+
+def test_signed_raw_target_must_match_the_dispatched_route(app: Flask) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    credential_uuid, private_key, _ = _enroll(app)
+    route_path = f"/api/v1/sync/policies/{DEVICE_UUID}"
+    signed_path = f"{route_path}/different-resource"
+    headers, _ = _signed_headers(
+        private_key,
+        credential_uuid,
+        path=signed_path,
+    )
+
+    response = app.test_client().get(
+        route_path,
+        headers=headers,
+        environ_overrides={"RAW_URI": signed_path},
+    )
+
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "authentication_failed"}
+    assert response.headers["Cache-Control"] == "no-store"
+    with app.app_context():
+        failure = db.session.execute(
+            select(DeviceEnrollmentEvent).where(
+                DeviceEnrollmentEvent.category == "authentication_failed"
+            )
+        ).scalar_one()
+        assert failure.failure_class == "invalid_signature"
+        assert db.session.execute(select(DeviceRequestNonce)).scalar_one_or_none() is None
+
+
+def test_enforcement_mode_rejects_missing_raw_request_target(app: Flask) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    credential_uuid, private_key, _ = _enroll(app)
+    path = f"/api/v1/sync/policies/{DEVICE_UUID}"
+    headers, _ = _signed_headers(private_key, credential_uuid, path=path)
+    app.config["TESTING"] = False
+
+    response = app.test_client().get(
+        path,
+        headers=headers,
+        environ_overrides={"RAW_URI": None, "REQUEST_URI": None},
+    )
+
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "authentication_failed"}
+    assert response.headers["Cache-Control"] == "no-store"
 
 
 def test_uuid_only_sync_is_rejected_for_new_device(app: Flask) -> None:

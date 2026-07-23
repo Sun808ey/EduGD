@@ -77,6 +77,11 @@ It does not mean later remediation increments have been implemented.
 - Policy statuses are `draft`, `active`, `inactive`, and `revoked`.
 - `Policy` is stable identity and lifecycle; immutable `PolicyRevision` rows
   contain versioned content.
+- The normalized model, canonical hash, legacy conversion, immutability
+  controls, compatibility boundary, and non-destructive downgrade guard are
+  specified in
+  [`immutable-policy-revision-design.md`](immutable-policy-revision-design.md).
+  Runtime and schema implementation remain separately gated as Remediation 15.
 - Assignments reference an exact revision and record administrator, reason,
   event UUID, assignment time, and supersession time.
 - Removing a policy produces operation `clear`.

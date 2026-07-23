@@ -1,5 +1,7 @@
 import re
+from collections.abc import Iterable
 from datetime import UTC, datetime
+from typing import SupportsIndex
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -98,6 +100,72 @@ def _validate_printable_text(value: object, field: str, maximum: int) -> str:
     ):
         raise ValueError(f"{field} must contain 1 to {maximum} printable characters")
     return value
+
+
+def _validate_blocked_apps(value: object) -> list[str]:
+    if not isinstance(value, list):
+        raise ValueError(
+            "blocked_apps must contain valid Android package identifiers"
+        )
+    is_valid = all(
+        isinstance(package_name, str)
+        and ANDROID_PACKAGE_PATTERN.fullmatch(package_name) is not None
+        for package_name in value
+    )
+    if not is_valid or len(value) != len(set(value)):
+        raise ValueError(
+            "blocked_apps must contain valid Android package identifiers"
+        )
+    return list(value)
+
+
+class BlockedAppList(MutableList[str]):
+    """Atomically validate every in-place blocked-app list mutation."""
+
+    @classmethod
+    def coerce(cls, key: str, value: object) -> "BlockedAppList":
+        if isinstance(value, cls):
+            return value
+        return cls(_validate_blocked_apps(value))
+
+    def _replace(self, candidate: list[str]) -> None:
+        validated = _validate_blocked_apps(candidate)
+        list.clear(self)
+        list.extend(self, validated)
+        self.changed()
+
+    def append(self, value: str) -> None:
+        self._replace([*self, value])
+
+    def extend(self, values: Iterable[str]) -> None:
+        self._replace([*self, *values])
+
+    def insert(self, index: SupportsIndex, value: str) -> None:
+        candidate = list(self)
+        candidate.insert(index, value)
+        self._replace(candidate)
+
+    def __setitem__(
+        self,
+        index: SupportsIndex | slice,
+        value: str | Iterable[str],
+    ) -> None:
+        candidate = list(self)
+        if isinstance(index, slice):
+            candidate[index] = value
+        else:
+            if not isinstance(value, str):
+                raise ValueError(
+                    "blocked_apps must contain valid Android package identifiers"
+                )
+            candidate[index] = value
+        self._replace(candidate)
+
+    def __imul__(self, value: SupportsIndex) -> "BlockedAppList":
+        candidate = list(self)
+        candidate *= value
+        self._replace(candidate)
+        return self
 
 
 class Administrator(db.Model):
@@ -716,6 +784,10 @@ class Policy(db.Model):
             "status IN ('draft', 'active', 'inactive', 'revoked')",
             name="ck_policies_status",
         ),
+        CheckConstraint(
+            "edug_valid_blocked_apps(blocked_apps)",
+            name="ck_policies_blocked_apps",
+        ).ddl_if(dialect="postgresql"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -737,7 +809,7 @@ class Policy(db.Model):
         server_default="active",
     )
     blocked_apps: Mapped[list[str]] = mapped_column(
-        MutableList.as_mutable(JSON),
+        BlockedAppList.as_mutable(JSON),
         nullable=False,
         default=list,
         server_default="[]",
@@ -766,21 +838,7 @@ class Policy(db.Model):
         _key: str,
         value: object,
     ) -> list[str]:
-        if not isinstance(value, list):
-            raise ValueError(
-                "blocked_apps must contain valid Android package identifiers"
-            )
-
-        is_valid = all(
-            isinstance(package_name, str)
-            and ANDROID_PACKAGE_PATTERN.fullmatch(package_name) is not None
-            for package_name in value
-        )
-        if not is_valid or len(value) != len(set(value)):
-            raise ValueError(
-                "blocked_apps must contain valid Android package identifiers"
-            )
-        return list(value)
+        return _validate_blocked_apps(value)
 
     @validates("status")
     def validate_status(self, _key: str, value: object) -> str:

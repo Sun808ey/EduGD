@@ -69,11 +69,17 @@ def test_policy_model_contract() -> None:
         for constraint in table.constraints
         if isinstance(constraint, CheckConstraint)
     }
+    check_constraint_names = {
+        constraint.name
+        for constraint in table.constraints
+        if isinstance(constraint, CheckConstraint)
+    }
     assert "version >= 1" in check_constraints
     assert (
         "status IN ('draft', 'active', 'inactive', 'revoked')"
         in check_constraints
     )
+    assert "ck_policies_blocked_apps" in check_constraint_names
 
     timestamp_columns = (table.c.created_at, table.c.updated_at)
     assert all(isinstance(column.type, DateTime) for column in timestamp_columns)
@@ -85,8 +91,10 @@ def test_policy_model_contract() -> None:
     sqlite_ddl = str(CreateTable(table).compile(dialect=sqlite.dialect()))
     assert "UUID" in postgresql_ddl
     assert "JSON" in postgresql_ddl
+    assert "ck_policies_blocked_apps" in postgresql_ddl
     assert "CHAR(32)" in sqlite_ddl
     assert "JSON" in sqlite_ddl
+    assert "ck_policies_blocked_apps" not in sqlite_ddl
 
 
 def test_policy_accepts_android_package_identifiers() -> None:
@@ -100,6 +108,70 @@ def test_policy_accepts_android_package_identifiers() -> None:
 
     assert policy.blocked_apps == VALID_BLOCKED_APPS
     assert policy.blocked_apps is not VALID_BLOCKED_APPS
+
+
+def test_valid_in_place_mutation_persists_and_preserves_order(app: Flask) -> None:
+    with app.app_context():
+        policy = Policy(
+            policy_uuid=uuid4(),
+            name="Mutable classroom policy",
+            blocked_apps=["com.instagram.android"],
+        )
+        db.session.add(policy)
+        db.session.commit()
+
+        policy.blocked_apps.insert(0, "com.facebook.katana")
+        policy.blocked_apps.extend(["org.example.learning"])
+        db.session.commit()
+        policy_id = policy.id
+        db.session.expire_all()
+
+        stored = db.session.get(Policy, policy_id)
+        assert stored is not None
+        assert stored.blocked_apps == [
+            "com.facebook.katana",
+            "com.instagram.android",
+            "org.example.learning",
+        ]
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "append_display_name",
+        "extend_duplicate",
+        "insert_invalid",
+        "replace_invalid",
+        "replace_slice_duplicate",
+        "in_place_add_invalid",
+        "in_place_multiply_duplicate",
+    ],
+)
+def test_invalid_in_place_mutation_is_rejected_atomically(operation: str) -> None:
+    policy = Policy(
+        policy_uuid=uuid4(),
+        name="Atomic blocked-app validation",
+        blocked_apps=VALID_BLOCKED_APPS,
+    )
+    original = list(policy.blocked_apps)
+
+    with pytest.raises(ValueError, match="Android package identifiers"):
+        if operation == "append_display_name":
+            policy.blocked_apps.append("facebook")
+        elif operation == "extend_duplicate":
+            policy.blocked_apps.extend(["org.example.learning", original[0]])
+        elif operation == "insert_invalid":
+            policy.blocked_apps.insert(0, "com.invalid-package")
+        elif operation == "replace_invalid":
+            policy.blocked_apps[0] = "instagram"
+        elif operation == "replace_slice_duplicate":
+            policy.blocked_apps[:] = [original[0], original[0]]
+        elif operation == "in_place_add_invalid":
+            policy.blocked_apps += ["com..invalid"]
+        else:
+            policy.blocked_apps *= 2
+
+    assert policy.blocked_apps == original
 
 
 @pytest.mark.parametrize("status", sorted(POLICY_STATUSES))

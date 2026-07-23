@@ -179,7 +179,10 @@ def revoke_enrollment_token(
 
 
 def enroll_device(data: DeviceEnrollmentData) -> EnrollmentResult:
-    token_uuid, secret = _parse_pairing_token(data.pairing_token)
+    try:
+        token_uuid, secret = _parse_pairing_token(data.pairing_token)
+    except EnrollmentFailed:
+        _record_failed_enrollment(None, None, "invalid_token")
     token = db.session.execute(
         select(EnrollmentToken)
         .where(EnrollmentToken.token_uuid == token_uuid)

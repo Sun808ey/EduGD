@@ -198,14 +198,23 @@ def test_enrollment_authentication_schema_constraints(
             "ck_enrollment_tokens_pepper_version",
             "ck_enrollment_tokens_revocation_state",
             "ck_enrollment_tokens_status",
+            "ck_enrollment_tokens_verifier_length",
         },
         "device_credentials": {
             "ck_device_credentials_algorithm",
+            "ck_device_credentials_fingerprint_length",
             "ck_device_credentials_lifecycle",
+            "ck_device_credentials_public_key_length",
             "ck_device_credentials_status",
         },
-        "device_request_nonces": {"ck_device_request_nonces_expiry"},
-        "device_enrollment_events": {"ck_device_enrollment_events_category"},
+        "device_request_nonces": {
+            "ck_device_request_nonces_expiry",
+            "ck_device_request_nonces_hash_length",
+        },
+        "device_enrollment_events": {
+            "ck_device_enrollment_events_category",
+            "ck_device_enrollment_events_fingerprint_length",
+        },
     }
     for table_name, constraint_names in expected_checks.items():
         assert {
@@ -260,6 +269,33 @@ def test_existing_device_enrollment_classification_on_postgres(
     postgres_session.expire(device, ["credentials"])
 
     assert device.enrollment_state == "enrolled"
+
+
+def test_postgres_rejects_a_second_active_credential_for_one_device(
+    postgres_session: Session,
+) -> None:
+    device = _device()
+    postgres_session.add(device)
+    postgres_session.flush()
+    postgres_session.add(
+        DeviceCredential(
+            device_id=device.id,
+            algorithm="RSA_2048_SHA256",
+            public_key_der=b"first-public-key",
+            public_key_fingerprint=b"a" * 32,
+        )
+    )
+    postgres_session.flush()
+
+    _expect_integrity_error(
+        postgres_session,
+        DeviceCredential(
+            device_id=device.id,
+            algorithm="RSA_2048_SHA256",
+            public_key_der=b"second-public-key",
+            public_key_fingerprint=b"b" * 32,
+        ),
+    )
 
 
 def test_administrator_authentication_schema_constraints(

@@ -122,15 +122,18 @@ def test_pairing_token_is_consumed_exactly_once_under_concurrency(
                 )
                 == 1
             )
-            assert (
-                db.session.scalar(
-                    select(func.count())
-                    .select_from(DeviceCredential)
-                    .join(Device)
-                    .where(Device.device_uuid == device_uuid)
-                )
-                == 1
-            )
+            stored_credential = db.session.execute(
+                select(DeviceCredential)
+                .join(Device)
+                .where(Device.device_uuid == device_uuid)
+            ).scalar_one()
+            assert stored_credential.credential_uuid.version == 4
+            assert stored_credential.enrollment_token_id == token_id
+            assert stored_credential.algorithm == "RSA_2048_SHA256"
+            assert stored_credential.public_key_der == public_der
+            assert stored_credential.public_key_fingerprint == fingerprint
+            assert stored_credential.status == "active"
+            assert stored_credential.last_used_at is None
             consumed_token = db.session.get(EnrollmentToken, token_id)
             assert consumed_token is not None
             assert consumed_token.status == "consumed"

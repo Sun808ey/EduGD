@@ -20,6 +20,7 @@ from app.device_cryptography import (
 )
 from app.extensions import db
 from app.models import (
+    AdministratorPermission,
     Device,
     DeviceCredential,
     DeviceEnrollmentEvent,
@@ -485,9 +486,10 @@ def test_uuid_only_sync_is_rejected_for_new_device(app: Flask) -> None:
 def test_administrator_revocation_immediately_blocks_sync(app: Flask) -> None:
     app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
     credential_uuid, private_key, access_token = _enroll(app)
+    reason = "device reported missing"
     revoke = app.test_client().post(
         f"/api/v1/admin/devices/{DEVICE_UUID}/credentials/revoke",
-        json={"reason": "device reported missing"},
+        json={"reason": reason},
         headers={"Authorization": f"Bearer {access_token}"},
     )
     headers, _ = _signed_headers(private_key, credential_uuid)
@@ -499,10 +501,142 @@ def test_administrator_revocation_immediately_blocks_sync(app: Flask) -> None:
         environ_overrides={"RAW_URI": target},
     )
     fallback_attempt = app.test_client().get(target)
+    rotation_path = f"/api/v1/devices/{DEVICE_UUID}/credentials/rotate"
+    rotation_body = b"{}"
+    rotation_headers, _ = _signed_headers(
+        private_key,
+        credential_uuid,
+        method="POST",
+        path=rotation_path,
+        body=rotation_body,
+    )
+    rotation_headers["Content-Type"] = "application/json"
+    rotation = app.test_client().post(
+        rotation_path,
+        data=rotation_body,
+        headers=rotation_headers,
+        environ_overrides={"RAW_URI": rotation_path},
+    )
+    repeated = app.test_client().post(
+        f"/api/v1/admin/devices/{DEVICE_UUID}/credentials/revoke",
+        json={"reason": "duplicate request"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
 
     assert revoke.status_code == 200
+    assert revoke.get_json() == {"message": "device credential revoked"}
+    assert revoke.headers["Cache-Control"] == "no-store"
     assert response.status_code == 401
+    assert response.get_json() == {"error": "authentication_failed"}
     assert fallback_attempt.status_code == 401
+    assert rotation.status_code == 401
+    assert rotation.get_json() == {"error": "authentication_failed"}
+    assert repeated.status_code == 404
+    assert repeated.get_json() == {"error": "active_credential_not_found"}
+    assert repeated.headers["Cache-Control"] == "no-store"
+    with app.app_context():
+        credential = db.session.execute(select(DeviceCredential)).scalar_one()
+        event = db.session.execute(
+            select(DeviceEnrollmentEvent).where(
+                DeviceEnrollmentEvent.category == "credential_revoked"
+            )
+        ).scalar_one()
+        assert credential.status == "revoked"
+        assert credential.revoked_at is not None
+        assert credential.revoked_by is not None
+        assert credential.revocation_reason == reason
+        assert credential.superseded_at is None
+        assert credential.superseded_by_id is None
+        assert event.event_uuid is not None
+        assert event.device_id == credential.device_id
+        assert event.credential_id == credential.id
+        assert event.administrator_subject == credential.revoked_by
+        assert event.reason == reason
+        assert event.public_key_fingerprint == credential.public_key_fingerprint
+
+
+def test_credential_revocation_requires_current_database_permission(
+    app: Flask,
+) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    _, _, access_token = _enroll(app)
+    path = f"/api/v1/admin/devices/{DEVICE_UUID}/credentials/revoke"
+
+    missing_authentication = app.test_client().post(
+        path,
+        json={"reason": "device reported missing"},
+    )
+    with app.app_context():
+        permission = db.session.execute(
+            select(AdministratorPermission).where(
+                AdministratorPermission.permission == "device_credential.revoke"
+            )
+        ).scalar_one()
+        db.session.delete(permission)
+        db.session.commit()
+    denied = app.test_client().post(
+        path,
+        json={"reason": "device reported missing"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert missing_authentication.status_code == 401
+    assert missing_authentication.get_json() == {"error": "authentication_failed"}
+    assert missing_authentication.headers["Cache-Control"] == "no-store"
+    assert denied.status_code == 403
+    assert denied.get_json() == {"error": "authorization_failed"}
+    assert denied.headers["Cache-Control"] == "no-store"
+    with app.app_context():
+        credential = db.session.execute(select(DeviceCredential)).scalar_one()
+        assert credential.status == "active"
+        assert (
+            db.session.execute(
+                select(DeviceEnrollmentEvent).where(
+                    DeviceEnrollmentEvent.category == "credential_revoked"
+                )
+            ).scalar_one_or_none()
+            is None
+        )
+
+
+def test_credential_revocation_database_failure_rolls_back(
+    app: Flask,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    _, _, access_token = _enroll(app)
+    path = f"/api/v1/admin/devices/{DEVICE_UUID}/credentials/revoke"
+
+    with app.app_context():
+        original_commit = db.session.commit
+
+        def fail_commit() -> None:
+            raise SQLAlchemyError("forced credential revocation failure")
+
+        monkeypatch.setattr(db.session, "commit", fail_commit)
+        response = app.test_client().post(
+            path,
+            json={"reason": "device reported missing"},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        monkeypatch.setattr(db.session, "commit", original_commit)
+
+        assert response.status_code == 500
+        assert response.get_json() == {"error": "internal_server_error"}
+        assert response.headers["Cache-Control"] == "no-store"
+        credential = db.session.execute(select(DeviceCredential)).scalar_one()
+        assert credential.status == "active"
+        assert credential.revoked_at is None
+        assert credential.revoked_by is None
+        assert credential.revocation_reason is None
+        assert (
+            db.session.execute(
+                select(DeviceEnrollmentEvent).where(
+                    DeviceEnrollmentEvent.category == "credential_revoked"
+                )
+            ).scalar_one_or_none()
+            is None
+        )
 
 
 def test_credential_rotation_requires_both_current_and_new_key_proof(

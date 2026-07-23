@@ -158,6 +158,7 @@ def test_existing_schema_metadata_and_constraints(
         for constraint in inspector.get_check_constraints("device_policy_assignments")
     }
     assert policy_checks == {
+        "ck_policies_blocked_apps",
         "ck_policies_status",
         "ck_policies_version_positive",
     }
@@ -568,6 +569,57 @@ def test_existing_check_constraints(postgres_session: Session) -> None:
     ]
     for assignment in invalid_assignments:
         _expect_integrity_error(postgres_session, assignment)
+
+
+@pytest.mark.parametrize(
+    "blocked_apps",
+    [
+        {"package": "com.facebook.katana"},
+        ["facebook"],
+        ["com.invalid-package"],
+        ["com.facebook.katana", "com.facebook.katana"],
+        ["com.facebook.katana", 10],
+        [None],
+    ],
+)
+def test_postgres_rejects_invalid_blocked_app_json(
+    postgres_session: Session,
+    blocked_apps: object,
+) -> None:
+    with pytest.raises(IntegrityError):
+        with postgres_session.begin_nested():
+            postgres_session.execute(
+                insert(Policy).values(
+                    policy_uuid=uuid4(),
+                    name="Invalid blocked-app JSON policy",
+                    status="active",
+                    blocked_apps=blocked_apps,
+                )
+            )
+
+
+def test_postgres_preserves_valid_blocked_app_order(
+    postgres_session: Session,
+) -> None:
+    expected = [
+        "org.example.learning",
+        "com.facebook.katana",
+        "com.instagram.android",
+    ]
+    policy_uuid = uuid4()
+    postgres_session.execute(
+        insert(Policy).values(
+            policy_uuid=policy_uuid,
+            name="Ordered blocked-app policy",
+            status="active",
+            blocked_apps=expected,
+        )
+    )
+    stored = postgres_session.execute(
+        select(Policy).where(Policy.policy_uuid == policy_uuid)
+    ).scalar_one()
+
+    assert stored.blocked_apps == expected
 
 
 def test_partial_unique_index_allows_only_one_active_assignment(

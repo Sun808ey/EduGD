@@ -30,12 +30,12 @@ def create_device(*, status: str = "active") -> Device:
     return device
 
 
-def assign_active_policy(device: Device) -> None:
+def assign_active_policy(device: Device, *, policy_status: str = "active") -> None:
     policy = Policy(
         policy_uuid=UUID(POLICY_UUID),
         name="Classroom policy",
         version=5,
-        status="active",
+        status=policy_status,
         blocked_apps=BLOCKED_APPS,
     )
     db.session.add(policy)
@@ -89,6 +89,37 @@ def test_policy_sync_route_returns_no_policy(
         "policy_version": 0,
         "message": "no policy assigned",
     }
+
+
+@pytest.mark.parametrize("policy_status", ["draft", "inactive", "revoked"])
+@pytest.mark.parametrize("current_version", [None, 5])
+def test_policy_sync_route_never_discloses_non_active_policy(
+    client: FlaskClient,
+    app: Flask,
+    policy_status: str,
+    current_version: int | None,
+) -> None:
+    with app.app_context():
+        device = create_device()
+        assign_active_policy(device, policy_status=policy_status)
+
+    query = "" if current_version is None else f"?current_version={current_version}"
+    response = client.get(f"{SYNC_URL}{query}")
+
+    assert response.status_code == 200
+    if current_version is None:
+        assert response.get_json() == {
+            "device_uuid": DEVICE_UUID,
+            "policy": None,
+            "policy_version": 0,
+            "message": "no policy assigned",
+        }
+    else:
+        assert response.get_json() == {
+            "update_available": False,
+            "policy_version": 0,
+            "policy": None,
+        }
 
 
 def test_policy_sync_route_rejects_unknown_device(client: FlaskClient) -> None:

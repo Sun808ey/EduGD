@@ -142,7 +142,9 @@ def test_policy_sync_returns_active_policy(app: Flask) -> None:
     "assignment_options",
     [
         {"assignment_status": "superseded"},
+        {"policy_status": "draft"},
         {"policy_status": "inactive"},
+        {"policy_status": "revoked"},
         {"policy_version": 6, "assignment_version": 5},
     ],
 )

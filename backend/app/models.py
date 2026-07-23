@@ -27,6 +27,7 @@ ANDROID_PACKAGE_PATTERN = re.compile(
     r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$"
 )
 DEVICE_STATUSES = frozenset({"active", "suspended", "retired"})
+POLICY_STATUSES = frozenset({"draft", "active", "inactive", "revoked"})
 DEVICE_REGISTRATION_EVENT_TYPES = frozenset(
     {
         "registered",
@@ -711,6 +712,10 @@ class Policy(db.Model):
         UniqueConstraint("policy_uuid", name="uq_policies_policy_uuid"),
         Index("ix_policies_policy_uuid", "policy_uuid"),
         CheckConstraint("version >= 1", name="ck_policies_version_positive"),
+        CheckConstraint(
+            "status IN ('draft', 'active', 'inactive', 'revoked')",
+            name="ck_policies_status",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -776,6 +781,12 @@ class Policy(db.Model):
                 "blocked_apps must contain valid Android package identifiers"
             )
         return list(value)
+
+    @validates("status")
+    def validate_status(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in POLICY_STATUSES:
+            raise ValueError("invalid policy status")
+        return value
 
 
 class DeviceRegistrationEvent(db.Model):
@@ -1293,4 +1304,5 @@ __all__ = [
     "DeviceRequestNonce",
     "EnrollmentToken",
     "Policy",
+    "POLICY_STATUSES",
 ]

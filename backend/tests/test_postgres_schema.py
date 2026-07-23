@@ -157,7 +157,10 @@ def test_existing_schema_metadata_and_constraints(
         constraint["name"]
         for constraint in inspector.get_check_constraints("device_policy_assignments")
     }
-    assert policy_checks == {"ck_policies_version_positive"}
+    assert policy_checks == {
+        "ck_policies_status",
+        "ck_policies_version_positive",
+    }
     assert assignment_checks == {
         "ck_device_policy_assignments_status",
         "ck_device_policy_assignments_status_timestamp",
@@ -524,6 +527,16 @@ def test_existing_check_constraints(postgres_session: Session) -> None:
                     )
                 )
     _expect_integrity_error(postgres_session, _policy(version=0))
+    with pytest.raises(IntegrityError):
+        with postgres_session.begin_nested():
+            postgres_session.execute(
+                insert(Policy).values(
+                    policy_uuid=uuid4(),
+                    name="Invalid status policy",
+                    status="published",
+                    blocked_apps=[],
+                )
+            )
     device = _device()
     policy = _policy()
     postgres_session.add_all([device, policy])

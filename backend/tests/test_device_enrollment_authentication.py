@@ -3,6 +3,7 @@ import json
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
+from unittest.mock import Mock
 from uuid import UUID, uuid4
 
 import pytest
@@ -697,6 +698,137 @@ def test_credential_rotation_requires_both_current_and_new_key_proof(
         .status_code
         == 200
     )
+    with app.app_context():
+        current = db.session.execute(
+            select(DeviceCredential).where(
+                DeviceCredential.credential_uuid == UUID(credential_uuid)
+            )
+        ).scalar_one()
+        replacement = db.session.execute(
+            select(DeviceCredential).where(
+                DeviceCredential.credential_uuid == UUID(replacement_uuid)
+            )
+        ).scalar_one()
+        event = db.session.execute(
+            select(DeviceEnrollmentEvent).where(
+                DeviceEnrollmentEvent.category == "credential_rotated"
+            )
+        ).scalar_one()
+        assert current.status == "superseded"
+        assert current.superseded_at is not None
+        assert current.superseded_by_id == replacement.id
+        assert current.revoked_at is None
+        assert replacement.status == "active"
+        assert replacement.public_key_fingerprint == fingerprint
+        assert event.device_id == replacement.device_id
+        assert event.credential_id == replacement.id
+        assert event.public_key_fingerprint == fingerprint
+
+
+def test_credential_rotation_database_failure_rolls_back(
+    app: Flask,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    credential_uuid, current_private_key, _ = _enroll(app)
+    new_private_key, new_public_key, fingerprint = _key_material()
+    rotation_nonce = encode_base64url(secrets.token_bytes(16))
+    proof_message = rotation_message(
+        device_uuid=DEVICE_UUID,
+        current_credential_uuid=credential_uuid,
+        algorithm="RSA_2048_SHA256",
+        public_key_fingerprint=fingerprint,
+        nonce=rotation_nonce,
+    )
+    payload = {
+        "algorithm": "RSA_2048_SHA256",
+        "public_key": new_public_key,
+        "nonce": rotation_nonce,
+        "proof": encode_base64url(
+            new_private_key.sign(
+                proof_message,
+                padding.PKCS1v15(),
+                hashes.SHA256(),
+            )
+        ),
+    }
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    path = f"/api/v1/devices/{DEVICE_UUID}/credentials/rotate"
+    headers, _ = _signed_headers(
+        current_private_key,
+        credential_uuid,
+        method="POST",
+        path=path,
+        body=body,
+    )
+    headers["Content-Type"] = "application/json"
+
+    with app.app_context():
+        original_commit = db.session.commit
+        commit_count = 0
+
+        def fail_rotation_commit() -> None:
+            nonlocal commit_count
+            commit_count += 1
+            if commit_count == 2:
+                raise SQLAlchemyError("forced credential rotation failure")
+            original_commit()
+
+        monkeypatch.setattr(db.session, "commit", fail_rotation_commit)
+        response = app.test_client().post(
+            path,
+            data=body,
+            headers=headers,
+            environ_overrides={"RAW_URI": path},
+        )
+        monkeypatch.setattr(db.session, "commit", original_commit)
+
+        assert response.status_code == 500
+        assert response.get_json() == {"error": "internal_server_error"}
+        assert response.headers["Cache-Control"] == "no-store"
+        credentials = list(db.session.execute(select(DeviceCredential)).scalars())
+        assert len(credentials) == 1
+        assert credentials[0].status == "active"
+        assert credentials[0].superseded_at is None
+        assert credentials[0].superseded_by_id is None
+        assert (
+            db.session.execute(
+                select(DeviceEnrollmentEvent).where(
+                    DeviceEnrollmentEvent.category == "credential_rotated"
+                )
+            ).scalar_one_or_none()
+            is None
+        )
+
+
+def test_protocol_logs_exclude_enrollment_and_authentication_secrets(
+    app: Flask,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    log_sinks = [Mock() for _ in range(4)]
+    for method_name, sink in zip(
+        ("debug", "info", "warning", "error"),
+        log_sinks,
+        strict=True,
+    ):
+        monkeypatch.setattr(app.logger, method_name, sink)
+
+    credential_uuid, private_key, access_token = _enroll(app)
+    path = f"/api/v1/sync/policies/{DEVICE_UUID}"
+    headers, nonce = _signed_headers(private_key, credential_uuid, path=path)
+    response = app.test_client().get(
+        path,
+        headers=headers,
+        environ_overrides={"RAW_URI": path},
+    )
+
+    assert response.status_code == 200
+    logged_values = repr([sink.call_args_list for sink in log_sinks])
+    assert access_token not in logged_values
+    assert credential_uuid not in logged_values
+    assert headers["X-Device-Signature"] not in logged_values
+    assert nonce not in logged_values
 
 
 def test_revoked_pairing_token_cannot_enroll(app: Flask) -> None:

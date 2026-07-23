@@ -7,7 +7,14 @@ from flask import Flask
 from sqlalchemy import event
 
 from app.extensions import db
-from app.models import Device, DevicePolicyAssignment, Policy, utc_now
+from app.models import (
+    Device,
+    DevicePolicyAssignment,
+    Policy,
+    PolicyRevision,
+    policy_revision_content_hash,
+    utc_now,
+)
 from app.services.policy_sync import (
     DeviceBlockedError,
     DeviceNotFoundError,
@@ -46,17 +53,41 @@ def assign_policy(
     policy = Policy(
         policy_uuid=UUID(POLICY_UUID),
         name="Classroom policy",
-        version=policy_version,
         status=policy_status,
-        blocked_apps=BLOCKED_APPS,
     )
     db.session.add(policy)
     db.session.flush()
+    assigned_payload = {
+        "schema_version": 1,
+        "blocked_apps": BLOCKED_APPS,
+    }
+    assigned_revision = PolicyRevision(
+        policy_id=policy.id,
+        version=assignment_version,
+        payload=assigned_payload,
+        content_hash=policy_revision_content_hash(assigned_payload),
+        created_by=str(UUID(POLICY_UUID)),
+    )
+    db.session.add(assigned_revision)
+    db.session.flush()
+    if policy_version != assignment_version:
+        latest_payload = {
+            "schema_version": 1,
+            "blocked_apps": ["org.example.latest"],
+        }
+        db.session.add(
+            PolicyRevision(
+                policy_id=policy.id,
+                version=policy_version,
+                payload=latest_payload,
+                content_hash=policy_revision_content_hash(latest_payload),
+                created_by=str(UUID(POLICY_UUID)),
+            )
+        )
 
     assignment = DevicePolicyAssignment(
         device_id=device.id,
-        policy_id=policy.id,
-        policy_version=assignment_version,
+        policy_revision_id=assigned_revision.id,
         status=assignment_status,
         superseded_at=(utc_now() if assignment_status == "superseded" else None),
     )
@@ -145,7 +176,6 @@ def test_policy_sync_returns_active_policy(app: Flask) -> None:
         {"policy_status": "draft"},
         {"policy_status": "inactive"},
         {"policy_status": "revoked"},
-        {"policy_version": 6, "assignment_version": 5},
     ],
 )
 def test_policy_sync_ignores_ineligible_policy(
@@ -160,6 +190,20 @@ def test_policy_sync_ignores_ineligible_policy(
 
     assert payload["policy"] is None
     assert payload["policy_version"] == 0
+
+
+def test_policy_sync_uses_exact_assigned_historical_revision(app: Flask) -> None:
+    with app.app_context():
+        device = create_device()
+        assign_policy(device, policy_version=6, assignment_version=5)
+
+        payload = get_policy_sync_payload(DEVICE_UUID)
+
+    assert payload["policy"] == {
+        "policy_uuid": POLICY_UUID,
+        "policy_version": 5,
+        "blocked_apps": BLOCKED_APPS,
+    }
 
 
 def test_policy_sync_is_database_read_only(app: Flask) -> None:

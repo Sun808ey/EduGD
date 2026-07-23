@@ -171,8 +171,7 @@ def test_sqlite_enforces_foreign_keys(app: Flask) -> None:
             db.session.execute(
                 insert(DevicePolicyAssignment).values(
                     device_id=-1,
-                    policy_id=-1,
-                    policy_version=1,
+                    policy_revision_id=-1,
                     status="active",
                 )
             )

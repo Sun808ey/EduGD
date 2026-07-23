@@ -157,6 +157,7 @@ def _load_models() -> None:
         DeviceRequestNonce,
         EnrollmentToken,
         Policy,
+        PolicyRevision,
     )
 
     _ = (
@@ -172,6 +173,7 @@ def _load_models() -> None:
         DeviceRequestNonce,
         EnrollmentToken,
         Policy,
+        PolicyRevision,
     )
 
 

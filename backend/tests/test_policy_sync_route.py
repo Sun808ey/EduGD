@@ -7,7 +7,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 import app.routes.sync as sync_routes
 from app.extensions import db
-from app.models import Device, DevicePolicyAssignment, Policy
+from app.models import (
+    Device,
+    DevicePolicyAssignment,
+    Policy,
+    PolicyRevision,
+    policy_revision_content_hash,
+)
 
 DEVICE_UUID = "550e8400-e29b-41d4-a716-446655440000"
 POLICY_UUID = "8e65f112-f7c4-4776-b113-e0eef34ec881"
@@ -34,17 +40,24 @@ def assign_active_policy(device: Device, *, policy_status: str = "active") -> No
     policy = Policy(
         policy_uuid=UUID(POLICY_UUID),
         name="Classroom policy",
-        version=5,
         status=policy_status,
-        blocked_apps=BLOCKED_APPS,
     )
     db.session.add(policy)
+    db.session.flush()
+    payload = {"schema_version": 1, "blocked_apps": BLOCKED_APPS}
+    revision = PolicyRevision(
+        policy_id=policy.id,
+        version=5,
+        payload=payload,
+        content_hash=policy_revision_content_hash(payload),
+        created_by=POLICY_UUID,
+    )
+    db.session.add(revision)
     db.session.flush()
     db.session.add(
         DevicePolicyAssignment(
             device_id=device.id,
-            policy_id=policy.id,
-            policy_version=policy.version,
+            policy_revision_id=revision.id,
             status="active",
         )
     )

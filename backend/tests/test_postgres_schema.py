@@ -3,10 +3,10 @@ from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import delete, insert, inspect, select
+from sqlalchemy import delete, insert, inspect, select, text
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.dialects.postgresql import UUID as POSTGRES_UUID
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.sqltypes import DateTime
 
@@ -16,6 +16,8 @@ from app.models import (
     DevicePolicyAssignment,
     DeviceRequestNonce,
     Policy,
+    PolicyRevision,
+    policy_revision_content_hash,
     utc_now,
 )
 
@@ -30,11 +32,26 @@ def _policy(**overrides: object) -> Policy:
     values = {
         "policy_uuid": uuid4(),
         "name": "Test policy",
-        "version": 1,
-        "blocked_apps": ["org.example.learning"],
     }
     values.update(overrides)
     return Policy(**values)
+
+
+def _revision(
+    policy: Policy,
+    *,
+    version: int = 1,
+    blocked_apps: object = None,
+) -> PolicyRevision:
+    apps = ["org.example.learning"] if blocked_apps is None else blocked_apps
+    payload = {"schema_version": 1, "blocked_apps": apps}
+    return PolicyRevision(
+        policy=policy,
+        version=version,
+        payload=payload,
+        content_hash=policy_revision_content_hash(payload),
+        created_by=str(uuid4()),
+    )
 
 
 def _expect_integrity_error(session: Session, model: object) -> None:
@@ -51,6 +68,7 @@ def test_existing_schema_metadata_and_constraints(
     expected_tables = {
         "devices",
         "policies",
+        "policy_revisions",
         "device_policy_assignments",
         "device_registration_events",
         "enrollment_tokens",
@@ -78,6 +96,19 @@ def test_existing_schema_metadata_and_constraints(
     }
     assert device_uniques["uq_devices_device_uuid"] == ["device_uuid"]
     assert policy_uniques["uq_policies_policy_uuid"] == ["policy_uuid"]
+    revision_uniques = {
+        constraint["name"]: constraint["column_names"]
+        for constraint in inspector.get_unique_constraints("policy_revisions")
+    }
+    assert revision_uniques["uq_policy_revisions_revision_uuid"] == ["revision_uuid"]
+    assert revision_uniques["uq_policy_revisions_policy_version"] == [
+        "policy_id",
+        "version",
+    ]
+    assert revision_uniques["uq_policy_revisions_policy_content_hash"] == [
+        "policy_id",
+        "content_hash",
+    ]
 
     foreign_keys = inspector.get_foreign_keys("device_policy_assignments")
     foreign_key_targets = {
@@ -88,7 +119,14 @@ def test_existing_schema_metadata_and_constraints(
         for foreign_key in foreign_keys
     }
     assert foreign_key_targets[("device_id",)] == ("devices", "RESTRICT")
-    assert foreign_key_targets[("policy_id",)] == ("policies", "RESTRICT")
+    assert foreign_key_targets[("policy_revision_id",)] == (
+        "policy_revisions",
+        "RESTRICT",
+    )
+    revision_foreign_key = inspector.get_foreign_keys("policy_revisions")
+    assert len(revision_foreign_key) == 1
+    assert revision_foreign_key[0]["referred_table"] == "policies"
+    assert revision_foreign_key[0]["options"].get("ondelete") == "RESTRICT"
 
     indexes = {
         index["name"]: index
@@ -111,9 +149,13 @@ def test_existing_schema_metadata_and_constraints(
         column["name"]: column
         for column in inspector.get_columns("device_policy_assignments")
     }
+    revision_columns = {
+        column["name"]: column for column in inspector.get_columns("policy_revisions")
+    }
     assert isinstance(device_columns["device_uuid"]["type"], POSTGRES_UUID)
     assert isinstance(policy_columns["policy_uuid"]["type"], POSTGRES_UUID)
-    assert isinstance(policy_columns["blocked_apps"]["type"], JSON)
+    assert isinstance(revision_columns["revision_uuid"]["type"], POSTGRES_UUID)
+    assert isinstance(revision_columns["payload"]["type"], JSON)
     nullable_columns = {
         "devices": {
             name for name, column in device_columns.items() if column["nullable"]
@@ -124,11 +166,15 @@ def test_existing_schema_metadata_and_constraints(
         "device_policy_assignments": {
             name for name, column in assignment_columns.items() if column["nullable"]
         },
+        "policy_revisions": {
+            name for name, column in revision_columns.items() if column["nullable"]
+        },
     }
     assert nullable_columns == {
         "devices": {"last_sync_at"},
         "policies": set(),
         "device_policy_assignments": {"superseded_at"},
+        "policy_revisions": set(),
     }
     for columns, timestamp_names in (
         (
@@ -137,6 +183,7 @@ def test_existing_schema_metadata_and_constraints(
         ),
         (policy_columns, {"created_at", "updated_at"}),
         (assignment_columns, {"assigned_at", "superseded_at"}),
+        (revision_columns, {"created_at"}),
     ):
         assert all(
             cast(DateTime, columns[name]["type"]).timezone for name in timestamp_names
@@ -157,15 +204,19 @@ def test_existing_schema_metadata_and_constraints(
         constraint["name"]
         for constraint in inspector.get_check_constraints("device_policy_assignments")
     }
-    assert policy_checks == {
-        "ck_policies_blocked_apps",
-        "ck_policies_status",
-        "ck_policies_version_positive",
-    }
+    assert policy_checks == {"ck_policies_status"}
     assert assignment_checks == {
         "ck_device_policy_assignments_status",
         "ck_device_policy_assignments_status_timestamp",
-        "ck_device_policy_assignments_version_positive",
+    }
+    revision_checks = {
+        constraint["name"]
+        for constraint in inspector.get_check_constraints("policy_revisions")
+    }
+    assert revision_checks == {
+        "ck_policy_revisions_content_hash_length",
+        "ck_policy_revisions_payload",
+        "ck_policy_revisions_version_positive",
     }
 
     registration_foreign_keys = inspector.get_foreign_keys("device_registration_events")
@@ -422,10 +473,12 @@ def test_uuid_json_primary_keys_uniqueness_and_timestamps(
     policy = _policy(policy_uuid=policy_uuid)
     postgres_session.add_all([device, policy])
     postgres_session.flush()
+    revision = _revision(policy)
+    postgres_session.add(revision)
+    postgres_session.flush()
     assignment = DevicePolicyAssignment(
         device_id=device.id,
-        policy_id=policy.id,
-        policy_version=policy.version,
+        policy_revision_id=revision.id,
     )
     postgres_session.add(assignment)
     postgres_session.flush()
@@ -438,7 +491,9 @@ def test_uuid_json_primary_keys_uniqueness_and_timestamps(
     assert stored_policy is not None
     assert stored_device.device_uuid == device_uuid
     assert stored_policy.policy_uuid == policy_uuid
-    assert stored_policy.blocked_apps == ["org.example.learning"]
+    assert revision.payload["blocked_apps"] == ["org.example.learning"]
+    assert revision.revision_uuid.version == 4
+    assert len(revision.content_hash) == 32
     assert isinstance(stored_policy.policy_uuid, UUID)
     timestamp_values = (
         device.registered_at,
@@ -446,6 +501,7 @@ def test_uuid_json_primary_keys_uniqueness_and_timestamps(
         device.updated_at,
         stored_policy.created_at,
         stored_policy.updated_at,
+        revision.created_at,
         assignment.assigned_at,
     )
     assert all(value.tzinfo is not None for value in timestamp_values)
@@ -485,17 +541,19 @@ def test_not_null_foreign_keys_and_restrict_delete(
             )
     _expect_integrity_error(
         postgres_session,
-        DevicePolicyAssignment(device_id=-1, policy_id=-1),
+        DevicePolicyAssignment(device_id=-1, policy_revision_id=-1),
     )
 
     device = _device()
     policy = _policy()
     postgres_session.add_all([device, policy])
     postgres_session.flush()
+    revision = _revision(policy)
+    postgres_session.add(revision)
+    postgres_session.flush()
     assignment = DevicePolicyAssignment(
         device_id=device.id,
-        policy_id=policy.id,
-        policy_version=policy.version,
+        policy_revision_id=revision.id,
     )
     postgres_session.add(assignment)
     postgres_session.flush()
@@ -503,6 +561,9 @@ def test_not_null_foreign_keys_and_restrict_delete(
     with pytest.raises(IntegrityError):
         with postgres_session.begin_nested():
             postgres_session.execute(delete(Device).where(Device.id == device.id))
+    with pytest.raises(IntegrityError):
+        with postgres_session.begin_nested():
+            postgres_session.execute(delete(Policy).where(Policy.id == policy.id))
 
 
 def test_existing_check_constraints(postgres_session: Session) -> None:
@@ -527,7 +588,21 @@ def test_existing_check_constraints(postgres_session: Session) -> None:
                         status="active",
                     )
                 )
-    _expect_integrity_error(postgres_session, _policy(version=0))
+    policy = _policy()
+    postgres_session.add(policy)
+    postgres_session.flush()
+    _expect_integrity_error(
+        postgres_session,
+        PolicyRevision(
+            policy_id=policy.id,
+            version=0,
+            payload={"schema_version": 1, "blocked_apps": []},
+            content_hash=policy_revision_content_hash(
+                {"schema_version": 1, "blocked_apps": []}
+            ),
+            created_by=str(uuid4()),
+        ),
+    )
     with pytest.raises(IntegrityError):
         with postgres_session.begin_nested():
             postgres_session.execute(
@@ -535,34 +610,28 @@ def test_existing_check_constraints(postgres_session: Session) -> None:
                     policy_uuid=uuid4(),
                     name="Invalid status policy",
                     status="published",
-                    blocked_apps=[],
                 )
             )
     device = _device()
-    policy = _policy()
-    postgres_session.add_all([device, policy])
+    revision = _revision(policy)
+    postgres_session.add_all([device, revision])
     postgres_session.flush()
 
     invalid_assignments = [
         DevicePolicyAssignment(
             device_id=device.id,
-            policy_id=policy.id,
-            policy_version=0,
-        ),
-        DevicePolicyAssignment(
-            device_id=device.id,
-            policy_id=policy.id,
+            policy_revision_id=revision.id,
             status="invalid",
         ),
         DevicePolicyAssignment(
             device_id=device.id,
-            policy_id=policy.id,
+            policy_revision_id=revision.id,
             status="active",
             superseded_at=datetime.now(UTC),
         ),
         DevicePolicyAssignment(
             device_id=device.id,
-            policy_id=policy.id,
+            policy_revision_id=revision.id,
             status="superseded",
             superseded_at=None,
         ),
@@ -582,23 +651,32 @@ def test_existing_check_constraints(postgres_session: Session) -> None:
         [None],
     ],
 )
-def test_postgres_rejects_invalid_blocked_app_json(
+def test_postgres_rejects_invalid_policy_revision_json(
     postgres_session: Session,
     blocked_apps: object,
 ) -> None:
     with pytest.raises(IntegrityError):
         with postgres_session.begin_nested():
             postgres_session.execute(
-                insert(Policy).values(
-                    policy_uuid=uuid4(),
-                    name="Invalid blocked-app JSON policy",
-                    status="active",
-                    blocked_apps=blocked_apps,
+                insert(PolicyRevision).values(
+                    revision_uuid=uuid4(),
+                    policy_id=postgres_session.scalar(
+                        insert(Policy)
+                        .values(policy_uuid=uuid4(), name="JSON policy")
+                        .returning(Policy.id)
+                    ),
+                    version=1,
+                    payload={
+                        "schema_version": 1,
+                        "blocked_apps": blocked_apps,
+                    },
+                    content_hash=b"x" * 32,
+                    created_by=str(uuid4()),
                 )
             )
 
 
-def test_postgres_preserves_valid_blocked_app_order(
+def test_postgres_preserves_valid_policy_revision_order(
     postgres_session: Session,
 ) -> None:
     expected = [
@@ -606,20 +684,110 @@ def test_postgres_preserves_valid_blocked_app_order(
         "com.facebook.katana",
         "com.instagram.android",
     ]
-    policy_uuid = uuid4()
-    postgres_session.execute(
-        insert(Policy).values(
-            policy_uuid=policy_uuid,
-            name="Ordered blocked-app policy",
-            status="active",
-            blocked_apps=expected,
-        )
-    )
-    stored = postgres_session.execute(
-        select(Policy).where(Policy.policy_uuid == policy_uuid)
-    ).scalar_one()
+    policy = _policy(name="Ordered blocked-app policy")
+    revision = _revision(policy, blocked_apps=expected)
+    postgres_session.add_all([policy, revision])
+    postgres_session.flush()
 
-    assert stored.blocked_apps == expected
+    stored = postgres_session.get(PolicyRevision, revision.id)
+    assert stored is not None
+    assert stored.payload["blocked_apps"] == expected
+
+
+def test_postgres_rejects_direct_policy_revision_update_and_delete(
+    postgres_session: Session,
+) -> None:
+    policy = _policy()
+    revision = _revision(policy)
+    postgres_session.add_all([policy, revision])
+    postgres_session.flush()
+
+    for statement in (
+        text("UPDATE policy_revisions SET created_by = :actor WHERE id = :revision_id"),
+        text("DELETE FROM policy_revisions WHERE id = :revision_id"),
+    ):
+        with pytest.raises(DBAPIError):
+            with postgres_session.begin_nested():
+                postgres_session.execute(
+                    statement,
+                    {
+                        "actor": str(uuid4()),
+                        "revision_id": revision.id,
+                    },
+                )
+
+    assert postgres_session.get(PolicyRevision, revision.id) is revision
+
+
+def test_postgres_rejects_invalid_hash_and_duplicate_revision_evidence(
+    postgres_session: Session,
+) -> None:
+    policy = _policy()
+    revision = _revision(policy)
+    postgres_session.add_all([policy, revision])
+    postgres_session.flush()
+
+    with pytest.raises(IntegrityError):
+        with postgres_session.begin_nested():
+            postgres_session.execute(
+                insert(PolicyRevision).values(
+                    revision_uuid=uuid4(),
+                    policy_id=policy.id,
+                    version=2,
+                    payload={
+                        "schema_version": 1,
+                        "blocked_apps": ["com.example.invalidhash"],
+                    },
+                    content_hash=b"short",
+                    created_by=str(uuid4()),
+                )
+            )
+
+    _expect_integrity_error(
+        postgres_session,
+        PolicyRevision(
+            policy_id=policy.id,
+            version=2,
+            payload=revision.payload,
+            content_hash=revision.content_hash,
+            created_by=str(uuid4()),
+        ),
+    )
+
+
+def test_postgres_assignment_reconstructs_exact_historical_revision(
+    postgres_session: Session,
+) -> None:
+    device = _device()
+    policy = _policy()
+    assigned_revision = _revision(
+        policy,
+        version=5,
+        blocked_apps=["com.example.historical"],
+    )
+    newer_revision = _revision(
+        policy,
+        version=6,
+        blocked_apps=["com.example.current"],
+    )
+    postgres_session.add_all(
+        [device, policy, assigned_revision, newer_revision]
+    )
+    postgres_session.flush()
+    assignment = DevicePolicyAssignment(
+        device_id=device.id,
+        policy_revision_id=assigned_revision.id,
+    )
+    postgres_session.add(assignment)
+    postgres_session.flush()
+
+    stored = postgres_session.execute(
+        select(PolicyRevision)
+        .join(DevicePolicyAssignment)
+        .where(DevicePolicyAssignment.id == assignment.id)
+    ).scalar_one()
+    assert stored.version == 5
+    assert stored.payload["blocked_apps"] == ["com.example.historical"]
 
 
 def test_partial_unique_index_allows_only_one_active_assignment(
@@ -630,9 +798,13 @@ def test_partial_unique_index_allows_only_one_active_assignment(
     second_policy = _policy(name="Second")
     postgres_session.add_all([device, first_policy, second_policy])
     postgres_session.flush()
+    first_revision = _revision(first_policy)
+    second_revision = _revision(second_policy)
+    postgres_session.add_all([first_revision, second_revision])
+    postgres_session.flush()
     first_assignment = DevicePolicyAssignment(
         device_id=device.id,
-        policy_id=first_policy.id,
+        policy_revision_id=first_revision.id,
     )
     postgres_session.add(first_assignment)
     postgres_session.flush()
@@ -641,7 +813,7 @@ def test_partial_unique_index_allows_only_one_active_assignment(
         postgres_session,
         DevicePolicyAssignment(
             device_id=device.id,
-            policy_id=second_policy.id,
+            policy_revision_id=second_revision.id,
         ),
     )
 
@@ -650,7 +822,7 @@ def test_partial_unique_index_allows_only_one_active_assignment(
     postgres_session.flush()
     replacement = DevicePolicyAssignment(
         device_id=device.id,
-        policy_id=second_policy.id,
+        policy_revision_id=second_revision.id,
     )
     postgres_session.add(replacement)
     postgres_session.flush()

@@ -8,7 +8,29 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.schema import CreateIndex
 
 from app.extensions import db
-from app.models import Device, DevicePolicyAssignment, Policy, utc_now
+from app.models import (
+    Device,
+    DevicePolicyAssignment,
+    Policy,
+    PolicyRevision,
+    policy_revision_content_hash,
+    utc_now,
+)
+
+
+def make_revision(
+    policy: Policy,
+    version: int,
+    blocked_apps: list[str],
+) -> PolicyRevision:
+    payload = {"schema_version": 1, "blocked_apps": blocked_apps}
+    return PolicyRevision(
+        policy=policy,
+        version=version,
+        payload=payload,
+        content_hash=policy_revision_content_hash(payload),
+        created_by=str(uuid4()),
+    )
 
 
 def test_device_policy_assignment_model_contract() -> None:
@@ -17,10 +39,7 @@ def test_device_policy_assignment_model_contract() -> None:
     assert table.name == "device_policy_assignments"
     assert table.c.id.primary_key is True
     assert table.c.device_id.nullable is False
-    assert table.c.policy_id.nullable is False
-    assert table.c.policy_version.nullable is False
-    assert table.c.policy_version.default.arg == 1
-    assert table.c.policy_version.server_default.arg == "1"
+    assert table.c.policy_revision_id.nullable is False
     assert table.c.status.nullable is False
     assert table.c.status.default.arg == "active"
     assert table.c.status.server_default.arg == "active"
@@ -31,7 +50,7 @@ def test_device_policy_assignment_model_contract() -> None:
     }
     assert foreign_keys == {
         "devices.id": "RESTRICT",
-        "policies.id": "RESTRICT",
+        "policy_revisions.id": "RESTRICT",
     }
 
     checks = {
@@ -39,7 +58,6 @@ def test_device_policy_assignment_model_contract() -> None:
         for constraint in table.constraints
         if isinstance(constraint, CheckConstraint)
     }
-    assert "policy_version >= 1" in checks
     assert "status IN ('active', 'superseded')" in checks
     assert any("superseded_at IS NULL" in check for check in checks)
 
@@ -78,24 +96,33 @@ def test_assignment_replacement_preserves_history(app: Flask) -> None:
         first_policy = Policy(
             policy_uuid=uuid4(),
             name="Initial policy",
-            version=1,
             status="active",
-            blocked_apps=["com.facebook.katana"],
         )
         second_policy = Policy(
             policy_uuid=uuid4(),
             name="Updated policy",
-            version=2,
             status="active",
-            blocked_apps=["com.facebook.katana", "com.instagram.android"],
         )
-        db.session.add_all([device, first_policy, second_policy])
+        first_revision = make_revision(first_policy, 1, ["com.facebook.katana"])
+        second_revision = make_revision(
+            second_policy,
+            2,
+            ["com.facebook.katana", "com.instagram.android"],
+        )
+        db.session.add_all(
+            [
+                device,
+                first_policy,
+                second_policy,
+                first_revision,
+                second_revision,
+            ]
+        )
         db.session.commit()
 
         first_assignment = DevicePolicyAssignment(
             device_id=device.id,
-            policy_id=first_policy.id,
-            policy_version=first_policy.version,
+            policy_revision_id=first_revision.id,
             status="active",
         )
         db.session.add(first_assignment)
@@ -103,8 +130,7 @@ def test_assignment_replacement_preserves_history(app: Flask) -> None:
 
         conflicting_assignment = DevicePolicyAssignment(
             device_id=device.id,
-            policy_id=second_policy.id,
-            policy_version=second_policy.version,
+            policy_revision_id=second_revision.id,
             status="active",
         )
         db.session.add(conflicting_assignment)
@@ -122,8 +148,7 @@ def test_assignment_replacement_preserves_history(app: Flask) -> None:
 
         replacement_assignment = DevicePolicyAssignment(
             device_id=device.id,
-            policy_id=second_policy.id,
-            policy_version=second_policy.version,
+            policy_revision_id=second_revision.id,
             status="active",
         )
         db.session.add(replacement_assignment)
@@ -141,8 +166,8 @@ def test_assignment_replacement_preserves_history(app: Flask) -> None:
 
         assert len(assignments) == 2
         assert assignments[0].status == "superseded"
-        assert assignments[0].policy_version == 1
+        assert assignments[0].policy_revision.version == 1
         assert assignments[0].superseded_at is not None
         assert assignments[1].status == "active"
-        assert assignments[1].policy_version == 2
+        assert assignments[1].policy_revision.version == 2
         assert assignments[1].superseded_at is None

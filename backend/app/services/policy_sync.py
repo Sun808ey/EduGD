@@ -1,10 +1,17 @@
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import select
 
 from app.device_identity import parse_canonical_uuid4
 from app.extensions import db
-from app.models import Device, DevicePolicyAssignment, Policy
+from app.models import (
+    Device,
+    DevicePolicyAssignment,
+    Policy,
+    PolicyRevision,
+    validate_policy_revision_payload,
+)
 
 
 class InvalidDeviceUUIDError(ValueError):
@@ -41,16 +48,18 @@ def get_policy_sync_payload(device_uuid: object) -> dict[str, object]:
         if assignment is None:
             return _no_policy_payload(canonical_uuid)
 
-        policy = _find_matching_active_policy(assignment)
-        if policy is None:
+        revision_and_policy = _find_exact_active_revision(assignment)
+        if revision_and_policy is None:
             return _no_policy_payload(canonical_uuid)
+        revision, policy = revision_and_policy
+        payload = validate_policy_revision_payload(revision.payload)
 
         return {
             "device_uuid": str(canonical_uuid),
             "policy": {
                 "policy_uuid": str(policy.policy_uuid),
-                "policy_version": assignment.policy_version,
-                "blocked_apps": list(policy.blocked_apps),
+                "policy_version": revision.version,
+                "blocked_apps": list(cast(list[str], payload["blocked_apps"])),
             },
         }
 
@@ -116,15 +125,24 @@ def _find_active_assignment(device_id: int) -> DevicePolicyAssignment | None:
     return db.session.execute(statement).scalar_one_or_none()
 
 
-def _find_matching_active_policy(
+def _find_exact_active_revision(
     assignment: DevicePolicyAssignment,
-) -> Policy | None:
-    statement = select(Policy).where(
-        Policy.id == assignment.policy_id,
-        Policy.status == "active",
-        Policy.version == assignment.policy_version,
+) -> tuple[PolicyRevision, Policy] | None:
+    statement = (
+        select(PolicyRevision, Policy)
+        .join(
+            Policy,
+            Policy.id == PolicyRevision.policy_id,
+        )
+        .where(
+            PolicyRevision.id == assignment.policy_revision_id,
+            Policy.status == "active",
+        )
     )
-    return db.session.execute(statement).scalar_one_or_none()
+    result = db.session.execute(statement).one_or_none()
+    if result is None:
+        return None
+    return result[0], result[1]
 
 
 def _no_policy_payload(device_uuid: UUID) -> dict[str, object]:

@@ -83,6 +83,7 @@ android/.idea/tasks.xml
 *.tmp
 *.bak
 *.swp
+.history/
 
 #####################################################
 # SQLCipher Databases (Development)

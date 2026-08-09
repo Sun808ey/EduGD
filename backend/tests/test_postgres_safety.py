@@ -24,6 +24,7 @@ PRODUCTION_URL = (
 def safe_environment(**overrides: str) -> dict[str, str]:
     environment = {
         "POSTGRES_TEST_BRANCH_NAME": APPROVED_POSTGRES_TEST_BRANCH,
+        "POSTGRES_TEST_ENDPOINT_ID": "ep-integration",
         "POSTGRES_TEST_DATABASE_URL": APPLICATION_URL,
         "MIGRATION_DATABASE_URL": MIGRATION_URL,
         "ALLOW_DESTRUCTIVE_POSTGRES_TESTS": "false",
@@ -41,6 +42,7 @@ def test_guard_accepts_separated_pooled_and_direct_test_urls() -> None:
     )
 
     assert approved.branch_name == APPROVED_POSTGRES_TEST_BRANCH
+    assert approved.endpoint_id == "ep-integration"
     assert approved.destructive_allowed is False
     assert "postgresql" not in repr(approved)
 
@@ -94,6 +96,17 @@ def test_guard_accepts_separated_pooled_and_direct_test_urls() -> None:
             "TLS",
         ),
         ({"POSTGRES_TEST_BRANCH_NAME": ""}, False, "POSTGRES_TEST_BRANCH_NAME"),
+        ({"POSTGRES_TEST_ENDPOINT_ID": ""}, False, "POSTGRES_TEST_ENDPOINT_ID"),
+        (
+            {"POSTGRES_TEST_ENDPOINT_ID": "ep-development"},
+            False,
+            "POSTGRES_TEST_ENDPOINT_ID",
+        ),
+        (
+            {"POSTGRES_TEST_ENDPOINT_ID": "integration"},
+            False,
+            "POSTGRES_TEST_ENDPOINT_ID",
+        ),
         (
             {"POSTGRES_TEST_BRANCH_NAME": "development"},
             False,

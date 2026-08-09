@@ -17,6 +17,7 @@ from app.models import (
     DeviceRequestNonce,
     Policy,
     PolicyRevision,
+    PolicySynchronizationEvent,
     policy_revision_content_hash,
     utc_now,
 )
@@ -50,8 +51,23 @@ def _revision(
         version=version,
         payload=payload,
         content_hash=policy_revision_content_hash(payload),
-        created_by=str(uuid4()),
+        created_by="migration:postgres-schema-test",
     )
+
+
+def _assignment(
+    device: Device,
+    revision: PolicyRevision,
+    **overrides: object,
+) -> DevicePolicyAssignment:
+    values: dict[str, object] = {
+        "device_id": device.id,
+        "policy_revision_id": revision.id,
+        "trusted_operator_subject": "test:postgres-schema",
+        "reason": "PostgreSQL schema verification",
+    }
+    values.update(overrides)
+    return DevicePolicyAssignment(**values)
 
 
 def _expect_integrity_error(session: Session, model: object) -> None:
@@ -79,6 +95,7 @@ def test_existing_schema_metadata_and_constraints(
         "administrator_permissions",
         "administrator_sessions",
         "administrator_authentication_events",
+        "policy_synchronization_events",
     }
     assert expected_tables.issubset(set(inspector.get_table_names()))
 
@@ -123,10 +140,21 @@ def test_existing_schema_metadata_and_constraints(
         "policy_revisions",
         "RESTRICT",
     )
-    revision_foreign_key = inspector.get_foreign_keys("policy_revisions")
-    assert len(revision_foreign_key) == 1
-    assert revision_foreign_key[0]["referred_table"] == "policies"
-    assert revision_foreign_key[0]["options"].get("ondelete") == "RESTRICT"
+    assert foreign_key_targets[("assigned_by_administrator_id",)] == (
+        "administrators",
+        "RESTRICT",
+    )
+    revision_foreign_keys = {
+        tuple(foreign_key["constrained_columns"]): (
+            foreign_key["referred_table"],
+            foreign_key["options"].get("ondelete"),
+        )
+        for foreign_key in inspector.get_foreign_keys("policy_revisions")
+    }
+    assert revision_foreign_keys == {
+        ("policy_id",): ("policies", "RESTRICT"),
+        ("created_by_administrator_id",): ("administrators", "RESTRICT"),
+    }
 
     indexes = {
         index["name"]: index
@@ -173,8 +201,12 @@ def test_existing_schema_metadata_and_constraints(
     assert nullable_columns == {
         "devices": {"last_sync_at"},
         "policies": set(),
-        "device_policy_assignments": {"superseded_at"},
-        "policy_revisions": set(),
+        "device_policy_assignments": {
+            "assigned_by_administrator_id",
+            "superseded_at",
+            "trusted_operator_subject",
+        },
+        "policy_revisions": {"created_by_administrator_id"},
     }
     for columns, timestamp_names in (
         (
@@ -206,14 +238,26 @@ def test_existing_schema_metadata_and_constraints(
     }
     assert policy_checks == {"ck_policies_status"}
     assert assignment_checks == {
+        "ck_device_policy_assignments_actor",
+        "ck_device_policy_assignments_operator_bounded",
+        "ck_device_policy_assignments_reason_bounded",
         "ck_device_policy_assignments_status",
         "ck_device_policy_assignments_status_timestamp",
     }
+    assignment_uniques = {
+        constraint["name"]: constraint["column_names"]
+        for constraint in inspector.get_unique_constraints("device_policy_assignments")
+    }
+    assert assignment_uniques["uq_device_policy_assignments_event_uuid"] == [
+        "event_uuid"
+    ]
+    assert isinstance(assignment_columns["event_uuid"]["type"], POSTGRES_UUID)
     revision_checks = {
         constraint["name"]
         for constraint in inspector.get_check_constraints("policy_revisions")
     }
     assert revision_checks == {
+        "ck_policy_revisions_actor_provenance",
         "ck_policy_revisions_content_hash_length",
         "ck_policy_revisions_payload",
         "ck_policy_revisions_version_positive",
@@ -240,6 +284,37 @@ def test_existing_schema_metadata_and_constraints(
         "ck_device_registration_events_stored_api_level",
         "ck_device_registration_events_type",
     }
+
+    synchronization_columns = {
+        column["name"]: column
+        for column in inspector.get_columns("policy_synchronization_events")
+    }
+    assert isinstance(synchronization_columns["event_uuid"]["type"], POSTGRES_UUID)
+    assert isinstance(
+        synchronization_columns["reported_policy_uuid"]["type"], POSTGRES_UUID
+    )
+    assert isinstance(
+        synchronization_columns["reported_revision_uuid"]["type"], POSTGRES_UUID
+    )
+    synchronization_checks = {
+        constraint["name"]
+        for constraint in inspector.get_check_constraints(
+            "policy_synchronization_events"
+        )
+    }
+    assert synchronization_checks == {
+        "ck_policy_synchronization_events_client_version",
+        "ck_policy_synchronization_events_device_pseudonym_length",
+        "ck_policy_synchronization_events_hash_length",
+        "ck_policy_synchronization_events_operation",
+        "ck_policy_synchronization_events_outcome",
+        "ck_policy_synchronization_events_previous_hash_length",
+        "ck_policy_synchronization_events_server_version",
+    }
+    assert {
+        foreign_key["options"].get("ondelete")
+        for foreign_key in inspector.get_foreign_keys("policy_synchronization_events")
+    } == {"RESTRICT"}
 
 
 def test_enrollment_authentication_schema_constraints(
@@ -476,10 +551,7 @@ def test_uuid_json_primary_keys_uniqueness_and_timestamps(
     revision = _revision(policy)
     postgres_session.add(revision)
     postgres_session.flush()
-    assignment = DevicePolicyAssignment(
-        device_id=device.id,
-        policy_revision_id=revision.id,
-    )
+    assignment = _assignment(device, revision)
     postgres_session.add(assignment)
     postgres_session.flush()
 
@@ -541,7 +613,12 @@ def test_not_null_foreign_keys_and_restrict_delete(
             )
     _expect_integrity_error(
         postgres_session,
-        DevicePolicyAssignment(device_id=-1, policy_revision_id=-1),
+        DevicePolicyAssignment(
+            device_id=-1,
+            policy_revision_id=-1,
+            trusted_operator_subject="test:postgres-schema",
+            reason="Foreign-key verification",
+        ),
     )
 
     device = _device()
@@ -551,10 +628,7 @@ def test_not_null_foreign_keys_and_restrict_delete(
     revision = _revision(policy)
     postgres_session.add(revision)
     postgres_session.flush()
-    assignment = DevicePolicyAssignment(
-        device_id=device.id,
-        policy_revision_id=revision.id,
-    )
+    assignment = _assignment(device, revision)
     postgres_session.add(assignment)
     postgres_session.flush()
 
@@ -618,20 +692,16 @@ def test_existing_check_constraints(postgres_session: Session) -> None:
     postgres_session.flush()
 
     invalid_assignments = [
-        DevicePolicyAssignment(
-            device_id=device.id,
-            policy_revision_id=revision.id,
-            status="invalid",
-        ),
-        DevicePolicyAssignment(
-            device_id=device.id,
-            policy_revision_id=revision.id,
+        _assignment(device, revision, status="invalid"),
+        _assignment(
+            device,
+            revision,
             status="active",
             superseded_at=datetime.now(UTC),
         ),
-        DevicePolicyAssignment(
-            device_id=device.id,
-            policy_revision_id=revision.id,
+        _assignment(
+            device,
+            revision,
             status="superseded",
             superseded_at=None,
         ),
@@ -719,6 +789,38 @@ def test_postgres_rejects_direct_policy_revision_update_and_delete(
     assert postgres_session.get(PolicyRevision, revision.id) is revision
 
 
+def test_postgres_rejects_policy_sync_audit_update_and_delete(
+    postgres_session: Session,
+) -> None:
+    device = _device()
+    postgres_session.add(device)
+    postgres_session.flush()
+    synchronization_event = PolicySynchronizationEvent(
+        device_id=device.id,
+        requested_device_pseudonym=b"p" * 32,
+        operation="no_change",
+        outcome_category="no_assignment",
+        server_policy_version=0,
+        event_hash=b"h" * 32,
+    )
+    postgres_session.add(synchronization_event)
+    postgres_session.flush()
+
+    for statement in (
+        text(
+            "UPDATE policy_synchronization_events SET operation = 'error' "
+            "WHERE id = :event_id"
+        ),
+        text("DELETE FROM policy_synchronization_events WHERE id = :event_id"),
+    ):
+        with pytest.raises(DBAPIError):
+            with postgres_session.begin_nested():
+                postgres_session.execute(
+                    statement,
+                    {"event_id": synchronization_event.id},
+                )
+
+
 def test_postgres_rejects_invalid_hash_and_duplicate_revision_evidence(
     postgres_session: Session,
 ) -> None:
@@ -770,14 +872,9 @@ def test_postgres_assignment_reconstructs_exact_historical_revision(
         version=6,
         blocked_apps=["com.example.current"],
     )
-    postgres_session.add_all(
-        [device, policy, assigned_revision, newer_revision]
-    )
+    postgres_session.add_all([device, policy, assigned_revision, newer_revision])
     postgres_session.flush()
-    assignment = DevicePolicyAssignment(
-        device_id=device.id,
-        policy_revision_id=assigned_revision.id,
-    )
+    assignment = _assignment(device, assigned_revision)
     postgres_session.add(assignment)
     postgres_session.flush()
 
@@ -802,28 +899,19 @@ def test_partial_unique_index_allows_only_one_active_assignment(
     second_revision = _revision(second_policy)
     postgres_session.add_all([first_revision, second_revision])
     postgres_session.flush()
-    first_assignment = DevicePolicyAssignment(
-        device_id=device.id,
-        policy_revision_id=first_revision.id,
-    )
+    first_assignment = _assignment(device, first_revision)
     postgres_session.add(first_assignment)
     postgres_session.flush()
 
     _expect_integrity_error(
         postgres_session,
-        DevicePolicyAssignment(
-            device_id=device.id,
-            policy_revision_id=second_revision.id,
-        ),
+        _assignment(device, second_revision),
     )
 
     first_assignment.status = "superseded"
     first_assignment.superseded_at = datetime.now(UTC)
     postgres_session.flush()
-    replacement = DevicePolicyAssignment(
-        device_id=device.id,
-        policy_revision_id=second_revision.id,
-    )
+    replacement = _assignment(device, second_revision)
     postgres_session.add(replacement)
     postgres_session.flush()
     assert (

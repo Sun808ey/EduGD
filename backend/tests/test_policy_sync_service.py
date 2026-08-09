@@ -19,6 +19,8 @@ from app.services.policy_sync import (
     DeviceBlockedError,
     DeviceNotFoundError,
     InvalidDeviceUUIDError,
+    PolicyInactiveError,
+    PolicyRevokedError,
     get_policy_sync_payload,
 )
 
@@ -90,6 +92,8 @@ def assign_policy(
         policy_revision_id=assigned_revision.id,
         status=assignment_status,
         superseded_at=(utc_now() if assignment_status == "superseded" else None),
+        trusted_operator_subject="test:sync-fixture",
+        reason="policy synchronization fixture",
     )
     db.session.add(assignment)
     db.session.commit()
@@ -169,27 +173,35 @@ def test_policy_sync_returns_active_policy(app: Flask) -> None:
     assert json.loads(json.dumps(first_payload, sort_keys=True)) == first_payload
 
 
-@pytest.mark.parametrize(
-    "assignment_options",
-    [
-        {"assignment_status": "superseded"},
-        {"policy_status": "draft"},
-        {"policy_status": "inactive"},
-        {"policy_status": "revoked"},
-    ],
-)
-def test_policy_sync_ignores_ineligible_policy(
-    app: Flask,
-    assignment_options: dict[str, Any],
-) -> None:
+def test_policy_sync_treats_superseded_history_as_no_assignment(app: Flask) -> None:
     with app.app_context():
         device = create_device()
-        assign_policy(device, **assignment_options)
+        assign_policy(device, assignment_status="superseded")
 
         payload = get_policy_sync_payload(DEVICE_UUID)
 
     assert payload["policy"] is None
     assert payload["policy_version"] == 0
+
+
+@pytest.mark.parametrize("policy_status", ["draft", "inactive"])
+def test_policy_sync_classifies_inactive_policy(
+    app: Flask,
+    policy_status: str,
+) -> None:
+    with app.app_context():
+        device = create_device()
+        assign_policy(device, policy_status=policy_status)
+        with pytest.raises(PolicyInactiveError):
+            get_policy_sync_payload(DEVICE_UUID)
+
+
+def test_policy_sync_classifies_revoked_policy(app: Flask) -> None:
+    with app.app_context():
+        device = create_device()
+        assign_policy(device, policy_status="revoked")
+        with pytest.raises(PolicyRevokedError):
+            get_policy_sync_payload(DEVICE_UUID)
 
 
 def test_policy_sync_uses_exact_assigned_historical_revision(app: Flask) -> None:

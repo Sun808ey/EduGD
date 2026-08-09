@@ -27,6 +27,7 @@ from app.models import (
     DeviceEnrollmentEvent,
     DeviceRequestNonce,
     EnrollmentToken,
+    PolicySynchronizationEvent,
 )
 from app.services.administrator_authentication import bootstrap_administrator
 
@@ -283,9 +284,7 @@ def test_consumption_database_failure_rolls_back_without_consuming_token(
         assert token.consumed_at is None
         assert token.consumed_by_device_id is None
         assert db.session.execute(select(Device)).scalar_one_or_none() is None
-        assert (
-            db.session.execute(select(DeviceCredential)).scalar_one_or_none() is None
-        )
+        assert db.session.execute(select(DeviceCredential)).scalar_one_or_none() is None
         categories = list(
             db.session.execute(select(DeviceEnrollmentEvent.category)).scalars()
         )
@@ -415,11 +414,16 @@ def test_signed_sync_succeeds_and_replayed_nonce_fails(app: Flask) -> None:
     with app.app_context():
         credential = db.session.execute(select(DeviceCredential)).scalar_one()
         nonce_record = db.session.execute(select(DeviceRequestNonce)).scalar_one()
+        synchronization_event = db.session.execute(
+            select(PolicySynchronizationEvent)
+        ).scalar_one()
         categories = list(
             db.session.execute(select(DeviceEnrollmentEvent.category)).scalars()
         )
         assert credential.last_used_at is not None
         assert nonce_record.credential_id == credential.id
+        assert synchronization_event.credential_id == credential.id
+        assert synchronization_event.device_id == credential.device_id
         assert len(nonce_record.nonce_hash) == 32
         assert nonce.encode() not in nonce_record.nonce_hash
         assert categories.count("authentication_succeeded") == 1
@@ -453,7 +457,9 @@ def test_signed_raw_target_must_match_the_dispatched_route(app: Flask) -> None:
             )
         ).scalar_one()
         assert failure.failure_class == "invalid_signature"
-        assert db.session.execute(select(DeviceRequestNonce)).scalar_one_or_none() is None
+        assert (
+            db.session.execute(select(DeviceRequestNonce)).scalar_one_or_none() is None
+        )
 
 
 def test_enforcement_mode_rejects_missing_raw_request_target(app: Flask) -> None:

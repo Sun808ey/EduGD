@@ -17,14 +17,16 @@ file or in Git.
 - `JWT_SECRET_KEY` signs short-lived administrator access JWTs.
 - `ADMIN_AUDIT_PSEUDONYM_KEY` creates keyed source-address pseudonyms for
   administrator authentication events.
+- `POLICY_SYNC_AUDIT_KEY` creates keyed device-identity pseudonyms for policy
+  synchronization events and must be distinct from every other secret.
 - `SENTRY_DSN` enables the approved Sentry integration outside test
   environments.
 
 All secret variables must remain unset in committed files. Production requires
-distinct `SECRET_KEY`, `JWT_SECRET_KEY`, and `ADMIN_AUDIT_PSEUDONYM_KEY` values
-of at least 32 characters. Development and test startup generate distinct
-process-local random values when any is absent; generated values are never
-logged.
+distinct `SECRET_KEY`, `JWT_SECRET_KEY`, `ADMIN_AUDIT_PSEUDONYM_KEY`, and
+`POLICY_SYNC_AUDIT_KEY` values of at least 32 characters. Development and test
+startup generate distinct process-local random values when any is absent;
+generated values are never logged.
 
 Sentry remains inactive without `SENTRY_DSN` and is always inactive in the
 `testing` and `postgres-testing` environments. When enabled, it labels events
@@ -44,6 +46,8 @@ The approved target configuration uses separate Neon branches and variables:
 - `DEVELOPMENT_DATABASE_URL` uses the pooled development connection.
 - `POSTGRES_TEST_DATABASE_URL` identifies the isolated PostgreSQL integration
   and migration test branch.
+- `POSTGRES_TEST_ENDPOINT_ID` is the non-secret `ep-*` identifier from that
+  branch's pooled/direct connection hostname and must match both URLs.
 - `PRODUCTION_DATABASE_URL` uses the pooled production connection.
 - `MIGRATION_DATABASE_URL` uses a direct Neon connection for migrations.
 - `PAIRING_TOKEN_PEPPER` is a deployment-secret HMAC pepper of at least 32
@@ -102,5 +106,8 @@ API level is the authoritative compatibility value.
 
 `Flask-Limiter` is initialized during application startup with no global
 limits. Administrator login is limited to 10 attempts per minute per source
-address. The limiter remains disabled by default in test configurations;
-focused tests explicitly enable it to verify the route policy.
+address. Policy synchronization defaults to 60 requests per minute and uses an
+authenticated credential identity when available, falling back to source
+address only for an approved legacy client. `POLICY_SYNC_RATE_LIMIT` can tune
+that deployment limit. The limiter remains disabled by default in test
+configurations; focused tests explicitly enable it to verify the route policy.

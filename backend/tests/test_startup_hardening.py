@@ -34,6 +34,7 @@ def test_nonproduction_startup_generates_distinct_ephemeral_secrets() -> None:
             "SECRET_KEY": None,
             "JWT_SECRET_KEY": None,
             "ADMIN_AUDIT_PSEUDONYM_KEY": None,
+            "POLICY_SYNC_AUDIT_KEY": None,
         },
     )
 
@@ -44,15 +45,18 @@ def test_nonproduction_startup_generates_distinct_ephemeral_secrets() -> None:
     assert application.config["SECRET_KEY"] != application.config["JWT_SECRET_KEY"]
     assert isinstance(application.config["ADMIN_AUDIT_PSEUDONYM_KEY"], str)
     assert len(application.config["ADMIN_AUDIT_PSEUDONYM_KEY"]) >= 32
+    assert isinstance(application.config["POLICY_SYNC_AUDIT_KEY"], str)
+    assert len(application.config["POLICY_SYNC_AUDIT_KEY"]) >= 32
     assert (
         len(
             {
                 application.config["SECRET_KEY"],
                 application.config["JWT_SECRET_KEY"],
                 application.config["ADMIN_AUDIT_PSEUDONYM_KEY"],
+                application.config["POLICY_SYNC_AUDIT_KEY"],
             }
         )
-        == 3
+        == 4
     )
     assert application.config["DEBUG"] is False
     assert application.config["RATELIMIT_ENABLED"] is False
@@ -92,6 +96,7 @@ def test_production_rejects_unsafe_secrets(
                 "SECRET_KEY": secret_key,
                 "JWT_SECRET_KEY": jwt_secret_key,
                 "ADMIN_AUDIT_PSEUDONYM_KEY": audit_key,
+                "POLICY_SYNC_AUDIT_KEY": "p" * 32,
             },
         )
 
@@ -107,11 +112,30 @@ def test_production_starts_with_distinct_strong_secrets(
             "SECRET_KEY": "f" * 32,
             "JWT_SECRET_KEY": "j" * 32,
             "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
+            "POLICY_SYNC_AUDIT_KEY": "p" * 32,
         },
     )
 
     assert application.config["DEBUG"] is False
     assert application.config["TESTING"] is False
+
+
+@pytest.mark.parametrize("sync_audit_key", ["short", "a" * 32])
+def test_production_rejects_unsafe_policy_sync_audit_key(
+    monkeypatch: pytest.MonkeyPatch,
+    sync_audit_key: str,
+) -> None:
+    monkeypatch.setenv("PRODUCTION_DATABASE_URL", PRODUCTION_URL)
+    with pytest.raises(RuntimeError, match="at least 32|distinct"):
+        create_app(
+            "production",
+            {
+                "SECRET_KEY": "f" * 32,
+                "JWT_SECRET_KEY": "j" * 32,
+                "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
+                "POLICY_SYNC_AUDIT_KEY": sync_audit_key,
+            },
+        )
 
 
 @pytest.mark.parametrize("unsafe_mode", ["DEBUG", "TESTING"])
@@ -128,6 +152,7 @@ def test_production_rejects_debug_or_testing_mode(
                 "SECRET_KEY": "f" * 32,
                 "JWT_SECRET_KEY": "j" * 32,
                 "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
+                "POLICY_SYNC_AUDIT_KEY": "p" * 32,
                 unsafe_mode: True,
             },
         )
@@ -216,6 +241,7 @@ def test_enabled_sentry_labels_production_environment(
             "SECRET_KEY": "f" * 32,
             "JWT_SECRET_KEY": "j" * 32,
             "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
+            "POLICY_SYNC_AUDIT_KEY": "p" * 32,
             "SENTRY_DSN": "https://public@example.invalid/1",
         },
     )
@@ -232,6 +258,7 @@ def test_structured_logging_redacts_secrets_and_credentials(
 ) -> None:
     secret_key = "structured-log-secret-value"
     audit_key = "structured-log-audit-pseudonym-key-value"
+    sync_audit_key = "structured-log-policy-sync-audit-key-value"
     database_url = "postgresql://test-user:test-password@example.invalid/db"
     application: Flask = create_app(
         "testing",
@@ -239,13 +266,14 @@ def test_structured_logging_redacts_secrets_and_credentials(
             "SECRET_KEY": secret_key,
             "JWT_SECRET_KEY": "structured-log-jwt-secret-value",
             "ADMIN_AUDIT_PSEUDONYM_KEY": audit_key,
+            "POLICY_SYNC_AUDIT_KEY": sync_audit_key,
             "SQLALCHEMY_DATABASE_URI": "sqlite+pysqlite:///:memory:",
         },
     )
 
     application.logger.error(
         "Startup failure secret=%s database=%s",
-        f"{secret_key} audit={audit_key}",
+        f"{secret_key} audit={audit_key} sync_audit={sync_audit_key}",
         database_url,
         extra={"event": "startup_test"},
     )
@@ -257,6 +285,7 @@ def test_structured_logging_redacts_secrets_and_credentials(
     assert log_record["event"] == "startup_test"
     assert secret_key not in captured.err
     assert audit_key not in captured.err
+    assert sync_audit_key not in captured.err
     assert "test-password" not in captured.err
     assert "<redacted>" in captured.err
 

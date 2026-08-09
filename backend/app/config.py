@@ -56,6 +56,7 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY")
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
     ADMIN_AUDIT_PSEUDONYM_KEY = os.getenv("ADMIN_AUDIT_PSEUDONYM_KEY")
+    POLICY_SYNC_AUDIT_KEY = os.getenv("POLICY_SYNC_AUDIT_KEY")
     PAIRING_TOKEN_PEPPER = os.getenv("PAIRING_TOKEN_PEPPER")
     PAIRING_TOKEN_PEPPER_VERSION = int(os.getenv("PAIRING_TOKEN_PEPPER_VERSION", "1"))
     PAIRING_TOKEN_PEPPERS: dict[int, str] | None = None
@@ -90,6 +91,7 @@ class Config:
     DEVICE_AUTH_CLOCK_SKEW_SECONDS = 300
     DEVICE_AUTH_NONCE_TTL_SECONDS = 600
     ENROLLMENT_TOKEN_TTL_SECONDS = 600
+    POLICY_SYNC_RATE_LIMIT = os.getenv("POLICY_SYNC_RATE_LIMIT") or "60 per minute"
 
 
 class DevelopmentConfig(Config):
@@ -107,6 +109,7 @@ class TestingConfig(Config):
     LOG_LEVEL = "WARNING"
     RATELIMIT_ENABLED = False
     PAIRING_TOKEN_PEPPER = "testing-pairing-token-pepper-value"
+    POLICY_SYNC_AUDIT_KEY = "testing-policy-sync-audit-key-value"
     ENROLLMENT_ADMIN_ENABLED = True
 
 

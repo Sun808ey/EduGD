@@ -95,6 +95,7 @@ def test_policy_revision_model_contract() -> None:
     assert isinstance(table.c.content_hash.type, LargeBinary)
     assert table.c.content_hash.type.length == 32
     assert table.c.created_by.nullable is False
+    assert table.c.created_by_administrator_id.nullable is True
     assert table.c.created_at.nullable is False
     assert table.c.created_at.type.timezone is True
 
@@ -110,7 +111,10 @@ def test_policy_revision_model_contract() -> None:
     assert {
         foreign_key.target_fullname: foreign_key.ondelete
         for foreign_key in table.foreign_keys
-    } == {"policies.id": "RESTRICT"}
+    } == {
+        "administrators.id": "RESTRICT",
+        "policies.id": "RESTRICT",
+    }
     assert {
         constraint.name
         for constraint in table.constraints
@@ -119,6 +123,7 @@ def test_policy_revision_model_contract() -> None:
         "ck_policy_revisions_version_positive",
         "ck_policy_revisions_content_hash_length",
         "ck_policy_revisions_payload",
+        "ck_policy_revisions_actor_provenance",
     }
 
     postgres_ddl = str(CreateTable(table).compile(dialect=postgresql.dialect()))
@@ -187,6 +192,13 @@ def test_policy_revision_payload_is_copied() -> None:
         "blocked_apps": ["com.example.learning"],
     }
 
+    exposed = revision.payload
+    cast(list[str], exposed["blocked_apps"]).append("com.example.changed")
+    assert revision.payload == {
+        "schema_version": 1,
+        "blocked_apps": ["com.example.learning"],
+    }
+
 
 def test_orm_rejects_policy_revision_update_and_delete(app: Flask) -> None:
     with app.app_context():
@@ -200,7 +212,17 @@ def test_orm_rejects_policy_revision_update_and_delete(app: Flask) -> None:
             db.session.commit()
         db.session.rollback()
 
-        stored_revision = db.session.get(PolicyRevision, revision.id)
+        loaded_revision = db.session.get(PolicyRevision, revision.id)
+        assert loaded_revision is not None
+        loaded_revision.payload = {
+            "schema_version": 1,
+            "blocked_apps": ["com.example.changed"],
+        }
+        with pytest.raises(PolicyRevisionImmutableError):
+            db.session.commit()
+        db.session.rollback()
+
+        stored_revision = db.session.get(PolicyRevision, loaded_revision.id)
         assert stored_revision is not None
         db.session.delete(stored_revision)
         with pytest.raises(PolicyRevisionImmutableError):

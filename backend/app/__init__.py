@@ -98,6 +98,7 @@ def _apply_nonproduction_secret_defaults(app: Flask) -> None:
         "SECRET_KEY",
         "JWT_SECRET_KEY",
         "ADMIN_AUDIT_PSEUDONYM_KEY",
+        "POLICY_SYNC_AUDIT_KEY",
     ):
         if not app.config.get(setting):
             app.config[setting] = token_urlsafe(32)
@@ -122,6 +123,7 @@ def _validate_startup_configuration(app: Flask) -> None:
         "SECRET_KEY",
         "JWT_SECRET_KEY",
         "ADMIN_AUDIT_PSEUDONYM_KEY",
+        "POLICY_SYNC_AUDIT_KEY",
     )
     if any(not app.config.get(setting) for setting in required_settings):
         raise RuntimeError("Required production secrets must be configured")
@@ -158,6 +160,7 @@ def _load_models() -> None:
         EnrollmentToken,
         Policy,
         PolicyRevision,
+        PolicySynchronizationEvent,
     )
 
     _ = (
@@ -174,6 +177,7 @@ def _load_models() -> None:
         EnrollmentToken,
         Policy,
         PolicyRevision,
+        PolicySynchronizationEvent,
     )
 
 

@@ -173,6 +173,8 @@ def test_sqlite_enforces_foreign_keys(app: Flask) -> None:
                     device_id=-1,
                     policy_revision_id=-1,
                     status="active",
+                    trusted_operator_subject="test:foreign-key-fixture",
+                    reason="foreign key enforcement fixture",
                 )
             )
             db.session.commit()

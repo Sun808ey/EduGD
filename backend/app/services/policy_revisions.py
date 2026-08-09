@@ -7,6 +7,7 @@ from app.device_identity import parse_canonical_uuid4
 from app.extensions import db
 from app.models import (
     POLICY_REVISION_SCHEMA_VERSION,
+    Administrator,
     Policy,
     PolicyRevision,
     policy_revision_content_hash,
@@ -30,6 +31,10 @@ class PolicyRevisionPersistenceError(RuntimeError):
     pass
 
 
+class PolicyRevisionActorError(PermissionError):
+    pass
+
+
 def create_policy_revision(
     policy_uuid: object,
     blocked_apps: object,
@@ -46,6 +51,17 @@ def create_policy_revision(
     content_hash = policy_revision_content_hash(payload)
 
     try:
+        administrator = db.session.execute(
+            select(Administrator).where(
+                Administrator.administrator_uuid == canonical_actor_uuid,
+                Administrator.status == "active",
+            )
+        ).scalar_one_or_none()
+        if administrator is None:
+            raise PolicyRevisionActorError(
+                "created_by must identify an active administrator"
+            )
+
         policy = db.session.execute(
             select(Policy)
             .where(Policy.policy_uuid == canonical_policy_uuid)
@@ -65,11 +81,12 @@ def create_policy_revision(
             payload=payload,
             content_hash=content_hash,
             created_by=str(canonical_actor_uuid),
+            created_by_administrator_id=administrator.id,
         )
         db.session.add(revision)
         db.session.commit()
         return revision
-    except PolicyNotFoundError:
+    except (PolicyNotFoundError, PolicyRevisionActorError):
         db.session.rollback()
         raise
     except IntegrityError as error:
@@ -96,5 +113,6 @@ __all__ = [
     "InvalidPolicyRevisionError",
     "PolicyNotFoundError",
     "PolicyRevisionPersistenceError",
+    "PolicyRevisionActorError",
     "create_policy_revision",
 ]

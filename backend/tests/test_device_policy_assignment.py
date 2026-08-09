@@ -49,6 +49,7 @@ def test_device_policy_assignment_model_contract() -> None:
         for foreign_key in table.foreign_keys
     }
     assert foreign_keys == {
+        "administrators.id": "RESTRICT",
         "devices.id": "RESTRICT",
         "policy_revisions.id": "RESTRICT",
     }
@@ -59,6 +60,8 @@ def test_device_policy_assignment_model_contract() -> None:
         if isinstance(constraint, CheckConstraint)
     }
     assert "status IN ('active', 'superseded')" in checks
+    assert any("assigned_by_administrator_id" in check for check in checks)
+    assert "length(reason) BETWEEN 1 AND 512" in checks
     assert any("superseded_at IS NULL" in check for check in checks)
 
     assert isinstance(table.c.assigned_at.type, DateTime)
@@ -124,6 +127,8 @@ def test_assignment_replacement_preserves_history(app: Flask) -> None:
             device_id=device.id,
             policy_revision_id=first_revision.id,
             status="active",
+            trusted_operator_subject="test:assignment-fixture",
+            reason="initial test assignment",
         )
         db.session.add(first_assignment)
         db.session.commit()
@@ -132,6 +137,8 @@ def test_assignment_replacement_preserves_history(app: Flask) -> None:
             device_id=device.id,
             policy_revision_id=second_revision.id,
             status="active",
+            trusted_operator_subject="test:assignment-fixture",
+            reason="conflicting test assignment",
         )
         db.session.add(conflicting_assignment)
         with pytest.raises(IntegrityError):
@@ -150,6 +157,8 @@ def test_assignment_replacement_preserves_history(app: Flask) -> None:
             device_id=device.id,
             policy_revision_id=second_revision.id,
             status="active",
+            trusted_operator_subject="test:assignment-fixture",
+            reason="replacement test assignment",
         )
         db.session.add(replacement_assignment)
         db.session.commit()

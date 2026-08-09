@@ -1,9 +1,7 @@
 import json
 import re
-from collections.abc import Iterable
 from datetime import UTC, datetime
 from hashlib import sha256
-from typing import SupportsIndex
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -22,7 +20,6 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship, validates
 
 from app.device_identity import ANDROID_VERSION_BY_API_LEVEL
@@ -34,6 +31,23 @@ ANDROID_PACKAGE_PATTERN = re.compile(
 DEVICE_STATUSES = frozenset({"active", "suspended", "retired"})
 POLICY_STATUSES = frozenset({"draft", "active", "inactive", "revoked"})
 POLICY_REVISION_SCHEMA_VERSION = 1
+POLICY_SYNC_OPERATIONS = frozenset(
+    {"apply", "no_change", "clear", "rollback", "blocked", "error"}
+)
+POLICY_SYNC_OUTCOMES = frozenset(
+    {
+        "success",
+        "no_assignment",
+        "device_not_found",
+        "device_inactive",
+        "policy_inactive",
+        "policy_revoked",
+        "assignment_corruption",
+        "revision_mismatch",
+        "internal_error",
+        "invalid_request",
+    }
+)
 DEVICE_REGISTRATION_EVENT_TYPES = frozenset(
     {
         "registered",
@@ -70,6 +84,7 @@ ADMINISTRATOR_PERMISSIONS = frozenset(
         "enrollment_token.issue",
         "enrollment_token.revoke",
         "device_credential.revoke",
+        "policy.assign",
     }
 )
 ADMINISTRATOR_AUTHENTICATION_EVENT_CATEGORIES = frozenset(
@@ -146,55 +161,6 @@ def canonical_policy_revision_bytes(value: object) -> bytes:
 
 def policy_revision_content_hash(value: object) -> bytes:
     return sha256(canonical_policy_revision_bytes(value)).digest()
-
-
-class BlockedAppList(MutableList[str]):
-    """Atomically validate every in-place blocked-app list mutation."""
-
-    @classmethod
-    def coerce(cls, key: str, value: object) -> "BlockedAppList":
-        if isinstance(value, cls):
-            return value
-        return cls(_validate_blocked_apps(value))
-
-    def _replace(self, candidate: list[str]) -> None:
-        validated = _validate_blocked_apps(candidate)
-        list.clear(self)
-        list.extend(self, validated)
-        self.changed()
-
-    def append(self, value: str) -> None:
-        self._replace([*self, value])
-
-    def extend(self, values: Iterable[str]) -> None:
-        self._replace([*self, *values])
-
-    def insert(self, index: SupportsIndex, value: str) -> None:
-        candidate = list(self)
-        candidate.insert(index, value)
-        self._replace(candidate)
-
-    def __setitem__(
-        self,
-        index: SupportsIndex | slice,
-        value: str | Iterable[str],
-    ) -> None:
-        candidate = list(self)
-        if isinstance(index, slice):
-            candidate[index] = value
-        else:
-            if not isinstance(value, str):
-                raise ValueError(
-                    "blocked_apps must contain valid Android package identifiers"
-                )
-            candidate[index] = value
-        self._replace(candidate)
-
-    def __imul__(self, value: SupportsIndex) -> "BlockedAppList":
-        candidate = list(self)
-        candidate *= value
-        self._replace(candidate)
-        return self
 
 
 class Administrator(db.Model):
@@ -352,7 +318,7 @@ class AdministratorPermission(db.Model):
         CheckConstraint(
             "permission IN ('administrator.manage', "
             "'enrollment_token.issue', 'enrollment_token.revoke', "
-            "'device_credential.revoke')",
+            "'device_credential.revoke', 'policy.assign')",
             name="ck_administrator_permissions_permission",
         ),
         CheckConstraint(
@@ -770,6 +736,10 @@ class Device(db.Model):
         foreign_keys="DeviceCredential.device_id",
         order_by="DeviceCredential.issued_at",
     )
+    synchronization_events: Mapped[list["PolicySynchronizationEvent"]] = relationship(
+        back_populates="device",
+        order_by="PolicySynchronizationEvent.requested_at",
+    )
 
     @property
     def enrollment_state(self) -> str:
@@ -877,6 +847,13 @@ class PolicyRevision(db.Model):
             name="ck_policy_revisions_content_hash_length",
         ),
         CheckConstraint(
+            "(created_by_administrator_id IS NULL AND "
+            "created_by LIKE 'migration:%') OR "
+            "(created_by_administrator_id IS NOT NULL AND "
+            "created_by NOT LIKE 'migration:%')",
+            name="ck_policy_revisions_actor_provenance",
+        ),
+        CheckConstraint(
             "edug_valid_policy_revision_payload(payload)",
             name="ck_policy_revisions_payload",
         ).ddl_if(dialect="postgresql"),
@@ -884,6 +861,10 @@ class PolicyRevision(db.Model):
             "ix_policy_revisions_policy_created",
             "policy_id",
             "created_at",
+        ),
+        Index(
+            "ix_policy_revisions_created_by_administrator_id",
+            "created_by_administrator_id",
         ),
     )
 
@@ -898,7 +879,11 @@ class PolicyRevision(db.Model):
         nullable=False,
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
-    payload: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    _payload: Mapped[dict[str, object]] = mapped_column(
+        "payload",
+        JSON,
+        nullable=False,
+    )
     content_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -907,20 +892,26 @@ class PolicyRevision(db.Model):
         server_default=func.now(),
     )
     created_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_by_administrator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
 
     policy: Mapped[Policy] = relationship(back_populates="revisions")
+    created_by_administrator: Mapped[Administrator | None] = relationship()
     device_assignments: Mapped[list["DevicePolicyAssignment"]] = relationship(
         back_populates="policy_revision",
         order_by="DevicePolicyAssignment.assigned_at",
     )
 
-    @validates("payload")
-    def validate_payload(
-        self,
-        _key: str,
-        value: object,
-    ) -> dict[str, object]:
-        return validate_policy_revision_payload(value)
+    @property
+    def payload(self) -> dict[str, object]:
+        """Return a validated copy so callers cannot mutate stored evidence."""
+        return validate_policy_revision_payload(self._payload)
+
+    @payload.setter
+    def payload(self, value: object) -> None:
+        self._payload = validate_policy_revision_payload(value)
 
     @validates("content_hash")
     def validate_content_hash(self, _key: str, value: object) -> bytes:
@@ -1391,6 +1382,26 @@ class DevicePolicyAssignment(db.Model):
             "(status = 'superseded' AND superseded_at IS NOT NULL)",
             name="ck_device_policy_assignments_status_timestamp",
         ),
+        CheckConstraint(
+            "(assigned_by_administrator_id IS NOT NULL AND "
+            "trusted_operator_subject IS NULL) OR "
+            "(assigned_by_administrator_id IS NULL AND "
+            "trusted_operator_subject IS NOT NULL)",
+            name="ck_device_policy_assignments_actor",
+        ),
+        CheckConstraint(
+            "length(reason) BETWEEN 1 AND 512",
+            name="ck_device_policy_assignments_reason_bounded",
+        ),
+        CheckConstraint(
+            "trusted_operator_subject IS NULL OR "
+            "length(trusted_operator_subject) BETWEEN 1 AND 255",
+            name="ck_device_policy_assignments_operator_bounded",
+        ),
+        UniqueConstraint(
+            "event_uuid",
+            name="uq_device_policy_assignments_event_uuid",
+        ),
         Index(
             "uq_device_policy_assignments_active_device",
             "device_id",
@@ -1407,9 +1418,18 @@ class DevicePolicyAssignment(db.Model):
             "ix_device_policy_assignments_policy_revision_id",
             "policy_revision_id",
         ),
+        Index(
+            "ix_device_policy_assignments_assigned_by_administrator_id",
+            "assigned_by_administrator_id",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        nullable=False,
+        default=uuid4,
+    )
     device_id: Mapped[int] = mapped_column(
         ForeignKey("devices.id", ondelete="RESTRICT"),
         nullable=False,
@@ -1418,6 +1438,15 @@ class DevicePolicyAssignment(db.Model):
         ForeignKey("policy_revisions.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    assigned_by_administrator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    trusted_operator_subject: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    reason: Mapped[str] = mapped_column(String(512), nullable=False)
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -1439,6 +1468,158 @@ class DevicePolicyAssignment(db.Model):
     policy_revision: Mapped[PolicyRevision] = relationship(
         back_populates="device_assignments"
     )
+    assigned_by_administrator: Mapped[Administrator | None] = relationship()
+
+    @validates("trusted_operator_subject")
+    def validate_trusted_operator_subject(
+        self,
+        _key: str,
+        value: object,
+    ) -> str | None:
+        if value is None:
+            return None
+        return _validate_printable_text(value, "trusted operator subject", 255)
+
+    @validates("reason")
+    def validate_reason(self, _key: str, value: object) -> str:
+        return _validate_printable_text(value, "assignment reason", 512)
+
+
+class PolicySynchronizationEvent(db.Model):
+    __tablename__ = "policy_synchronization_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "event_uuid",
+            name="uq_policy_synchronization_events_uuid",
+        ),
+        CheckConstraint(
+            "operation IN ('apply', 'no_change', 'clear', 'rollback', "
+            "'blocked', 'error')",
+            name="ck_policy_synchronization_events_operation",
+        ),
+        CheckConstraint(
+            "outcome_category IN ('success', 'no_assignment', "
+            "'device_not_found', 'device_inactive', 'policy_inactive', "
+            "'policy_revoked', 'assignment_corruption', "
+            "'revision_mismatch', 'internal_error', 'invalid_request')",
+            name="ck_policy_synchronization_events_outcome",
+        ),
+        CheckConstraint(
+            "reported_client_version IS NULL OR reported_client_version "
+            "BETWEEN 0 AND 2147483647",
+            name="ck_policy_synchronization_events_client_version",
+        ),
+        CheckConstraint(
+            "server_policy_version IS NULL OR server_policy_version >= 0",
+            name="ck_policy_synchronization_events_server_version",
+        ),
+        CheckConstraint(
+            "length(requested_device_pseudonym) = 32",
+            name="ck_policy_synchronization_events_device_pseudonym_length",
+        ),
+        CheckConstraint(
+            "previous_event_hash IS NULL OR length(previous_event_hash) = 32",
+            name="ck_policy_synchronization_events_previous_hash_length",
+        ),
+        CheckConstraint(
+            "length(event_hash) = 32",
+            name="ck_policy_synchronization_events_hash_length",
+        ),
+        Index(
+            "ix_policy_synchronization_events_device_requested",
+            "device_id",
+            "requested_at",
+        ),
+        Index(
+            "ix_policy_synchronization_events_pseudonym_requested",
+            "requested_device_pseudonym",
+            "requested_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, default=uuid4
+    )
+    device_id: Mapped[int | None] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"), nullable=True
+    )
+    credential_id: Mapped[int | None] = mapped_column(
+        ForeignKey("device_credentials.id", ondelete="RESTRICT"), nullable=True
+    )
+    requested_device_pseudonym: Mapped[bytes] = mapped_column(
+        LargeBinary(32), nullable=False
+    )
+    reported_client_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reported_policy_uuid: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
+    reported_revision_uuid: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
+    server_policy_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    outcome_category: Mapped[str] = mapped_column(String(64), nullable=False)
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    previous_event_hash: Mapped[bytes | None] = mapped_column(
+        LargeBinary(32), nullable=True
+    )
+    event_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+
+    device: Mapped[Device | None] = relationship(
+        back_populates="synchronization_events"
+    )
+    credential: Mapped[DeviceCredential | None] = relationship()
+
+    @validates("operation")
+    def validate_operation(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in POLICY_SYNC_OPERATIONS:
+            raise ValueError("invalid synchronization operation")
+        return value
+
+    @validates("outcome_category")
+    def validate_outcome_category(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in POLICY_SYNC_OUTCOMES:
+            raise ValueError("invalid synchronization outcome")
+        return value
+
+    @validates("requested_device_pseudonym", "event_hash")
+    def validate_required_hash(self, _key: str, value: object) -> bytes:
+        if not isinstance(value, bytes) or len(value) != 32:
+            raise ValueError("synchronization hash must contain 32 bytes")
+        return value
+
+    @validates("previous_event_hash")
+    def validate_previous_hash(self, _key: str, value: object) -> bytes | None:
+        if value is not None and (not isinstance(value, bytes) or len(value) != 32):
+            raise ValueError("previous synchronization hash must contain 32 bytes")
+        return value
+
+
+class PolicySynchronizationEventImmutableError(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__("policy synchronization events are immutable")
+
+
+@event.listens_for(Session, "before_flush")
+def _reject_policy_synchronization_event_mutation(
+    session: Session,
+    _flush_context: object,
+    _instances: object,
+) -> None:
+    if any(isinstance(value, PolicySynchronizationEvent) for value in session.deleted):
+        raise PolicySynchronizationEventImmutableError()
+    if any(
+        isinstance(value, PolicySynchronizationEvent)
+        and session.is_modified(value, include_collections=False)
+        for value in session.dirty
+    ):
+        raise PolicySynchronizationEventImmutableError()
 
 
 __all__ = [
@@ -1466,8 +1647,12 @@ __all__ = [
     "Policy",
     "PolicyRevision",
     "PolicyRevisionImmutableError",
+    "PolicySynchronizationEvent",
+    "PolicySynchronizationEventImmutableError",
     "POLICY_STATUSES",
     "POLICY_REVISION_SCHEMA_VERSION",
+    "POLICY_SYNC_OPERATIONS",
+    "POLICY_SYNC_OUTCOMES",
     "canonical_policy_revision_bytes",
     "policy_revision_content_hash",
     "validate_policy_revision_payload",

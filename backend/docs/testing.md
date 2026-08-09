@@ -50,13 +50,17 @@ Before collecting one of these selections, the reusable database safety guard
 validates configuration without opening a connection. It requires the exact
 non-secret branch marker
 `POSTGRES_TEST_BRANCH_NAME=backend-integration-test`, a pooled Neon
-`POSTGRES_TEST_DATABASE_URL`, PostgreSQL TLS, and separation from configured
+`POSTGRES_TEST_DATABASE_URL`, the exact non-secret
+`POSTGRES_TEST_ENDPOINT_ID` extracted from the approved branch connection
+hostname, PostgreSQL TLS, and separation from configured
 development and production branches. Migration selections also require a
 direct `MIGRATION_DATABASE_URL` for the same test endpoint. Validation errors
 name variables but never render database URLs or credentials.
 
-The branch marker documents operator intent; it does not derive or prove the
-human-readable Neon branch name from a connection URL. Add it manually to the
+The human-readable branch marker documents the approved purpose. The endpoint
+marker binds that approval to the unique Neon compute endpoint encoded in both
+the pooled and direct URLs, and the connected-session guard verifies that same
+endpoint after libpq connects. Add both non-secret markers manually to the
 local `.env`. Never place credentials in `.env.example`.
 
 Passing the guard does not itself connect, migrate, write, reset, downgrade,

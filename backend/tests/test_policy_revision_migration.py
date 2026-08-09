@@ -13,7 +13,7 @@ from app.extensions import db
 from app.services.policy_sync import get_policy_sync_payload
 
 LEGACY_REVISION = "f4a7c9e2b6d1"
-HEAD_REVISION = "a8d5e2f7c1b4"
+HEAD_REVISION = "d9b4e7a2c6f1"
 
 
 def _migration_app(database_path: Path) -> Flask:
@@ -198,3 +198,37 @@ def test_sqlite_downgrade_refuses_to_discard_revision_history(
             == HEAD_REVISION
         )
         assert db.session.scalar(text("SELECT count(*) FROM policy_revisions")) == 2
+
+
+def test_actor_migration_refuses_unverified_revision_subject(
+    tmp_path: Path,
+) -> None:
+    app = _migration_app(tmp_path / "actor-refusal.db")
+    with app.app_context():
+        upgrade(revision=LEGACY_REVISION)
+    _seed_legacy_policy(app)
+
+    with app.app_context():
+        upgrade(revision="a8d5e2f7c1b4")
+        db.session.execute(
+            text(
+                "UPDATE policy_revisions SET created_by = :actor "
+                "WHERE created_by LIKE 'migration:%'"
+            ),
+            {"actor": str(uuid4())},
+        )
+        db.session.commit()
+        db.session.remove()
+
+        with pytest.raises(SystemExit):
+            upgrade(revision="head")
+
+        assert (
+            db.session.scalar(text("SELECT version_num FROM alembic_version"))
+            == "a8d5e2f7c1b4"
+        )
+        columns = {
+            column["name"]
+            for column in inspect(db.engine).get_columns("policy_revisions")
+        }
+        assert "created_by_administrator_id" not in columns

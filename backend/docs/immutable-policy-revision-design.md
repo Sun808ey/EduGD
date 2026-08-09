@@ -136,6 +136,8 @@ revision when an intentional rollback is required.
 
 The PostgreSQL constraint validates payload structure and package values.
 Application tests verify that the stored hash matches canonical payload bytes.
+The ORM stores the JSON value privately and exposes only validated deep copies,
+so nested in-memory mutation cannot alter pending or synchronized evidence.
 The runtime database role must not receive revision `UPDATE`, `DELETE`, or
 `TRUNCATE` privileges.
 
@@ -153,6 +155,10 @@ Immutability is defense in depth:
    revision mutation.
 6. Reviewed migrations execute as the schema owner and may explicitly replace
    guards only inside a migration transaction.
+
+Application-created revisions also store a `RESTRICT` foreign key to the
+verified active administrator. Converted legacy revisions retain their reserved
+`migration:*` subject and a null administrator foreign key under an XOR check.
 
 Bulk SQL statements must not bypass the database trigger. An attempted
 mutation fails without changing the revision or its assignments.

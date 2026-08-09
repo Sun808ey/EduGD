@@ -10,6 +10,7 @@ from sqlalchemy.exc import ArgumentError
 APP_DATABASE_VARIABLE = "POSTGRES_TEST_DATABASE_URL"
 MIGRATION_DATABASE_VARIABLE = "MIGRATION_DATABASE_URL"
 BRANCH_NAME_VARIABLE = "POSTGRES_TEST_BRANCH_NAME"
+ENDPOINT_ID_VARIABLE = "POSTGRES_TEST_ENDPOINT_ID"
 DESTRUCTIVE_OPT_IN_VARIABLE = "ALLOW_DESTRUCTIVE_POSTGRES_TESTS"
 APPROVED_POSTGRES_TEST_BRANCH = "backend-integration-test"
 PROTECTED_DATABASE_VARIABLES = (
@@ -40,12 +41,14 @@ class ApprovedPostgresTestEnvironment:
     application_database_url: str = field(repr=False)
     migration_database_url: str | None = field(repr=False)
     branch_name: str
+    endpoint_id: str
     destructive_allowed: bool
 
     def __repr__(self) -> str:
         return (
             "ApprovedPostgresTestEnvironment("
             f"branch_name={self.branch_name!r}, "
+            f"endpoint_id={self.endpoint_id!r}, "
             f"destructive_allowed={self.destructive_allowed!r}, "
             "database_urls=<redacted>)"
         )
@@ -70,6 +73,12 @@ def validate_postgres_test_environment(
             "PostgreSQL test branch"
         )
 
+    endpoint_id = values.get(ENDPOINT_ID_VARIABLE, "").strip().lower()
+    if not endpoint_id:
+        _fail(f"{ENDPOINT_ID_VARIABLE} is required")
+    if not endpoint_id.startswith("ep-") or endpoint_id.endswith("-pooler"):
+        _fail(f"{ENDPOINT_ID_VARIABLE} must contain a Neon endpoint ID")
+
     destructive_allowed = values.get(DESTRUCTIVE_OPT_IN_VARIABLE) == "true"
     if require_destructive and not destructive_allowed:
         _fail(
@@ -87,6 +96,8 @@ def validate_postgres_test_environment(
         application_database_url,
         require_pooled=True,
     )
+    if _endpoint_id(application_url.host or "") != endpoint_id:
+        _fail(f"{APP_DATABASE_VARIABLE} must match the approved {ENDPOINT_ID_VARIABLE}")
 
     migration_database_url = values.get(MIGRATION_DATABASE_VARIABLE) or None
     if require_migration and migration_database_url is None:
@@ -104,6 +115,11 @@ def validate_postgres_test_environment(
                 f"{APP_DATABASE_VARIABLE} and {MIGRATION_DATABASE_VARIABLE} "
                 "must target the same dedicated Neon test branch"
             )
+        if _endpoint_id(migration_url.host or "") != endpoint_id:
+            _fail(
+                f"{MIGRATION_DATABASE_VARIABLE} must match the approved "
+                f"{ENDPOINT_ID_VARIABLE}"
+            )
 
     _reject_protected_database_reuse(
         values,
@@ -115,6 +131,7 @@ def validate_postgres_test_environment(
         application_database_url=application_database_url,
         migration_database_url=migration_database_url,
         branch_name=branch_name,
+        endpoint_id=endpoint_id,
         destructive_allowed=destructive_allowed,
     )
 
@@ -146,6 +163,8 @@ def validate_connected_postgres_test_environment(
     tls_active = getattr(connection_info, "ssl_in_use", False)
     if _host_identity(actual_host) != _endpoint_identity(parsed_url):
         _fail("Connected PostgreSQL endpoint does not match the approved target")
+    if _endpoint_id(actual_host) != approved.endpoint_id:
+        _fail("Connected PostgreSQL endpoint is not the approved test endpoint")
     if actual_database != parsed_url.database:
         _fail("Connected PostgreSQL database does not match the approved target")
     if tls_active is not True:
@@ -219,6 +238,11 @@ def _host_identity(hostname: str) -> str:
     if endpoint_name.endswith("-pooler"):
         endpoint_name = endpoint_name.removesuffix("-pooler")
     return f"{endpoint_name}{separator}{remainder}"
+
+
+def _endpoint_id(hostname: str) -> str:
+    endpoint_name = hostname.lower().partition(".")[0]
+    return endpoint_name.removesuffix("-pooler")
 
 
 def _fail(message: str) -> None:

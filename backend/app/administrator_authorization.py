@@ -171,11 +171,26 @@ def administrator_permissions(administrator_id: int) -> list[str]:
 
 
 def authentication_failure_response() -> Response:
+    if request.blueprint == "policies":
+        return _standard_error_response(
+            "authentication_failed", "administrator authentication failed", 401
+        )
     return _no_store_response("authentication_failed", 401)
 
 
 def authorization_failure_response() -> Response:
+    if request.blueprint == "policies":
+        return _standard_error_response(
+            "authorization_failed", "administrator authorization failed", 403
+        )
     return _no_store_response("authorization_failed", 403)
+
+
+def _standard_error_response(code: str, message: str, status_code: int) -> Response:
+    response = jsonify({"error": {"code": code, "message": message}})
+    response.status_code = status_code
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def _load_current_administrator_context() -> AdministratorRequestContext:

@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - "backend/**"
+      - "render.yaml"
       - ".github/workflows/backend-quality.yml"
   pull_request:
     paths:
       - "backend/**"
+      - "render.yaml"
       - ".github/workflows/backend-quality.yml"
 
 permissions:

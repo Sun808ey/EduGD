@@ -13,7 +13,7 @@ from app.extensions import db
 from app.services.policy_sync import get_policy_sync_payload
 
 LEGACY_REVISION = "f4a7c9e2b6d1"
-HEAD_REVISION = "d9b4e7a2c6f1"
+HEAD_REVISION = "e4a1b7c9d2f6"
 
 
 def _migration_app(database_path: Path) -> Flask:
@@ -195,7 +195,7 @@ def test_sqlite_downgrade_refuses_to_discard_revision_history(
 
         assert (
             db.session.scalar(text("SELECT version_num FROM alembic_version"))
-            == HEAD_REVISION
+            == "d9b4e7a2c6f1"
         )
         assert db.session.scalar(text("SELECT count(*) FROM policy_revisions")) == 2
 

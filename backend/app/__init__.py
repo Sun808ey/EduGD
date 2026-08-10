@@ -5,6 +5,9 @@ from secrets import token_urlsafe
 from typing import Any
 
 from flask import Flask
+from redis import Redis
+from redis.exceptions import RedisError
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.administrator_authorization import configure_administrator_jwt
 from app.cli import register_cli_commands
@@ -54,6 +57,7 @@ def create_app(
             migration_database_uri,
         )
     _validate_startup_configuration(app)
+    _configure_trusted_proxy(app)
     configure_sentry(app)
     _initialize_extensions(app)
     configure_administrator_jwt()
@@ -143,6 +147,33 @@ def _validate_startup_configuration(app: Flask) -> None:
         raise RuntimeError("Production secrets must be distinct")
     if app.config["DEBUG"] or app.config["TESTING"]:
         raise RuntimeError("Production startup cannot enable debug or testing mode")
+    storage_uri = app.config.get("RATELIMIT_STORAGE_URI")
+    if not isinstance(storage_uri, str) or not storage_uri.startswith(
+        ("redis://", "rediss://")
+    ):
+        raise RuntimeError("Production rate limiting requires REDIS_URL")
+    try:
+        Redis.from_url(
+            storage_uri,
+            socket_connect_timeout=3,
+            socket_timeout=3,
+        ).ping()
+    except (RedisError, ValueError, OSError):
+        raise RuntimeError("Production rate-limit storage is unavailable") from None
+
+
+def _configure_trusted_proxy(app: Flask) -> None:
+    hops = app.config.get("TRUSTED_PROXY_HOPS", 0)
+    if hops == 0:
+        return
+    if app.config["APP_ENV"] != "production" or hops != 1:
+        raise RuntimeError("Trusted proxy configuration is invalid")
+    app.wsgi_app = ProxyFix(  # type: ignore[method-assign]
+        app.wsgi_app,
+        x_for=1,
+        x_proto=1,
+        x_host=1,
+    )
 
 
 def _load_models() -> None:
@@ -159,7 +190,10 @@ def _load_models() -> None:
         DeviceRequestNonce,
         EnrollmentToken,
         Policy,
+        PolicyAssignmentChainHead,
+        PolicyAssignmentEvent,
         PolicyRevision,
+        PolicySynchronizationChainHead,
         PolicySynchronizationEvent,
     )
 
@@ -176,7 +210,10 @@ def _load_models() -> None:
         DeviceRequestNonce,
         EnrollmentToken,
         Policy,
+        PolicyAssignmentChainHead,
+        PolicyAssignmentEvent,
         PolicyRevision,
+        PolicySynchronizationChainHead,
         PolicySynchronizationEvent,
     )
 

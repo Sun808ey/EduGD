@@ -105,6 +105,8 @@ def test_production_starts_with_distinct_strong_secrets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PRODUCTION_DATABASE_URL", PRODUCTION_URL)
+    redis_client = Mock()
+    monkeypatch.setattr("app.Redis.from_url", Mock(return_value=redis_client))
 
     application = create_app(
         "production",
@@ -113,11 +115,30 @@ def test_production_starts_with_distinct_strong_secrets(
             "JWT_SECRET_KEY": "j" * 32,
             "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
             "POLICY_SYNC_AUDIT_KEY": "p" * 32,
+            "RATELIMIT_STORAGE_URI": "rediss://redis.example.invalid:6379/0",
         },
     )
 
     assert application.config["DEBUG"] is False
     assert application.config["TESTING"] is False
+    redis_client.ping.assert_called_once_with()
+
+
+def test_production_rejects_missing_shared_rate_limit_storage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PRODUCTION_DATABASE_URL", PRODUCTION_URL)
+    with pytest.raises(RuntimeError, match="requires REDIS_URL"):
+        create_app(
+            "production",
+            {
+                "SECRET_KEY": "f" * 32,
+                "JWT_SECRET_KEY": "j" * 32,
+                "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
+                "POLICY_SYNC_AUDIT_KEY": "p" * 32,
+                "RATELIMIT_STORAGE_URI": "memory://",
+            },
+        )
 
 
 @pytest.mark.parametrize("sync_audit_key", ["short", "a" * 32])
@@ -234,6 +255,8 @@ def test_enabled_sentry_labels_production_environment(
     monkeypatch.setenv("PRODUCTION_DATABASE_URL", PRODUCTION_URL)
     sentry_init = Mock()
     monkeypatch.setattr("app.observability.sentry_sdk.init", sentry_init)
+    redis_client = Mock()
+    monkeypatch.setattr("app.Redis.from_url", Mock(return_value=redis_client))
 
     application = create_app(
         "production",
@@ -243,6 +266,7 @@ def test_enabled_sentry_labels_production_environment(
             "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
             "POLICY_SYNC_AUDIT_KEY": "p" * 32,
             "SENTRY_DSN": "https://public@example.invalid/1",
+            "RATELIMIT_STORAGE_URI": "rediss://redis.example.invalid:6379/0",
         },
     )
 

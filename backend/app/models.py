@@ -48,6 +48,7 @@ POLICY_SYNC_OUTCOMES = frozenset(
         "invalid_request",
     }
 )
+POLICY_ASSIGNMENT_OPERATIONS = frozenset({"assign", "replace", "clear"})
 DEVICE_REGISTRATION_EVENT_TYPES = frozenset(
     {
         "registered",
@@ -1485,12 +1486,157 @@ class DevicePolicyAssignment(db.Model):
         return _validate_printable_text(value, "assignment reason", 512)
 
 
+class PolicyAssignmentChainHead(db.Model):
+    __tablename__ = "policy_assignment_chain_heads"
+    __table_args__ = (
+        CheckConstraint(
+            "length(head_event_hash) = 32",
+            name="ck_policy_assignment_chain_heads_hash_length",
+        ),
+    )
+
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"), primary_key=True
+    )
+    head_event_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+
+class PolicyAssignmentEvent(db.Model):
+    __tablename__ = "policy_assignment_events"
+    __table_args__ = (
+        UniqueConstraint("event_uuid", name="uq_policy_assignment_events_uuid"),
+        UniqueConstraint("event_hash", name="uq_policy_assignment_events_hash"),
+        CheckConstraint(
+            "operation IN ('assign', 'replace', 'clear')",
+            name="ck_policy_assignment_events_operation",
+        ),
+        CheckConstraint(
+            "length(reason) BETWEEN 1 AND 512",
+            name="ck_policy_assignment_events_reason_bounded",
+        ),
+        CheckConstraint(
+            "previous_event_hash IS NULL OR length(previous_event_hash) = 32",
+            name="ck_policy_assignment_events_previous_hash_length",
+        ),
+        CheckConstraint(
+            "length(event_hash) = 32",
+            name="ck_policy_assignment_events_hash_length",
+        ),
+        Index("ix_policy_assignment_events_device_created", "device_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, default=uuid4
+    )
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"), nullable=False
+    )
+    assignment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("device_policy_assignments.id", ondelete="RESTRICT"), nullable=True
+    )
+    previous_assignment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("device_policy_assignments.id", ondelete="RESTRICT"), nullable=True
+    )
+    administrator_id: Mapped[int] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"), nullable=False
+    )
+    operation: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason: Mapped[str] = mapped_column(String(512), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    previous_event_hash: Mapped[bytes | None] = mapped_column(
+        LargeBinary(32), nullable=True
+    )
+    event_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+
+    @validates("operation")
+    def validate_operation(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in POLICY_ASSIGNMENT_OPERATIONS:
+            raise ValueError("invalid policy assignment operation")
+        return value
+
+    @validates("reason")
+    def validate_event_reason(self, _key: str, value: object) -> str:
+        return _validate_printable_text(value, "assignment event reason", 512)
+
+    @validates("event_hash")
+    def validate_event_hash(self, _key: str, value: object) -> bytes:
+        if not isinstance(value, bytes) or len(value) != 32:
+            raise ValueError("assignment event hash must contain 32 bytes")
+        return value
+
+    @validates("previous_event_hash")
+    def validate_previous_event_hash(self, _key: str, value: object) -> bytes | None:
+        if value is not None and (not isinstance(value, bytes) or len(value) != 32):
+            raise ValueError("previous assignment event hash must contain 32 bytes")
+        return value
+
+
+class PolicyAssignmentEventImmutableError(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__("policy assignment events are immutable")
+
+
+@event.listens_for(Session, "before_flush")
+def _reject_policy_assignment_event_mutation(
+    session: Session, _flush_context: object, _instances: object
+) -> None:
+    if any(isinstance(value, PolicyAssignmentEvent) for value in session.deleted):
+        raise PolicyAssignmentEventImmutableError()
+    if any(
+        isinstance(value, PolicyAssignmentEvent)
+        and session.is_modified(value, include_collections=False)
+        for value in session.dirty
+    ):
+        raise PolicyAssignmentEventImmutableError()
+
+
+class PolicySynchronizationChainHead(db.Model):
+    __tablename__ = "policy_synchronization_chain_heads"
+    __table_args__ = (
+        CheckConstraint(
+            "length(requested_device_pseudonym) = 32",
+            name="ck_policy_sync_chain_heads_pseudonym_length",
+        ),
+        CheckConstraint(
+            "length(head_event_hash) = 32",
+            name="ck_policy_sync_chain_heads_hash_length",
+        ),
+    )
+
+    requested_device_pseudonym: Mapped[bytes] = mapped_column(
+        LargeBinary(32), primary_key=True
+    )
+    head_event_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+
 class PolicySynchronizationEvent(db.Model):
     __tablename__ = "policy_synchronization_events"
     __table_args__ = (
         UniqueConstraint(
             "event_uuid",
             name="uq_policy_synchronization_events_uuid",
+        ),
+        UniqueConstraint(
+            "event_hash",
+            name="uq_policy_synchronization_events_hash",
         ),
         CheckConstraint(
             "operation IN ('apply', 'no_change', 'clear', 'rollback', "
@@ -1647,6 +1793,11 @@ __all__ = [
     "Policy",
     "PolicyRevision",
     "PolicyRevisionImmutableError",
+    "PolicyAssignmentChainHead",
+    "PolicyAssignmentEvent",
+    "PolicyAssignmentEventImmutableError",
+    "POLICY_ASSIGNMENT_OPERATIONS",
+    "PolicySynchronizationChainHead",
     "PolicySynchronizationEvent",
     "PolicySynchronizationEventImmutableError",
     "POLICY_STATUSES",

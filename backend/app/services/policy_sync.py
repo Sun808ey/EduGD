@@ -8,7 +8,7 @@ from typing import cast
 from uuid import UUID, uuid4
 
 from flask import current_app
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.device_identity import parse_canonical_uuid4
@@ -18,6 +18,7 @@ from app.models import (
     DevicePolicyAssignment,
     Policy,
     PolicyRevision,
+    PolicySynchronizationChainHead,
     PolicySynchronizationEvent,
     policy_revision_content_hash,
     utc_now,
@@ -213,15 +214,19 @@ def record_policy_sync_event(
             db.session.execute(
                 select(Device.id).where(Device.id == device_id).with_for_update()
             ).scalar_one()
-        previous_hash = db.session.execute(
-            select(PolicySynchronizationEvent.event_hash)
-            .where(PolicySynchronizationEvent.requested_device_pseudonym == pseudonym)
-            .order_by(
-                PolicySynchronizationEvent.requested_at.desc(),
-                PolicySynchronizationEvent.id.desc(),
+        if db.session.get_bind().dialect.name == "postgresql":
+            advisory_key = int.from_bytes(pseudonym[:8], "big", signed=True)
+            db.session.execute(
+                text("SELECT pg_advisory_xact_lock(:key)"), {"key": advisory_key}
             )
-            .limit(1)
+        chain_head = db.session.execute(
+            select(PolicySynchronizationChainHead)
+            .where(
+                PolicySynchronizationChainHead.requested_device_pseudonym == pseudonym
+            )
+            .with_for_update()
         ).scalar_one_or_none()
+        previous_hash = chain_head.head_event_hash if chain_head is not None else None
         evidence = {
             "credential_id": credential_id,
             "device_id": device_id,
@@ -263,6 +268,17 @@ def record_policy_sync_event(
             event_hash=event_hash,
         )
         db.session.add(event)
+        if chain_head is None:
+            db.session.add(
+                PolicySynchronizationChainHead(
+                    requested_device_pseudonym=pseudonym,
+                    head_event_hash=event_hash,
+                    updated_at=requested_at,
+                )
+            )
+        else:
+            chain_head.head_event_hash = event_hash
+            chain_head.updated_at = requested_at
         db.session.commit()
         return event
     except SQLAlchemyError as error:

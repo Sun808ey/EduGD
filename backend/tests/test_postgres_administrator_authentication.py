@@ -96,7 +96,9 @@ def _isolated_application_session(
         if outer_transaction is None or outer_transaction.is_active:
             raise AssertionError("PostgreSQL outer transaction was not rolled back")
         if not connection.closed:
-            raise AssertionError("PostgreSQL application test connection was not closed")
+            raise AssertionError(
+                "PostgreSQL application test connection was not closed"
+            )
 
         with engine.connect() as verification_connection:
             after_counts = _table_counts(verification_connection)
@@ -188,8 +190,7 @@ def test_lockout_uses_postgres_row_lock_and_persists_bounded_state(
     _bootstrap()
 
     failures = [
-        _login(postgres_authentication_app, password=WRONG_PASSWORD)
-        for _ in range(5)
+        _login(postgres_authentication_app, password=WRONG_PASSWORD) for _ in range(5)
     ]
     locked = _login(postgres_authentication_app, password=PASSWORD)
 
@@ -205,9 +206,7 @@ def test_lockout_uses_postgres_row_lock_and_persists_bounded_state(
     assert administrator.failed_attempts == 5
     assert administrator.lock_expires_at is not None
     categories = list(
-        db.session.execute(
-            select(AdministratorAuthenticationEvent.category)
-        ).scalars()
+        db.session.execute(select(AdministratorAuthenticationEvent.category)).scalars()
     )
     assert categories.count("login_failed") == 6
     assert categories.count("account_locked") == 1
@@ -301,9 +300,7 @@ def test_postgres_failure_audit_data_and_logs_are_redacted(
     )
 
     assert known.status_code == unknown.status_code == 401
-    assert known.get_json() == unknown.get_json() == {
-        "error": "authentication_failed"
-    }
+    assert known.get_json() == unknown.get_json() == {"error": "authentication_failed"}
     response_text = known.get_data(as_text=True) + unknown.get_data(as_text=True)
     assert USERNAME not in response_text
     assert "unknown.postgres.admin" not in response_text

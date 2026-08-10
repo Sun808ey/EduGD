@@ -5,6 +5,8 @@ from pathlib import Path
 from alembic.config import Config as AlembicConfig
 from alembic.script import ScriptDirectory
 from flask import Flask
+from redis import Redis
+from redis.exceptions import RedisError
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -52,6 +54,15 @@ def check_readiness(app: Flask) -> None:
         raise ReadinessCheckError("Database readiness probe returned an invalid result")
     if not expected_heads or database_heads != expected_heads:
         raise ReadinessCheckError("Database migration revision is not current")
+    if app.config["APP_ENV"] == "production":
+        try:
+            Redis.from_url(
+                app.config["RATELIMIT_STORAGE_URI"],
+                socket_connect_timeout=3,
+                socket_timeout=3,
+            ).ping()
+        except (RedisError, ValueError, OSError, TypeError):
+            raise ReadinessCheckError("Rate-limit storage is unavailable") from None
 
 
 def _validate_essential_configuration(app: Flask) -> None:

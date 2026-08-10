@@ -163,3 +163,11 @@ build/
 dist/
 out/
 target/
+
+###############################################################################
+# Local editor history and ad-hoc environment files
+###############################################################################
+
+.history/
+.github/env.txt
+frontend/package-lock.json

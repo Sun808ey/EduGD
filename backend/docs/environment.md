@@ -21,6 +21,9 @@ file or in Git.
   synchronization events and must be distinct from every other secret.
 - `SENTRY_DSN` enables the approved Sentry integration outside test
   environments.
+- `REDIS_URL` identifies the Render Key Value/Redis service used for shared
+  production rate-limit state. Production startup and readiness fail closed
+  when it is missing or unreachable.
 
 All secret variables must remain unset in committed files. Production requires
 distinct `SECRET_KEY`, `JWT_SECRET_KEY`, `ADMIN_AUDIT_PSEUDONYM_KEY`, and
@@ -111,3 +114,9 @@ authenticated credential identity when available, falling back to source
 address only for an approved legacy client. `POLICY_SYNC_RATE_LIMIT` can tune
 that deployment limit. The limiter remains disabled by default in test
 configurations; focused tests explicitly enable it to verify the route policy.
+Production never uses `memory://`; all Gunicorn workers share `REDIS_URL`.
+
+Render is the supported production runtime. `ProxyFix` trusts exactly one
+Render proxy hop in production and is disabled elsewhere. Do not add another
+proxy in front of Render without reviewing this boundary, because forwarded
+addresses feed rate limits and audit pseudonyms.

@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import pytest
 
 from app import create_app
@@ -191,6 +193,8 @@ def test_production_starts_with_database_and_required_secrets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PRODUCTION_DATABASE_URL", PRODUCTION_URL)
+    redis_client = Mock()
+    monkeypatch.setattr("app.Redis.from_url", Mock(return_value=redis_client))
 
     application = create_app(
         "production",
@@ -199,6 +203,7 @@ def test_production_starts_with_database_and_required_secrets(
             "JWT_SECRET_KEY": "j" * 32,
             "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
             "POLICY_SYNC_AUDIT_KEY": "p" * 32,
+            "RATELIMIT_STORAGE_URI": "rediss://redis.example.invalid:6379/0",
         },
     )
 

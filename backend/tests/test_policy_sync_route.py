@@ -19,6 +19,7 @@ from app.models import (
     PolicySynchronizationEventImmutableError,
     policy_revision_content_hash,
 )
+from app.services.audit_verification import verify_policy_synchronization_chain
 
 DEVICE_UUID = "550e8400-e29b-41d4-a716-446655440000"
 POLICY_UUID = "8e65f112-f7c4-4776-b113-e0eef34ec881"
@@ -201,6 +202,7 @@ def test_successful_sync_appends_hash_linked_audit_events(
         stored_device = db.session.get(Device, device_id)
         assert stored_device is not None
         assert stored_device.last_sync_at is None
+        verify_policy_synchronization_chain(events[0].requested_device_pseudonym)
 
         events[0].operation = "error"
         with pytest.raises(PolicySynchronizationEventImmutableError):

@@ -728,7 +728,7 @@ def test_postgres_rejects_invalid_policy_revision_json(
     with pytest.raises(IntegrityError):
         with postgres_session.begin_nested():
             postgres_session.execute(
-                insert(PolicyRevision).values(
+                insert(PolicyRevision.__table__).values(
                     revision_uuid=uuid4(),
                     policy_id=postgres_session.scalar(
                         insert(Policy)
@@ -832,7 +832,7 @@ def test_postgres_rejects_invalid_hash_and_duplicate_revision_evidence(
     with pytest.raises(IntegrityError):
         with postgres_session.begin_nested():
             postgres_session.execute(
-                insert(PolicyRevision).values(
+                insert(PolicyRevision.__table__).values(
                     revision_uuid=uuid4(),
                     policy_id=policy.id,
                     version=2,

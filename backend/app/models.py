@@ -1634,9 +1634,10 @@ class PolicySynchronizationEvent(db.Model):
             "event_uuid",
             name="uq_policy_synchronization_events_uuid",
         ),
-        UniqueConstraint(
+        Index(
+            "uq_policy_synchronization_events_hash",
             "event_hash",
-            name="uq_policy_synchronization_events_hash",
+            unique=True,
         ),
         CheckConstraint(
             "operation IN ('apply', 'no_change', 'clear', 'rollback', "

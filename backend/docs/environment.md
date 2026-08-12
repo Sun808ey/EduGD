@@ -116,6 +116,14 @@ that deployment limit. The limiter remains disabled by default in test
 configurations; focused tests explicitly enable it to verify the route policy.
 Production never uses `memory://`; all Gunicorn workers share `REDIS_URL`.
 
+Production defaults to `SQLALCHEMY_POOL_SIZE=3` and
+`SQLALCHEMY_MAX_OVERFLOW=2`. Both values are validated at application creation:
+pool size must be 1–10, overflow must be 0–10, and their sum must not exceed 10
+per worker. With the two Gunicorn workers declared in `render.yaml`, the default
+application connection ceiling is `2 × (3 + 2) = 10`. This is an application
+budget, not an assumed Neon plan limit. Confirm it against the Neon allocation
+before changing worker or pool settings.
+
 Render is the supported production runtime. `ProxyFix` trusts exactly one
 Render proxy hop in production and is disabled elsewhere. Do not add another
 proxy in front of Render without reviewing this boundary, because forwarded

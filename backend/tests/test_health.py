@@ -1,6 +1,7 @@
 import pytest
 from flask import Flask
 from flask.testing import FlaskClient
+from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy.exc import OperationalError
 
 from app.services import readiness
@@ -111,6 +112,29 @@ def test_readiness_rejects_migration_revision_mismatch(
         readiness,
         "_expected_migration_heads",
         lambda: frozenset({"unexpected-revision"}),
+    )
+
+    response = client.get("/api/v1/ready")
+
+    assert response.status_code == 503
+
+
+def test_production_readiness_rejects_unavailable_redis(
+    app: Flask,
+    client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app.config["APP_ENV"] = "production"
+    app.config["RATELIMIT_STORAGE_URI"] = "rediss://redis.example.invalid:6379/0"
+    redis_client = type(
+        "UnavailableRedis",
+        (),
+        {"ping": lambda self: (_ for _ in ()).throw(RedisConnectionError())},
+    )()
+    monkeypatch.setattr(
+        readiness.Redis,
+        "from_url",
+        lambda *_args, **_kwargs: redis_client,
     )
 
     response = client.get("/api/v1/ready")

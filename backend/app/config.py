@@ -26,11 +26,51 @@ APPLICATION_DATABASE_ENVIRONMENTS = (
     ("PRODUCTION_DATABASE_URL", True),
 )
 POSTGRES_CONNECTION_TIMEOUT_SECONDS = 3
+DEFAULT_PRODUCTION_POOL_SIZE = 3
+DEFAULT_PRODUCTION_MAX_OVERFLOW = 2
+MAX_PRODUCTION_POOL_COMPONENT = 10
+MAX_PRODUCTION_CONNECTIONS_PER_WORKER = 10
 POSTGRES_ENGINE_OPTIONS: dict[str, object] = {
     "connect_args": {"connect_timeout": POSTGRES_CONNECTION_TIMEOUT_SECONDS},
     "pool_pre_ping": True,
     "pool_timeout": POSTGRES_CONNECTION_TIMEOUT_SECONDS,
 }
+
+
+def resolve_production_engine_options() -> dict[str, object]:
+    """Return bounded production pool settings resolved at application creation."""
+    pool_size = _bounded_pool_setting(
+        "SQLALCHEMY_POOL_SIZE",
+        DEFAULT_PRODUCTION_POOL_SIZE,
+        minimum=1,
+    )
+    max_overflow = _bounded_pool_setting(
+        "SQLALCHEMY_MAX_OVERFLOW",
+        DEFAULT_PRODUCTION_MAX_OVERFLOW,
+        minimum=0,
+    )
+    if pool_size + max_overflow > MAX_PRODUCTION_CONNECTIONS_PER_WORKER:
+        raise RuntimeError(
+            "Production SQLAlchemy pool capacity must not exceed 10 connections "
+            "per worker"
+        )
+    return {
+        **POSTGRES_ENGINE_OPTIONS,
+        "pool_size": pool_size,
+        "max_overflow": max_overflow,
+    }
+
+
+def _bounded_pool_setting(name: str, default: int, *, minimum: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    if not raw_value or not raw_value.isascii() or not raw_value.isdecimal():
+        raise RuntimeError(f"{name} must be a base-10 integer")
+    value = int(raw_value, 10)
+    if not minimum <= value <= MAX_PRODUCTION_POOL_COMPONENT:
+        raise RuntimeError(f"{name} must be between {minimum} and 10")
+    return value
 
 
 def _environment_flag(name: str, default: bool = False) -> bool:
@@ -127,7 +167,7 @@ class PostgresTestingConfig(Config):
 class ProductionConfig(Config):
     DATABASE_ENV_VAR = "PRODUCTION_DATABASE_URL"
     REQUIRE_POOLED_DATABASE_URL = True
-    SQLALCHEMY_ENGINE_OPTIONS = POSTGRES_ENGINE_OPTIONS
+    SQLALCHEMY_ENGINE_OPTIONS: dict[str, object] = {}
     RATELIMIT_STORAGE_URI = os.getenv("REDIS_URL")
     TRUSTED_PROXY_HOPS = 1
 
@@ -287,6 +327,7 @@ __all__ = [
     "get_configuration",
     "resolve_database_uri",
     "resolve_migration_database_uri",
+    "resolve_production_engine_options",
     "validate_database_separation",
     "validate_migration_target",
 ]

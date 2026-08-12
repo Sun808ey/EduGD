@@ -171,3 +171,5 @@ target/
 .history/
 .github/env.txt
 frontend/package-lock.json
+/11env.txt
+/secrets.txt

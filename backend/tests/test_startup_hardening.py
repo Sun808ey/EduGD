@@ -216,11 +216,15 @@ def test_enabled_sentry_is_conservative_and_scrubs_events(
     sentry_init = Mock()
     monkeypatch.setattr("app.observability.sentry_sdk.init", sentry_init)
     secret_key = "development-secret-value-that-must-be-redacted"
+    redis_url = "rediss://synthetic-user:synthetic-password@example.invalid/0"
+    pairing_pepper = "synthetic-pairing-pepper-value-for-redaction"
 
     application = create_app(
         "development",
         {
             "SECRET_KEY": secret_key,
+            "REDIS_URL": redis_url,
+            "PAIRING_TOKEN_PEPPER": pairing_pepper,
             "SENTRY_DSN": "https://public@example.invalid/1",
         },
     )
@@ -233,9 +237,12 @@ def test_enabled_sentry_is_conservative_and_scrubs_events(
     assert options["sample_rate"] <= 0.25
     assert options["traces_sample_rate"] <= 0.05
     event = {
-        "message": f"failure with {secret_key}",
+        "message": f"failure with {secret_key} {redis_url}",
         "request": {"data": secret_key},
-        "extra": {"authorization": "Bearer private-token"},
+        "extra": {
+            "authorization": "Bearer private-token",
+            "metadata": {"pairing": pairing_pepper, "redis": redis_url},
+        },
     }
 
     scrubbed_event = options["before_send"](event, {})
@@ -243,6 +250,8 @@ def test_enabled_sentry_is_conservative_and_scrubs_events(
     assert "request" not in scrubbed_event
     assert secret_key not in repr(scrubbed_event)
     assert "private-token" not in repr(scrubbed_event)
+    assert redis_url not in repr(scrubbed_event)
+    assert pairing_pepper not in repr(scrubbed_event)
     assert application.extensions["sentry"] == {
         "enabled": True,
         "environment": "development",
@@ -283,6 +292,8 @@ def test_structured_logging_redacts_secrets_and_credentials(
     secret_key = "structured-log-secret-value"
     audit_key = "structured-log-audit-pseudonym-key-value"
     sync_audit_key = "structured-log-policy-sync-audit-key-value"
+    redis_url = "rediss://log-user:log-password@example.invalid/0"
+    pairing_pepper = "structured-log-pairing-pepper-value"
     database_url = "postgresql://test-user:test-password@example.invalid/db"
     application: Flask = create_app(
         "testing",
@@ -291,13 +302,18 @@ def test_structured_logging_redacts_secrets_and_credentials(
             "JWT_SECRET_KEY": "structured-log-jwt-secret-value",
             "ADMIN_AUDIT_PSEUDONYM_KEY": audit_key,
             "POLICY_SYNC_AUDIT_KEY": sync_audit_key,
+            "REDIS_URL": redis_url,
+            "PAIRING_TOKEN_PEPPER": pairing_pepper,
             "SQLALCHEMY_DATABASE_URI": "sqlite+pysqlite:///:memory:",
         },
     )
 
     application.logger.error(
         "Startup failure secret=%s database=%s",
-        f"{secret_key} audit={audit_key} sync_audit={sync_audit_key}",
+        (
+            f"{secret_key} audit={audit_key} sync_audit={sync_audit_key} "
+            f"redis={redis_url} pairing={pairing_pepper}"
+        ),
         database_url,
         extra={"event": "startup_test"},
     )
@@ -310,6 +326,8 @@ def test_structured_logging_redacts_secrets_and_credentials(
     assert secret_key not in captured.err
     assert audit_key not in captured.err
     assert sync_audit_key not in captured.err
+    assert redis_url not in captured.err
+    assert pairing_pepper not in captured.err
     assert "test-password" not in captured.err
     assert "<redacted>" in captured.err
 

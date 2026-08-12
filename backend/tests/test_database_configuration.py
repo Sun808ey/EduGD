@@ -10,6 +10,7 @@ from app.config import (
     TestingConfig,
     resolve_database_uri,
     resolve_migration_database_uri,
+    resolve_production_engine_options,
     validate_database_separation,
 )
 
@@ -173,11 +174,72 @@ def test_postgres_environments_use_bounded_resilient_connections() -> None:
     }
     assert DevelopmentConfig.SQLALCHEMY_ENGINE_OPTIONS == bounded_postgres_options
     assert PostgresTestingConfig.SQLALCHEMY_ENGINE_OPTIONS == bounded_postgres_options
-    assert ProductionConfig.SQLALCHEMY_ENGINE_OPTIONS == bounded_postgres_options
+    assert ProductionConfig.SQLALCHEMY_ENGINE_OPTIONS == {}
+    assert resolve_production_engine_options() == {
+        **bounded_postgres_options,
+        "pool_size": 3,
+        "max_overflow": 2,
+    }
     assert TestingConfig.SQLALCHEMY_ENGINE_OPTIONS == {}
     assert DevelopmentConfig.READINESS_STATEMENT_TIMEOUT_MS == 2_000
     assert PostgresTestingConfig.READINESS_STATEMENT_TIMEOUT_MS == 2_000
     assert ProductionConfig.READINESS_STATEMENT_TIMEOUT_MS == 2_000
+
+
+def test_production_pool_overrides_are_resolved_at_application_creation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQLALCHEMY_POOL_SIZE", "4")
+    monkeypatch.setenv("SQLALCHEMY_MAX_OVERFLOW", "1")
+    monkeypatch.setenv("PRODUCTION_DATABASE_URL", PRODUCTION_URL)
+    redis_client = Mock()
+    monkeypatch.setattr("app.Redis.from_url", Mock(return_value=redis_client))
+
+    application = create_app(
+        "production",
+        {
+            "SECRET_KEY": "f" * 32,
+            "JWT_SECRET_KEY": "j" * 32,
+            "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
+            "POLICY_SYNC_AUDIT_KEY": "p" * 32,
+            "RATELIMIT_STORAGE_URI": "rediss://redis.example.invalid:6379/0",
+        },
+    )
+
+    assert application.config["SQLALCHEMY_ENGINE_OPTIONS"]["pool_size"] == 4
+    assert application.config["SQLALCHEMY_ENGINE_OPTIONS"]["max_overflow"] == 1
+
+
+@pytest.mark.parametrize(
+    ("variable_name", "value", "expected_message"),
+    [
+        ("SQLALCHEMY_POOL_SIZE", "", "base-10 integer"),
+        ("SQLALCHEMY_POOL_SIZE", "1.5", "base-10 integer"),
+        ("SQLALCHEMY_POOL_SIZE", "0", "between 1 and 10"),
+        ("SQLALCHEMY_MAX_OVERFLOW", "-1", "base-10 integer"),
+        ("SQLALCHEMY_MAX_OVERFLOW", "11", "between 0 and 10"),
+    ],
+)
+def test_production_rejects_invalid_pool_settings(
+    monkeypatch: pytest.MonkeyPatch,
+    variable_name: str,
+    value: str,
+    expected_message: str,
+) -> None:
+    monkeypatch.setenv(variable_name, value)
+
+    with pytest.raises(RuntimeError, match=expected_message):
+        resolve_production_engine_options()
+
+
+def test_production_rejects_excessive_per_worker_connection_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQLALCHEMY_POOL_SIZE", "6")
+    monkeypatch.setenv("SQLALCHEMY_MAX_OVERFLOW", "5")
+
+    with pytest.raises(RuntimeError, match="must not exceed 10"):
+        resolve_production_engine_options()
 
 
 def test_production_fails_closed_without_required_secrets(

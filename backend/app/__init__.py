@@ -15,6 +15,7 @@ from app.config import (
     get_configuration,
     resolve_database_uri,
     resolve_migration_database_uri,
+    resolve_production_engine_options,
     validate_database_separation,
     validate_migration_target,
 )
@@ -34,6 +35,9 @@ def create_app(
     selected_name, configuration = get_configuration(config_name)
     app.config.from_object(configuration)
     app.config["APP_ENV"] = selected_name
+
+    if selected_name == "production":
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = resolve_production_engine_options()
 
     database_uri = resolve_database_uri(configuration)
     if database_uri is not None:

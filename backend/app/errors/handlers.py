@@ -15,5 +15,5 @@ def register_error_handlers(app: Flask) -> None:
 
     @app.errorhandler(Exception)
     def handle_unexpected_error(error: Exception) -> tuple[Response, int]:
-        app.logger.exception("Unhandled server error", exc_info=error)
+        app.logger.exception("Unhandled server error")
         return jsonify({"error": "internal server error"}), 500

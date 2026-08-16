@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+import re
 
 import pytest
 from flask import Flask
@@ -31,7 +32,8 @@ def pytest_configure(config: pytest.Config) -> None:
         return
 
     requests_postgres_category = any(
-        marker_name in marker_expression for marker_name in POSTGRES_TEST_MARKERS
+        re.search(rf'\b{re.escape(marker_name)}\b', marker_expression)
+        for marker_name in POSTGRES_TEST_MARKERS
     )
     if requests_postgres_category:
         try:

@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from secrets import token_urlsafe
 from typing import Any
 
-from flask import Flask
+from flask import Flask, Response, request
 from redis import Redis
 from redis.exceptions import RedisError
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -64,6 +64,7 @@ def create_app(
     _configure_trusted_proxy(app)
     configure_sentry(app)
     _initialize_extensions(app)
+    _configure_admin_cors(app)
     configure_administrator_jwt()
     register_cli_commands(app)
     register_blueprints(app)
@@ -178,6 +179,59 @@ def _configure_trusted_proxy(app: Flask) -> None:
         x_proto=1,
         x_host=1,
     )
+
+
+def _configure_admin_cors(app: Flask) -> None:
+    allowed_origins = _admin_frontend_origins(app)
+    if app.config["APP_ENV"] == "production" and not allowed_origins:
+        raise RuntimeError("Production CORS requires ADMIN_FRONTEND_ORIGINS")
+
+    @app.before_request
+    def reject_disallowed_admin_preflight() -> tuple[str, int] | None:
+        if request.method != "OPTIONS" or not request.path.startswith("/api/v1/admin/"):
+            return None
+        origin = request.headers.get("Origin")
+        requested_method = request.headers.get("Access-Control-Request-Method")
+        if origin is None or requested_method is None:
+            return None
+        if origin not in allowed_origins:
+            return "", 403
+        return "", 204
+
+    @app.after_request
+    def add_admin_cors_headers(response: Response) -> Response:
+        if not request.path.startswith("/api/v1/admin/"):
+            return response
+        origin = request.headers.get("Origin")
+        if origin not in allowed_origins:
+            return response
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Max-Age"] = "600"
+        response.headers["Vary"] = _append_vary(response.headers.get("Vary"), "Origin")
+        return response
+
+
+def _admin_frontend_origins(app: Flask) -> frozenset[str]:
+    raw_origins = app.config.get("ADMIN_FRONTEND_ORIGINS", "")
+    if not isinstance(raw_origins, str):
+        raise RuntimeError("ADMIN_FRONTEND_ORIGINS must be a comma-separated string")
+    origins = frozenset(
+        origin.strip() for origin in raw_origins.split(",") if origin.strip()
+    )
+    if "*" in origins:
+        raise RuntimeError("ADMIN_FRONTEND_ORIGINS cannot contain a wildcard")
+    return origins
+
+
+def _append_vary(current: str | None, value: str) -> str:
+    if not current:
+        return value
+    existing = [part.strip() for part in current.split(",")]
+    if value in existing:
+        return current
+    return f"{current}, {value}"
 
 
 def _load_models() -> None:

@@ -131,7 +131,7 @@ def test_missing_or_invalid_tokens_use_one_generic_response(
     response = app.test_client().get("/api/v1/admin/auth/me", headers=headers)
 
     assert response.status_code == 401
-    assert response.get_json() == {"error": "authentication_failed"}
+    assert response.get_json()["error"]["code"] == "authentication_failed"
     assert response.headers["Cache-Control"] == "no-store"
 
 
@@ -149,7 +149,7 @@ def test_valid_signed_token_without_database_session_fails_closed(app: Flask) ->
     )
 
     assert response.status_code == 401
-    assert response.get_json() == {"error": "authentication_failed"}
+    assert response.get_json()["error"]["code"] == "authentication_failed"
 
 
 def test_expired_token_uses_generic_failure_response(app: Flask) -> None:
@@ -165,7 +165,7 @@ def test_expired_token_uses_generic_failure_response(app: Flask) -> None:
     )
 
     assert response.status_code == 401
-    assert response.get_json() == {"error": "authentication_failed"}
+    assert response.get_json()["error"]["code"] == "authentication_failed"
     assert response.headers["Cache-Control"] == "no-store"
 
 
@@ -181,11 +181,8 @@ def test_unknown_and_wrong_password_responses_are_indistinguishable(app: Flask) 
 
     assert wrong_password.status_code == 401
     assert unknown_account.status_code == 401
-    assert (
-        wrong_password.get_json()
-        == unknown_account.get_json()
-        == {"error": "authentication_failed"}
-    )
+    assert wrong_password.get_json() == unknown_account.get_json()
+    assert wrong_password.get_json()["error"]["code"] == "authentication_failed"
     assert USERNAME not in wrong_password.get_data(as_text=True)
     assert "unknown.admin" not in unknown_account.get_data(as_text=True)
 
@@ -232,7 +229,7 @@ def test_five_failed_logins_lock_account_without_revealing_state(app: Flask) -> 
 
     assert all(response.status_code == 401 for response in responses)
     assert locked_response.status_code == 401
-    assert locked_response.get_json() == {"error": "authentication_failed"}
+    assert locked_response.get_json()["error"]["code"] == "authentication_failed"
     with app.app_context():
         administrator = _administrator()
         assert administrator.status == "locked"
@@ -299,8 +296,9 @@ def test_disabled_account_and_session_fail_closed(app: Flask) -> None:
     assert (
         login_response.get_json()
         == session_response.get_json()
-        == {"error": "authentication_failed"}
+        == session_response.get_json()
     )
+    assert login_response.get_json()["error"]["code"] == "authentication_failed"
 
 
 def test_logout_revokes_database_session_and_rejects_token_reuse(app: Flask) -> None:
@@ -389,7 +387,7 @@ def test_login_rejects_malformed_requests_without_details(
     )
 
     assert response.status_code == expected_status
-    assert response.get_json() == {"error": "invalid_request"}
+    assert response.get_json()["error"]["code"] == "invalid_request"
     assert response.headers["Cache-Control"] == "no-store"
 
 
@@ -400,7 +398,7 @@ def test_login_rejects_body_over_16_kib(app: Flask) -> None:
     )
 
     assert response.status_code == 413
-    assert response.get_json() == {"error": "invalid_request"}
+    assert response.get_json()["error"]["code"] == "invalid_request"
 
 
 def test_login_rate_limit_is_ten_per_source_per_minute() -> None:
@@ -420,7 +418,7 @@ def test_login_rate_limit_is_ten_per_source_per_minute() -> None:
 
     assert all(response.status_code == 401 for response in responses[:10])
     assert responses[10].status_code == 429
-    assert responses[10].get_json() == {"error": "rate_limit_exceeded"}
+    assert responses[10].get_json()["error"]["code"] == "rate_limit_exceeded"
     assert responses[10].headers["Cache-Control"] == "no-store"
 
 

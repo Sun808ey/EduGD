@@ -171,7 +171,7 @@ def administrator_permissions(administrator_id: int) -> list[str]:
 
 
 def authentication_failure_response() -> Response:
-    if request.blueprint == "policies":
+    if _is_admin_api_request():
         return _standard_error_response(
             "authentication_failed", "administrator authentication failed", 401
         )
@@ -179,7 +179,7 @@ def authentication_failure_response() -> Response:
 
 
 def authorization_failure_response() -> Response:
-    if request.blueprint == "policies":
+    if _is_admin_api_request():
         return _standard_error_response(
             "authorization_failed", "administrator authorization failed", 403
         )
@@ -324,6 +324,10 @@ def _no_store_response(error: str, status_code: int) -> Response:
     response.status_code = status_code
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+def _is_admin_api_request() -> bool:
+    return request.path.startswith("/api/v1/admin/")
 
 
 def _as_utc(value: datetime) -> datetime:

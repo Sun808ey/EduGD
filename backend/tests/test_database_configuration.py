@@ -203,6 +203,7 @@ def test_production_pool_overrides_are_resolved_at_application_creation(
             "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
             "POLICY_SYNC_AUDIT_KEY": "p" * 32,
             "RATELIMIT_STORAGE_URI": "rediss://redis.example.invalid:6379/0",
+            "ADMIN_FRONTEND_ORIGINS": "https://admin.example.invalid",
         },
     )
 
@@ -266,6 +267,7 @@ def test_production_starts_with_database_and_required_secrets(
             "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
             "POLICY_SYNC_AUDIT_KEY": "p" * 32,
             "RATELIMIT_STORAGE_URI": "rediss://redis.example.invalid:6379/0",
+            "ADMIN_FRONTEND_ORIGINS": "https://admin.example.invalid",
         },
     )
 

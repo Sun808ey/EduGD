@@ -196,11 +196,11 @@ def test_lockout_uses_postgres_row_lock_and_persists_bounded_state(
 
     assert all(response.status_code == 401 for response in failures)
     assert all(
-        response.get_json() == {"error": "authentication_failed"}
+        response.get_json()["error"]["code"] == "authentication_failed"
         for response in failures
     )
     assert locked.status_code == 401
-    assert locked.get_json() == {"error": "authentication_failed"}
+    assert locked.get_json()["error"]["code"] == "authentication_failed"
     administrator = _administrator()
     assert administrator.status == "locked"
     assert administrator.failed_attempts == 5
@@ -240,7 +240,7 @@ def test_authorization_rechecks_postgres_permissions_for_each_request(
 
     assert allowed.status_code == 200
     assert denied.status_code == 403
-    assert denied.get_json() == {"error": "authorization_failed"}
+    assert denied.get_json()["error"]["code"] == "authorization_failed"
     assert denied.headers["Cache-Control"] == "no-store"
     event = db.session.execute(
         select(AdministratorAuthenticationEvent).where(
@@ -266,7 +266,7 @@ def test_unique_session_failure_rolls_back_only_the_failed_login(
 
     assert first.status_code == 200
     assert second.status_code == 500
-    assert second.get_json() == {"error": "internal_server_error"}
+    assert second.get_json()["error"]["code"] == "internal_server_error"
     assert "access_token" not in second.get_data(as_text=True)
     assert (
         db.session.scalar(select(func.count()).select_from(AdministratorSession)) == 1
@@ -300,7 +300,8 @@ def test_postgres_failure_audit_data_and_logs_are_redacted(
     )
 
     assert known.status_code == unknown.status_code == 401
-    assert known.get_json() == unknown.get_json() == {"error": "authentication_failed"}
+    assert known.get_json() == unknown.get_json()
+    assert known.get_json()["error"]["code"] == "authentication_failed"
     response_text = known.get_data(as_text=True) + unknown.get_data(as_text=True)
     assert USERNAME not in response_text
     assert "unknown.postgres.admin" not in response_text

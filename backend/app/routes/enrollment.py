@@ -4,6 +4,13 @@ from uuid import UUID
 
 from flask import Blueprint, Response, current_app, jsonify, request
 
+from app.admin_api import (
+    AdminRequestError,
+    admin_error,
+    admin_json,
+    parse_optional_filter,
+    parse_pagination,
+)
 from app.administrator_authorization import (
     administrator_required,
     get_administrator_request_context,
@@ -15,6 +22,8 @@ from app.enrollment_schemas import (
     validate_token_issue_request,
 )
 from app.extensions import limiter
+from app.models import ENROLLMENT_TOKEN_STATUSES
+from app.services.admin_read import AdminReadPersistenceError, list_enrollment_tokens
 from app.services.device_authentication import (
     credential_rate_limit_key,
     device_authentication_required,
@@ -45,14 +54,16 @@ def issue_token() -> Response:
             get_administrator_request_context().administrator,
         )
     except EnrollmentValidationError as error:
-        return _json_no_store({"error": "invalid_request"}, error.status_code)
+        return admin_error(
+            "invalid_request", "invalid enrollment token request", error.status_code
+        )
     except EnrollmentNotFound:
-        return _json_no_store({"error": "device_not_found"}, 404)
+        return admin_error("device_not_found", "device not found", 404)
     except EnrollmentConflict:
-        return _json_no_store({"error": "operation_not_available"}, 409)
+        return admin_error("operation_not_available", "operation is not available", 409)
     except EnrollmentDatabaseError:
-        return _json_no_store({"error": "internal_server_error"}, 500)
-    return _json_no_store(
+        return admin_error("internal_server_error", "internal server error", 500)
+    return admin_json(
         {
             "token_uuid": issued.token_uuid,
             "pairing_token": issued.pairing_token,
@@ -61,6 +72,22 @@ def issue_token() -> Response:
         },
         201,
     )
+
+
+@enrollment_bp.get("/admin/enrollment-tokens")
+@administrator_required()
+def list_tokens() -> Response:
+    try:
+        pagination = parse_pagination()
+        status = parse_optional_filter("status", ENROLLMENT_TOKEN_STATUSES)
+        page = list_enrollment_tokens(pagination, status=status)
+    except AdminRequestError as error:
+        return admin_error(error.code, error.message, error.status_code)
+    except AdminReadPersistenceError:
+        return admin_error(
+            "read_unavailable", "enrollment tokens are temporarily unavailable", 503
+        )
+    return admin_json({"enrollment_tokens": page.items, "pagination": page.pagination})
 
 
 @enrollment_bp.post("/admin/enrollment-tokens/<token_uuid>/revoke")
@@ -76,14 +103,16 @@ def revoke_token(token_uuid: str) -> Response:
             get_administrator_request_context().administrator,
         )
     except (ValueError, EnrollmentValidationError):
-        return _json_no_store({"error": "invalid_request"}, 400)
+        return admin_error("invalid_request", "invalid revoke request", 400)
     except EnrollmentNotFound:
-        return _json_no_store({"error": "enrollment_token_not_found"}, 404)
+        return admin_error(
+            "enrollment_token_not_found", "enrollment token not found", 404
+        )
     except EnrollmentConflict:
-        return _json_no_store({"error": "operation_not_available"}, 409)
+        return admin_error("operation_not_available", "operation is not available", 409)
     except EnrollmentDatabaseError:
-        return _json_no_store({"error": "internal_server_error"}, 500)
-    return _json_no_store({"message": "enrollment token revoked"}, 200)
+        return admin_error("internal_server_error", "internal server error", 500)
+    return admin_json({"message": "enrollment token revoked"}, 200)
 
 
 @enrollment_bp.post("/admin/devices/<device_uuid>/credentials/revoke")
@@ -99,12 +128,14 @@ def revoke_credential(device_uuid: str) -> Response:
             get_administrator_request_context().administrator,
         )
     except (ValueError, EnrollmentValidationError):
-        return _json_no_store({"error": "invalid_request"}, 400)
+        return admin_error("invalid_request", "invalid credential revoke request", 400)
     except EnrollmentNotFound:
-        return _json_no_store({"error": "active_credential_not_found"}, 404)
+        return admin_error(
+            "active_credential_not_found", "active credential not found", 404
+        )
     except EnrollmentDatabaseError:
-        return _json_no_store({"error": "internal_server_error"}, 500)
-    return _json_no_store({"message": "device credential revoked"}, 200)
+        return admin_error("internal_server_error", "internal server error", 500)
+    return admin_json({"message": "device credential revoked"}, 200)
 
 
 @enrollment_bp.post("/devices/<device_uuid>/credentials/rotate")

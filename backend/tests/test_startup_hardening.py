@@ -116,6 +116,7 @@ def test_production_starts_with_distinct_strong_secrets(
             "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
             "POLICY_SYNC_AUDIT_KEY": "p" * 32,
             "RATELIMIT_STORAGE_URI": "rediss://redis.example.invalid:6379/0",
+            "ADMIN_FRONTEND_ORIGINS": "https://admin.example.invalid",
         },
     )
 
@@ -276,6 +277,7 @@ def test_enabled_sentry_labels_production_environment(
             "POLICY_SYNC_AUDIT_KEY": "p" * 32,
             "SENTRY_DSN": "https://public@example.invalid/1",
             "RATELIMIT_STORAGE_URI": "rediss://redis.example.invalid:6379/0",
+            "ADMIN_FRONTEND_ORIGINS": "https://admin.example.invalid",
         },
     )
 

@@ -130,7 +130,7 @@ def test_issuance_requires_current_database_permission(app: Flask) -> None:
     response = _issue(app, access_token)
 
     assert response.status_code == 403
-    assert response.get_json() == {"error": "authorization_failed"}
+    assert response.get_json()["error"]["code"] == "authorization_failed"
     assert response.headers["Cache-Control"] == "no-store"
     with app.app_context():
         assert db.session.scalar(select(func.count()).select_from(EnrollmentToken)) == 0
@@ -183,7 +183,7 @@ def test_issuance_transaction_rolls_back_token_and_event_on_commit_failure(
         monkeypatch.setattr(db.session, "commit", original_commit)
 
         assert response.status_code == 500
-        assert response.get_json() == {"error": "internal_server_error"}
+        assert response.get_json()["error"]["code"] == "internal_server_error"
         assert response.headers["Cache-Control"] == "no-store"
         assert "pairing_token" not in response.get_data(as_text=True)
         assert db.session.scalar(select(func.count()).select_from(EnrollmentToken)) == 0

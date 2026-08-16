@@ -135,6 +135,7 @@ class Config:
     DEVICE_AUTH_NONCE_TTL_SECONDS = 600
     ENROLLMENT_TOKEN_TTL_SECONDS = 600
     POLICY_SYNC_RATE_LIMIT = os.getenv("POLICY_SYNC_RATE_LIMIT") or "60 per minute"
+    ADMIN_FRONTEND_ORIGINS = os.getenv("ADMIN_FRONTEND_ORIGINS", "")
 
 
 class DevelopmentConfig(Config):
@@ -143,6 +144,10 @@ class DevelopmentConfig(Config):
     REQUIRE_POOLED_DATABASE_URL = True
     SQLALCHEMY_ENGINE_OPTIONS = POSTGRES_ENGINE_OPTIONS
     LOG_LEVEL = "DEBUG" if DEBUG else "INFO"
+    ADMIN_FRONTEND_ORIGINS = os.getenv(
+        "ADMIN_FRONTEND_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    )
 
 
 class TestingConfig(Config):
@@ -154,6 +159,7 @@ class TestingConfig(Config):
     PAIRING_TOKEN_PEPPER = "testing-pairing-token-pepper-value"
     POLICY_SYNC_AUDIT_KEY = "testing-policy-sync-audit-key-value"
     ENROLLMENT_ADMIN_ENABLED = True
+    ADMIN_FRONTEND_ORIGINS = "http://localhost:5173"
 
 
 class PostgresTestingConfig(Config):

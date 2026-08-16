@@ -1,13 +1,28 @@
 from flask import Blueprint, Response, current_app, jsonify, request
 
+from app.admin_api import (
+    AdminRequestError,
+    admin_error,
+    admin_json,
+    parse_optional_filter,
+    parse_pagination,
+)
 from app.administrator_authorization import (
     administrator_required,
     get_administrator_request_context,
 )
+from app.models import POLICY_STATUSES
 from app.policy_assignment_schemas import (
     PolicyAssignmentRequestError,
     validate_assignment_request,
     validate_clear_request,
+)
+from app.services.admin_read import (
+    AdminReadNotFoundError,
+    AdminReadPersistenceError,
+    get_policy,
+    list_policies,
+    list_policy_revisions,
 )
 from app.services.policy_assignments import (
     InvalidPolicyAssignmentError,
@@ -19,6 +34,55 @@ from app.services.policy_assignments import (
 )
 
 policy_bp = Blueprint("policies", __name__)
+
+
+@policy_bp.get("/admin/policies")
+@administrator_required()
+def admin_policies() -> Response:
+    try:
+        pagination = parse_pagination()
+        status = parse_optional_filter("status", POLICY_STATUSES)
+        page = list_policies(pagination, status=status)
+    except AdminRequestError as error:
+        return admin_error(error.code, error.message, error.status_code)
+    except AdminReadPersistenceError:
+        return admin_error(
+            "read_unavailable", "policies are temporarily unavailable", 503
+        )
+    return admin_json({"policies": page.items, "pagination": page.pagination})
+
+
+@policy_bp.get("/admin/policies/<policy_uuid>")
+@administrator_required()
+def admin_policy_detail(policy_uuid: str) -> Response:
+    try:
+        policy = get_policy(policy_uuid)
+    except ValueError:
+        return admin_error("invalid_policy_uuid", "policy_uuid must be a UUIDv4", 400)
+    except AdminReadNotFoundError:
+        return admin_error("policy_not_found", "policy not found", 404)
+    except AdminReadPersistenceError:
+        return admin_error("read_unavailable", "policy is temporarily unavailable", 503)
+    return admin_json({"policy": policy})
+
+
+@policy_bp.get("/admin/policies/<policy_uuid>/revisions")
+@administrator_required()
+def admin_policy_revisions(policy_uuid: str) -> Response:
+    try:
+        pagination = parse_pagination()
+        page = list_policy_revisions(policy_uuid, pagination)
+    except AdminRequestError as error:
+        return admin_error(error.code, error.message, error.status_code)
+    except ValueError:
+        return admin_error("invalid_policy_uuid", "policy_uuid must be a UUIDv4", 400)
+    except AdminReadNotFoundError:
+        return admin_error("policy_not_found", "policy not found", 404)
+    except AdminReadPersistenceError:
+        return admin_error(
+            "read_unavailable", "policy revisions are temporarily unavailable", 503
+        )
+    return admin_json({"revisions": page.items, "pagination": page.pagination})
 
 
 @policy_bp.post("/admin/devices/<device_uuid>/policy-assignment")
@@ -110,7 +174,7 @@ def clear_device_policy(device_uuid: str) -> Response:
 
 
 def _error(code: str, message: str, status: int) -> Response:
-    return _json_no_store({"error": {"code": code, "message": message}}, status)
+    return admin_error(code, message, status)
 
 
 def _json_no_store(payload: dict[str, object], status: int) -> Response:

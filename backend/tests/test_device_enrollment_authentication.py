@@ -298,7 +298,7 @@ def test_token_issuance_requires_administrator_permission(app: Flask) -> None:
     )
 
     assert response.status_code == 401
-    assert response.get_json() == {"error": "authentication_failed"}
+    assert response.get_json()["error"]["code"] == "authentication_failed"
     with app.app_context():
         assert db.session.execute(select(EnrollmentToken)).scalar_one_or_none() is None
 
@@ -539,7 +539,7 @@ def test_administrator_revocation_immediately_blocks_sync(app: Flask) -> None:
     assert rotation.status_code == 401
     assert rotation.get_json() == {"error": "authentication_failed"}
     assert repeated.status_code == 404
-    assert repeated.get_json() == {"error": "active_credential_not_found"}
+    assert repeated.get_json()["error"]["code"] == "active_credential_not_found"
     assert repeated.headers["Cache-Control"] == "no-store"
     with app.app_context():
         credential = db.session.execute(select(DeviceCredential)).scalar_one()
@@ -588,10 +588,10 @@ def test_credential_revocation_requires_current_database_permission(
     )
 
     assert missing_authentication.status_code == 401
-    assert missing_authentication.get_json() == {"error": "authentication_failed"}
+    assert missing_authentication.get_json()["error"]["code"] == "authentication_failed"
     assert missing_authentication.headers["Cache-Control"] == "no-store"
     assert denied.status_code == 403
-    assert denied.get_json() == {"error": "authorization_failed"}
+    assert denied.get_json()["error"]["code"] == "authorization_failed"
     assert denied.headers["Cache-Control"] == "no-store"
     with app.app_context():
         credential = db.session.execute(select(DeviceCredential)).scalar_one()
@@ -629,7 +629,7 @@ def test_credential_revocation_database_failure_rolls_back(
         monkeypatch.setattr(db.session, "commit", original_commit)
 
         assert response.status_code == 500
-        assert response.get_json() == {"error": "internal_server_error"}
+        assert response.get_json()["error"]["code"] == "internal_server_error"
         assert response.headers["Cache-Control"] == "no-store"
         credential = db.session.execute(select(DeviceCredential)).scalar_one()
         assert credential.status == "active"

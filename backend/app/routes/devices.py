@@ -1,13 +1,29 @@
 from flask import Blueprint, Response, current_app, jsonify, request
 
+from app.admin_api import (
+    AdminRequestError,
+    admin_error,
+    admin_json,
+    parse_optional_filter,
+    parse_pagination,
+)
+from app.administrator_authorization import administrator_required
 from app.enrollment_schemas import (
     EnrollmentValidationError,
     validate_enrollment_request,
 )
 from app.extensions import limiter
+from app.models import DEVICE_STATUSES
 from app.schemas import (
     DeviceRegistrationValidationError,
     validate_device_registration_request,
+)
+from app.services.admin_read import (
+    AdminReadNotFoundError,
+    AdminReadPersistenceError,
+    get_device,
+    get_device_policy_assignment,
+    list_devices,
 )
 from app.services.device_enrollment import (
     EnrollmentConflict,
@@ -27,6 +43,52 @@ device_bp = Blueprint("devices", __name__)
 @device_bp.get("/devices")
 def devices() -> Response:
     return jsonify({"message": "Device API working"})
+
+
+@device_bp.get("/admin/devices")
+@administrator_required()
+def admin_devices() -> Response:
+    try:
+        pagination = parse_pagination()
+        status = parse_optional_filter("status", DEVICE_STATUSES)
+        page = list_devices(pagination, status=status)
+    except AdminRequestError as error:
+        return admin_error(error.code, error.message, error.status_code)
+    except AdminReadPersistenceError:
+        return admin_error(
+            "read_unavailable", "devices are temporarily unavailable", 503
+        )
+    return admin_json({"devices": page.items, "pagination": page.pagination})
+
+
+@device_bp.get("/admin/devices/<device_uuid>")
+@administrator_required()
+def admin_device_detail(device_uuid: str) -> Response:
+    try:
+        device = get_device(device_uuid)
+    except ValueError:
+        return admin_error("invalid_device_uuid", "device_uuid must be a UUIDv4", 400)
+    except AdminReadNotFoundError:
+        return admin_error("device_not_found", "device not found", 404)
+    except AdminReadPersistenceError:
+        return admin_error("read_unavailable", "device is temporarily unavailable", 503)
+    return admin_json({"device": device})
+
+
+@device_bp.get("/admin/devices/<device_uuid>/policy-assignment")
+@administrator_required()
+def admin_device_policy_assignment(device_uuid: str) -> Response:
+    try:
+        assignment = get_device_policy_assignment(device_uuid)
+    except ValueError:
+        return admin_error("invalid_device_uuid", "device_uuid must be a UUIDv4", 400)
+    except AdminReadNotFoundError:
+        return admin_error("device_not_found", "device not found", 404)
+    except AdminReadPersistenceError:
+        return admin_error(
+            "read_unavailable", "policy assignment is temporarily unavailable", 503
+        )
+    return admin_json({"policy_assignment": assignment})
 
 
 @device_bp.post("/devices/register")

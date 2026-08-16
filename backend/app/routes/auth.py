@@ -1,7 +1,8 @@
-from flask import Blueprint, Response, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, request
 from flask_limiter.errors import RateLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.admin_api import admin_error, admin_json
 from app.administrator_authorization import (
     administrator_permissions,
     administrator_required,
@@ -26,7 +27,7 @@ AUTHORIZATION_SCHEME = "Bearer"
 
 @auth_bp.errorhandler(RateLimitExceeded)
 def handle_auth_rate_limit(_error: RateLimitExceeded) -> Response:
-    return _json_no_store({"error": "rate_limit_exceeded"}, 429)
+    return admin_error("rate_limit_exceeded", "rate limit exceeded", 429)
 
 
 @auth_bp.post("/admin/auth/login")
@@ -36,7 +37,9 @@ def administrator_login() -> Response:
     try:
         login_data = validate_administrator_login_request(request)
     except AdministratorLoginValidationError as error:
-        return _json_no_store({"error": "invalid_request"}, error.status_code)
+        return admin_error(
+            "invalid_request", "invalid login request", error.status_code
+        )
 
     try:
         result = authenticate_administrator(
@@ -47,9 +50,9 @@ def administrator_login() -> Response:
     except AdministratorAuthenticationFailed:
         return authentication_failure_response()
     except AdministratorLoginDatabaseError:
-        return _json_no_store({"error": "internal_server_error"}, 500)
+        return admin_error("internal_server_error", "internal server error", 500)
 
-    return _json_no_store(
+    return admin_json(
         {
             "access_token": result.access_token,
             "token_type": AUTHORIZATION_SCHEME,
@@ -70,8 +73,8 @@ def administrator_logout() -> Response:
     try:
         logout_administrator(get_administrator_request_context())
     except SQLAlchemyError:
-        return _json_no_store({"error": "internal_server_error"}, 500)
-    return _json_no_store({"message": "administrator logged out"}, 200)
+        return admin_error("internal_server_error", "internal server error", 500)
+    return admin_json({"message": "administrator logged out"}, 200)
 
 
 @auth_bp.get("/admin/auth/me")
@@ -86,9 +89,9 @@ def administrator_identity() -> Response:
             "Administrator identity lookup failed",
             extra={"event": "administrator_identity_database_error"},
         )
-        return _json_no_store({"error": "internal_server_error"}, 500)
+        return admin_error("internal_server_error", "internal server error", 500)
 
-    return _json_no_store(
+    return admin_json(
         {
             "administrator": {
                 "administrator_uuid": str(context.administrator.administrator_uuid),
@@ -97,12 +100,4 @@ def administrator_identity() -> Response:
                 "permissions": permissions,
             }
         },
-        200,
     )
-
-
-def _json_no_store(payload: dict[str, object], status_code: int) -> Response:
-    response = jsonify(payload)
-    response.status_code = status_code
-    response.headers["Cache-Control"] = "no-store"
-    return response

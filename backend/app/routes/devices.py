@@ -100,24 +100,22 @@ def register_device_endpoint() -> tuple[Response, int]:
     try:
         registration_data = validate_device_registration_request(request)
     except DeviceRegistrationValidationError as error:
-        return jsonify({"error": error.message}), error.status_code
+        return _no_store({"error": error.message}, error.status_code)
 
     try:
         result = register_device(registration_data)
     except DeviceRegistrationConflictError as error:
-        return jsonify({"error": str(error)}), 409
+        return _no_store({"error": str(error)}, 409)
     except DeviceRegistrationDatabaseError:
-        return jsonify({"error": "internal server error"}), 500
+        return _no_store({"error": "internal server error"}, 500)
 
     message = "device registered" if result.created else "device already registered"
     status_code = 201 if result.created else 200
-    return (
-        jsonify(
-            {
-                "message": message,
-                "device": result.device.to_dict(),
-            }
-        ),
+    return _no_store(
+        {
+            "message": message,
+            "device": result.device.to_dict(),
+        },
         status_code,
     )
 

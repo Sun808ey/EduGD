@@ -27,22 +27,20 @@ def readiness_check() -> tuple[Response, int]:
             "Application readiness check failed",
             extra={"event": "readiness_check_failed"},
         )
-        return (
-            jsonify(
-                {
-                    "status": "not_ready",
-                    "service": "school-policy-api",
-                }
-            ),
-            503,
-        )
-
-    return (
-        jsonify(
+        response = jsonify(
             {
-                "status": "ready",
+                "status": "not_ready",
                 "service": "school-policy-api",
             }
-        ),
-        200,
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return response, 503
+
+    response = jsonify(
+        {
+            "status": "ready",
+            "service": "school-policy-api",
+        }
     )
+    response.headers["Cache-Control"] = "no-store"
+    return response, 200

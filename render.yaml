@@ -46,6 +46,8 @@ services:
         value: legacy
       - key: ENROLLMENT_ADMIN_ENABLED
         value: "false"
+      - key: ADMIN_FRONTEND_ORIGINS
+        value: https://edug-admin.vercel.app
       - key: POLICY_SYNC_RATE_LIMIT
         value: 60 per minute
       - key: SQLALCHEMY_POOL_SIZE

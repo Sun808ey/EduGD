@@ -1,0 +1,56 @@
+services:
+  - type: keyvalue
+    name: edug-rate-limits
+    plan: starter
+    ipAllowList: []
+
+  - type: web
+    name: edug-school-policy-api
+    runtime: python
+    rootDir: backend
+    plan: starter
+    buildCommand: pip install --requirement requirements.txt
+    preDeployCommand: flask --app run.py db upgrade
+    startCommand: gunicorn --workers 2 --threads 4 --timeout 30 --graceful-timeout 30 --access-logfile - --error-logfile - run:app
+    healthCheckPath: /api/v1/ready
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: APP_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: "false"
+      - key: PRODUCTION_DATABASE_URL
+        sync: false
+      - key: MIGRATION_DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: edug-rate-limits
+          property: connectionString
+      - key: SECRET_KEY
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: ADMIN_AUDIT_PSEUDONYM_KEY
+        sync: false
+      - key: POLICY_SYNC_AUDIT_KEY
+        sync: false
+      - key: PAIRING_TOKEN_PEPPER
+        sync: false
+      - key: PAIRING_TOKEN_PEPPER_VERSION
+        value: "1"
+      - key: DEVICE_ENROLLMENT_MODE
+        value: legacy
+      - key: ENROLLMENT_ADMIN_ENABLED
+        value: "false"
+      - key: POLICY_SYNC_RATE_LIMIT
+        value: 60 per minute
+      - key: SQLALCHEMY_POOL_SIZE
+        value: "3"
+      - key: SQLALCHEMY_MAX_OVERFLOW
+        value: "2"
+      - key: SENTRY_DSN
+        sync: false

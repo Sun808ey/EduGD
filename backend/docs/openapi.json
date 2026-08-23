@@ -1,0 +1,155 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "EduG School Policy API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "administratorBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "required": ["page", "per_page", "total", "has_next"],
+        "properties": {
+          "page": { "type": "integer", "minimum": 1 },
+          "per_page": { "type": "integer", "minimum": 1, "maximum": 100 },
+          "total": { "type": "integer", "minimum": 0 },
+          "has_next": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "administratorBearer": []
+    }
+  ],
+  "paths": {
+    "/admin/auth/login": {
+      "post": {
+        "security": [],
+        "responses": {
+          "200": { "description": "Administrator login succeeded" },
+          "400": { "$ref": "#/components/schemas/Error" },
+          "401": { "$ref": "#/components/schemas/Error" },
+          "429": { "$ref": "#/components/schemas/Error" }
+        }
+      }
+    },
+    "/admin/auth/logout": {
+      "post": {
+        "responses": {
+          "200": { "description": "Administrator session revoked" },
+          "401": { "$ref": "#/components/schemas/Error" }
+        }
+      }
+    },
+    "/admin/auth/me": {
+      "get": {
+        "responses": {
+          "200": { "description": "Current administrator identity and permissions" },
+          "401": { "$ref": "#/components/schemas/Error" }
+        }
+      }
+    },
+    "/admin/devices": {
+      "get": {
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer", "default": 25, "maximum": 100 } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["active", "suspended", "retired"] } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated devices" },
+          "400": { "$ref": "#/components/schemas/Error" },
+          "401": { "$ref": "#/components/schemas/Error" }
+        }
+      }
+    },
+    "/admin/devices/{device_uuid}": {
+      "get": {
+        "responses": {
+          "200": { "description": "Device detail" },
+          "400": { "$ref": "#/components/schemas/Error" },
+          "401": { "$ref": "#/components/schemas/Error" },
+          "404": { "$ref": "#/components/schemas/Error" }
+        }
+      }
+    },
+    "/admin/devices/{device_uuid}/policy-assignment": {
+      "get": { "responses": { "200": { "description": "Current policy assignment" } } },
+      "post": { "responses": { "200": { "description": "Policy assigned" } } }
+    },
+    "/admin/devices/{device_uuid}/policy-assignment/clear": {
+      "post": { "responses": { "200": { "description": "Policy assignment cleared" } } }
+    },
+    "/admin/policies": {
+      "get": {
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "per_page", "in": "query", "schema": { "type": "integer", "default": 25, "maximum": 100 } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["draft", "active", "inactive", "revoked"] } }
+        ],
+        "responses": { "200": { "description": "Paginated policies" } }
+      }
+    },
+    "/admin/policies/{policy_uuid}": {
+      "get": { "responses": { "200": { "description": "Policy detail" } } }
+    },
+    "/admin/policies/{policy_uuid}/revisions": {
+      "get": { "responses": { "200": { "description": "Policy revisions" } } }
+    },
+    "/admin/enrollment-tokens": {
+      "get": { "responses": { "200": { "description": "Paginated enrollment tokens" } } },
+      "post": { "responses": { "201": { "description": "Enrollment token issued" } } }
+    },
+    "/admin/enrollment-tokens/{token_uuid}/revoke": {
+      "post": { "responses": { "200": { "description": "Enrollment token revoked" } } }
+    },
+    "/admin/audit-events": {
+      "get": {
+        "parameters": [
+          { "name": "event_type", "in": "query", "schema": { "type": "string", "enum": ["administrator_authentication", "device_enrollment", "policy_assignment", "policy_synchronization"] } }
+        ],
+        "responses": { "200": { "description": "Paginated audit events" } }
+      }
+    },
+    "/devices/register": {
+      "post": {
+        "security": [],
+        "responses": { "201": { "description": "Device registered or enrolled" } }
+      }
+    },
+    "/devices/{device_uuid}/credentials/rotate": {
+      "post": { "security": [], "responses": { "201": { "description": "Credential rotated" } } }
+    },
+    "/sync/policies/{device_uuid}": {
+      "get": { "security": [], "responses": { "200": { "description": "Policy sync response" } } }
+    }
+  }
+}

@@ -60,6 +60,7 @@ backend/__pycache__/
 backend/**/*.py[cod]
 
 backend/.pytest_cache/
+backend/.pytest_cache_local/
 backend/.mypy_cache/
 backend/.ruff_cache/
 backend/.tox/

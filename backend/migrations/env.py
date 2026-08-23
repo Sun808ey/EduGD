@@ -23,7 +23,7 @@ logger = logging.getLogger('alembic.env')
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 target_db = current_app.extensions['migrate'].db
-migration_database_uri = current_app.config.get("MIGRATION_DATABASE_URL")
+migration_database_uri = current_app.config.get("MIGRATION_DATABASE_URI")
 if not migration_database_uri:
     raise RuntimeError(
         "MIGRATION_DATABASE_URL must be configured for database migrations"

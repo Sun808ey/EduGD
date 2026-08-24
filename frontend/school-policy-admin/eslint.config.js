@@ -6,7 +6,19 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'node_modules', '.history']),
+  {
+    files: ['**/*.{js,jsx}'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      globals: globals.browser,
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+      },
+    },
+  },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -17,6 +29,18 @@ export default defineConfig([
     ],
     languageOptions: {
       globals: globals.browser,
+    },
+    rules: {
+      'react-refresh/only-export-components': [
+        'error',
+        { allowConstantExport: true },
+      ],
+    },
+  },
+  {
+    files: ['src/components/ui/button.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
     },
   },
 ])

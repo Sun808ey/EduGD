@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
+    // Tailwind v4 directives are processed by PostCSS before esbuild minification.
     cssMinify: 'esbuild',
   },
 })

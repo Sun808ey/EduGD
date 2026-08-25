@@ -1,0 +1,30 @@
+# Workspace-wide generated history snapshots
+.history/
+
+# Python virtual environments and caches
+.venv/
+venv/
+**/__pycache__/
+*.py[cod]
+
+# Backend runtime/test artifacts
+backend/.venv/
+backend/venv/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/.tox/
+backend/.nox/
+backend/.coverage
+backend/.coverage.*
+backend/.pytest-tmp-quality/
+backend/.pytest-tmp-quality-full/
+
+# Frontend generated artifacts outside tracked TS source
+frontend/package-lock.json
+frontend/school-policy-admin/tsconfig.tsbuildinfo
+frontend/school-policy-admin/vite.config.js
+frontend/school-policy-admin/src/**/*.js
+
+# Misc accidental lockfiles in non-node packages
+backend/package-lock.json

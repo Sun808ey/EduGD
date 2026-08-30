@@ -1,17 +1,16 @@
 services:
   - type: keyvalue
     name: edug-rate-limits
-    plan: starter
+    plan: free
     ipAllowList: []
 
   - type: web
     name: edug-school-policy-api
     runtime: python
     rootDir: backend
-    plan: starter
-    buildCommand: pip install --requirement requirements.txt
-    preDeployCommand: flask --app run.py db upgrade
-    startCommand: gunicorn --workers 2 --threads 4 --timeout 30 --graceful-timeout 30 --access-logfile - --error-logfile - run:app
+    plan: free
+    buildCommand: pip install --requirement requirements.txt && flask --app run.py db upgrade
+    startCommand: gunicorn --workers 1 --threads 4 --timeout 30 --graceful-timeout 30 --access-logfile - --error-logfile - run:app
     healthCheckPath: /api/v1/ready
     autoDeployTrigger: checksPass
     envVars:

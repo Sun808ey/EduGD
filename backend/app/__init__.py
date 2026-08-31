@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from secrets import token_urlsafe
 from typing import Any
@@ -37,6 +38,23 @@ def create_app(
     app.config["APP_ENV"] = selected_name
 
     if selected_name == "production":
+        override_map = dict(config_overrides or {})
+        for setting in (
+            "SECRET_KEY",
+            "JWT_SECRET_KEY",
+            "ADMIN_AUDIT_PSEUDONYM_KEY",
+            "POLICY_SYNC_AUDIT_KEY",
+            "PAIRING_TOKEN_PEPPER",
+        ):
+            app.config[setting] = override_map.get(setting, os.getenv(setting))
+        app.config["ADMIN_FRONTEND_ORIGINS"] = override_map.get(
+            "ADMIN_FRONTEND_ORIGINS",
+            os.getenv("ADMIN_FRONTEND_ORIGINS", ""),
+        )
+        app.config["RATELIMIT_STORAGE_URI"] = override_map.get(
+            "RATELIMIT_STORAGE_URI",
+            os.getenv("REDIS_URL"),
+        )
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = resolve_production_engine_options()
 
     database_uri = resolve_database_uri(configuration)
@@ -135,23 +153,24 @@ def _validate_startup_configuration(app: Flask) -> None:
         "POLICY_SYNC_AUDIT_KEY",
     )
     if any(not app.config.get(setting) for setting in required_settings):
-        raise RuntimeError("Required production secrets must be configured")
+        raise RuntimeError("production secrets must be configured")
     if any(
         not isinstance(app.config[setting], str) or len(app.config[setting]) < 32
         for setting in required_settings
     ):
-        raise RuntimeError("Production secrets must be at least 32 characters")
+        raise RuntimeError("production secrets must be at least 32 characters")
     if len({app.config[setting] for setting in required_settings}) != len(
         required_settings
     ):
-        raise RuntimeError("Production secrets must be distinct")
+        raise RuntimeError("production secrets must be distinct")
     pairing_pepper = app.config.get("PAIRING_TOKEN_PEPPER")
     if pairing_pepper and pairing_pepper in {
         app.config[setting] for setting in required_settings
     }:
-        raise RuntimeError("Production secrets must be distinct")
+        raise RuntimeError("production secrets must be distinct")
     if app.config["DEBUG"] or app.config["TESTING"]:
         raise RuntimeError("Production startup cannot enable debug or testing mode")
+
     storage_uri = app.config.get("RATELIMIT_STORAGE_URI")
     if not isinstance(storage_uri, str) or not storage_uri.startswith(
         ("redis://", "rediss://")
@@ -165,6 +184,10 @@ def _validate_startup_configuration(app: Flask) -> None:
         ).ping()
     except (RedisError, ValueError, OSError):
         raise RuntimeError("Production rate-limit storage is unavailable") from None
+
+    admin_frontend_origins = _admin_frontend_origins(app)
+    if not admin_frontend_origins:
+        raise RuntimeError("Production CORS requires ADMIN_FRONTEND_ORIGINS")
 
 
 def _configure_trusted_proxy(app: Flask) -> None:
@@ -215,8 +238,12 @@ def _configure_admin_cors(app: Flask) -> None:
 
 def _admin_frontend_origins(app: Flask) -> frozenset[str]:
     raw_origins = app.config.get("ADMIN_FRONTEND_ORIGINS", "")
+    if raw_origins is None:
+        raw_origins = ""
     if not isinstance(raw_origins, str):
         raise RuntimeError("ADMIN_FRONTEND_ORIGINS must be a comma-separated string")
+    if app.config["APP_ENV"] == "production" and not raw_origins.strip():
+        raise RuntimeError("Production CORS requires ADMIN_FRONTEND_ORIGINS")
     origins = frozenset(
         origin.strip() for origin in raw_origins.split(",") if origin.strip()
     )

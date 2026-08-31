@@ -5,12 +5,10 @@ from datetime import timedelta
 from pathlib import Path
 from typing import cast
 
-from dotenv import load_dotenv
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import ArgumentError
 
 BACKEND_DIRECTORY = Path(__file__).resolve().parent.parent
-load_dotenv(BACKEND_DIRECTORY / ".env", override=False)
 
 NEON_HOST_SUFFIX = ".neon.tech"
 SECURE_POSTGRES_SSL_MODES = frozenset(

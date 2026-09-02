@@ -1,23 +1,10 @@
-from flask import Blueprint,jsonify
+from flask import Blueprint, jsonify
 
 
-device_bp=Blueprint(
-"devices",
-__name__
-)
+device_bp = Blueprint("devices", __name__)
 
 
-
-@device_bp.route(
-"/devices",
-methods=["GET"]
-)
-
+@device_bp.route("/devices", methods=["GET"])
 def devices():
 
-    return jsonify(
-        {
-        "message":
-        "Device API working"
-        }
-    )
+    return jsonify({"message": "Device API working"})

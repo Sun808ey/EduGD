@@ -7,19 +7,8 @@ app = Flask(__name__)
 @app.route("/")
 def home():
 
-    return {
-        "system":
-        "School Policy Enforcement API",
-
-        "status":
-        "running"
-    }
+    return {"system": "School Policy Enforcement API", "status": "running"}
 
 
 if __name__ == "__main__":
-
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=True
-    )
+    app.run(host="0.0.0.0", port=5000, debug=True)

@@ -115,10 +115,3 @@ Production secrets must be supplied through environment configuration and **must
 **Target devices:** School-owned Android devices
 **Degree:** Bachelor of Science in Computer Security and Forensics
 
-## Documentation
-
-Detailed architecture, API, security, Android, database, testing and deployment documentation is maintained in [`docs/`](docs/).
-
-## License
-
-See [`LICENSE`](LICENSE).

@@ -55,9 +55,9 @@
         "security": [],
         "responses": {
           "200": { "description": "Administrator login succeeded" },
-          "400": { "$ref": "#/components/schemas/Error" },
-          "401": { "$ref": "#/components/schemas/Error" },
-          "429": { "$ref": "#/components/schemas/Error" }
+          "400": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "429": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
         }
       }
     },
@@ -65,7 +65,7 @@
       "post": {
         "responses": {
           "200": { "description": "Administrator session revoked" },
-          "401": { "$ref": "#/components/schemas/Error" }
+          "401": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
         }
       }
     },
@@ -73,7 +73,7 @@
       "get": {
         "responses": {
           "200": { "description": "Current administrator identity and permissions" },
-          "401": { "$ref": "#/components/schemas/Error" }
+          "401": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
         }
       }
     },
@@ -86,26 +86,29 @@
         ],
         "responses": {
           "200": { "description": "Paginated devices" },
-          "400": { "$ref": "#/components/schemas/Error" },
-          "401": { "$ref": "#/components/schemas/Error" }
+          "400": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
         }
       }
     },
     "/admin/devices/{device_uuid}": {
+      "parameters": [{"name": "device_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
       "get": {
         "responses": {
           "200": { "description": "Device detail" },
-          "400": { "$ref": "#/components/schemas/Error" },
-          "401": { "$ref": "#/components/schemas/Error" },
-          "404": { "$ref": "#/components/schemas/Error" }
+          "400": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "404": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
         }
       }
     },
     "/admin/devices/{device_uuid}/policy-assignment": {
+      "parameters": [{"name": "device_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
       "get": { "responses": { "200": { "description": "Current policy assignment" } } },
       "post": { "responses": { "200": { "description": "Policy assigned" } } }
     },
     "/admin/devices/{device_uuid}/policy-assignment/clear": {
+      "parameters": [{"name": "device_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
       "post": { "responses": { "200": { "description": "Policy assignment cleared" } } }
     },
     "/admin/policies": {
@@ -119,9 +122,11 @@
       }
     },
     "/admin/policies/{policy_uuid}": {
+      "parameters": [{"name": "policy_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
       "get": { "responses": { "200": { "description": "Policy detail" } } }
     },
     "/admin/policies/{policy_uuid}/revisions": {
+      "parameters": [{"name": "policy_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
       "get": { "responses": { "200": { "description": "Policy revisions" } } }
     },
     "/admin/enrollment-tokens": {
@@ -129,7 +134,24 @@
       "post": { "responses": { "201": { "description": "Enrollment token issued" } } }
     },
     "/admin/enrollment-tokens/{token_uuid}/revoke": {
+      "parameters": [{"name": "token_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
       "post": { "responses": { "200": { "description": "Enrollment token revoked" } } }
+    },
+    "/admin/devices/{device_uuid}/credentials/revoke": {
+      "parameters": [{"name": "device_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+      "post": {
+        "description": "Requires device_credential.revoke permission; revokes the active credential.",
+        "parameters": [{ "name": "device_uuid", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["reason"], "additionalProperties": false, "properties": { "reason": { "type": "string", "minLength": 1, "maxLength": 512 } } } } } },
+        "responses": {
+          "200": { "description": "Device credential revoked" },
+          "400": { "description": "Invalid request" },
+          "401": { "description": "Authentication failed" },
+          "403": { "description": "Permission denied" },
+          "404": { "description": "No active credential" },
+          "500": { "description": "Persistence failed" }
+        }
+      }
     },
     "/admin/audit-events": {
       "get": {
@@ -146,9 +168,11 @@
       }
     },
     "/devices/{device_uuid}/credentials/rotate": {
+      "parameters": [{"name": "device_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
       "post": { "security": [], "responses": { "201": { "description": "Credential rotated" } } }
     },
     "/sync/policies/{device_uuid}": {
+      "parameters": [{"name": "device_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
       "get": { "security": [], "responses": { "200": { "description": "Policy sync response" } } }
     }
   }

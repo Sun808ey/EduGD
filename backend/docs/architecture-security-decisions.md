@@ -3,6 +3,26 @@
 This document records approved decisions for the backend remediation backlog.
 It does not mean later remediation increments have been implemented.
 
+## Current deployment decision
+
+The backend now supports Supabase direct/session PostgreSQL connections through
+configuration while retaining Neon behavior. Railway uses the existing Flask
+factory and `run:app`; SQLAlchemy, models, migration history, RBAC, device
+protocol and forensic formats are preserved. Shared Redis remains mandatory
+because the existing production limiter requires it. Supabase Data API must be
+disabled; no Supabase Auth, Realtime or Edge Functions are introduced.
+
+The historical Neon-only deployment descriptions below are superseded by
+`environment.md` and `database-migration-runbook.md`. Source data migration,
+provider setup, Android offline/endpoint evidence and final cutover remain
+operator gates. Android code and a queued-event upload endpoint are not present
+in this checkout. Existing policy-sync contracts do not prove those features.
+
+Registration/enrollment/authentication events must be preserved, but they do
+not all implement the same DB trigger/ORM immutability mechanisms as revisions
+and assignment/synchronization events. Restricted runtime grants protect
+append-only evidence; never claim all audit tables have identical controls.
+
 ## Device lifecycle and identity
 
 - Device statuses are `active`, `suspended`, and `retired`.

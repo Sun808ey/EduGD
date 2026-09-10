@@ -55,7 +55,7 @@ jobs:
         run: python -m ruff check .
 
       - name: Type check
-        run: python -m mypy app test_support
+        run: python -m mypy app test_support scripts
 
       - name: Test with coverage
         run: >-
@@ -69,4 +69,9 @@ jobs:
         run: python -m pip_audit -r requirements.txt --strict
 
       - name: Scan Python security issues
-        run: python -m bandit -r app test_support -c pyproject.toml -ll
+        run: python -m bandit -r app test_support scripts -c pyproject.toml -ll
+
+      - name: Check Linux Gunicorn entry point
+        env:
+          APP_ENV: testing
+        run: gunicorn --check-config --config gunicorn.conf.py run:app

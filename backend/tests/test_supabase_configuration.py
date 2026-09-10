@@ -50,6 +50,7 @@ def test_runtime_and_migration_support_persistent_supabase_connections(
     "url",
     [
         SESSION.replace(":5432", ":6543"),
+        DIRECT.replace(".co/", ".co:6543/"),
         DIRECT.replace("verify-full", "require"),
         DIRECT.replace("verify-full", "disable"),
         DIRECT.replace(PROJECT, "invalid"),
@@ -105,7 +106,7 @@ def test_database_separation_recognizes_pooler_tenant(
 
 def environment() -> dict[str, str]:
     return {
-        "POSTGRES_TEST_BRANCH_NAME": "backend-integration-test",
+        "POSTGRES_TEST_PURPOSE": "backend-integration-test",
         "POSTGRES_TEST_PROJECT_REF": PROJECT,
         "POSTGRES_TEST_DATABASE_URL": SESSION,
         "MIGRATION_DATABASE_URL": DIRECT,
@@ -161,8 +162,8 @@ def test_supabase_guard_rejects_unapproved_targets(name: str, value: str) -> Non
         validate_postgres_test_environment(values, require_destructive=True)
 
 
-def test_project_identity_is_provider_qualified() -> None:
+def test_project_identity_matches_supabase_reference() -> None:
     assert (
         database_project_identity(validate_postgres_database_uri("URL", SESSION))
-        == f"supabase:{PROJECT}"
+        == PROJECT
     )

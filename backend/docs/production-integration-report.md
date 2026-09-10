@@ -7,9 +7,17 @@ production state have not been inspected or changed.
 
 Implemented reversible configuration, deployment, verification and frontend
 foundation changes for React/Vite → HTTPS → Railway → Flask/Gunicorn →
-SQLAlchemy → Supabase PostgreSQL. Existing Neon compatibility remains available.
+SQLAlchemy → Supabase PostgreSQL. Database connectivity is Supabase-only.
 Flask remains the business/authentication layer. No schema migration, business
-route, model or authentication/policy service was rewritten.
+route, model or authentication/policy service was rewritten. The follow-up
+provider cleanup makes Supabase and Railway the only active database and backend
+deployment targets in the current source tree. Legacy provider resources and
+Git history were not modified.
+
+**PROVIDER CLEANUP VERDICT: PASS — COMPLETE IN THE LOCAL WORKING TREE.** The
+Supabase-only configuration, Railway-only deployment files, current-tree scan,
+focused regressions and full local suite pass. External service retirement is a
+manual operational gate and is not implied by this verdict.
 
 **FINAL VERDICT: FAIL — NOT READY.** Local checks do not establish production
 readiness. Live PostgreSQL migration/concurrency tests, restore rehearsal,
@@ -22,7 +30,7 @@ cutover approval. No production database was contacted.
 | Area | Verified repository facts and implications |
 | --- | --- |
 | Factory/entry | `app.create_app` is exported through `run.py`; Gunicorn can use `run:app` without restructuring. |
-| Database | Flask-SQLAlchemy with psycopg2; runtime and migration URLs already separate. Provider assumptions were Neon-specific. |
+| Database | Flask-SQLAlchemy with psycopg2; runtime and migration URLs are separate and restricted to approved Supabase direct/session connections. |
 | Migrations | Sixteen linear revisions, current head `e4a1b7c9d2f6`; retained verbatim. SQLite tests do not prove PostgreSQL trigger/concurrency behavior. |
 | Authentication | Existing 15-minute JWT Bearer sessions, database-authoritative administrator permissions/RBAC, enrollment controls and device signature/nonce checks remain. |
 | Policy/sync | Existing immutable policy revisions, assignments and synchronization contracts retained. No queued event-upload endpoint was found. |
@@ -30,7 +38,7 @@ cutover approval. No production database was contacted.
 | Rate limits | Existing Redis-backed production limiting is required and fails closed; login/registration limits and configured policy-sync limits remain. Redis is an existing required dependency, not new infrastructure added for this migration. |
 | Logging | Existing Flask logging, error handling and Sentry remain. Gunicorn access logs omit request targets/headers/addresses; optional frontend Sentry drops request/user context and exception text. |
 | Security | Strong secret validation, body limits, replay defenses and one trusted proxy hop already exist. Production CORS now requires exact HTTPS origins. Historical-secret remediation remains externally unverified. |
-| Render/Neon | `render.yaml` is retained; its existing migration-in-build behavior is documented accurately. Railway uses a separate pre-deploy migration command. |
+| Deployment | Railway is the sole configured backend platform and runs migrations as a separate pre-deploy command. |
 | Frontend | React/Vite/TypeScript/Axios foundation exists; starter UI and empty feature pages are not an implemented administrator application. A missing button-variant module blocked the baseline build. |
 | Android | No Android sources in this checkout. DevicePolicyManager → local deterministic engine → Room/queue → synchronization is the required external architecture, not a verified implementation here. Cloud connectivity must never become a prerequisite for cached enforcement. |
 
@@ -47,7 +55,7 @@ make migration/integration prerequisites testable. All changes below are local.
 
 | Files/paths | Reason and modification | Risk | Verification |
 | --- | --- | --- | --- |
-| `app/config.py` | Accept Supabase direct/session connections with full TLS verification; reject transaction pooler and libpq authority overrides; compare tenant/database identity. Preserve Neon rules. | Medium: stricter configuration rejects unsafe URLs. | Existing database configuration and new Supabase regression tests. |
+| `app/config.py` | Accept only Supabase direct/session connections with full TLS verification; reject transaction pooler, unsupported providers and libpq authority overrides; compare project/database identity. | Medium: legacy provider URLs now fail closed. | Database configuration and Supabase regression tests. |
 | `app/__init__.py` | Validate exact HTTPS administrator origins in production. | Low: invalid origin settings now fail startup. | Existing CORS and new production-origin tests. |
 | `test_support/postgres_safety.py`, `tests/test_supabase_configuration.py` | Extend isolated destructive-test guards to exact Supabase project identity and connected TLS/identity. | Medium: live database semantics remain unverified. | Guard tests; actual PostgreSQL CI still required. |
 | `railway.json`, `gunicorn.conf.py`, `tests/test_railway_configuration.py` | Existing entry point, bounded worker/thread count, PORT binding, pre-deploy migration, dependency readiness and private access-log format. | Medium: real proxy/network/platform behavior needs staging. | Configuration tests; Linux Gunicorn CI check added. |
@@ -69,12 +77,30 @@ the approved migration and frontend integration verifiable without altering core
 behavior. A scanner finding in sequence inventory was resolved with SQLAlchemy
 expressions rather than suppression.
 
+### Supabase/Railway-only cleanup increment
+
+| Files/paths | Completed modification | Risk and containment |
+| --- | --- | --- |
+| `app/config.py` | Removed legacy database-host parsing and pooled/direct compatibility flags. All application and migration URLs must identify a Supabase direct or session endpoint on port 5432 with `sslmode=verify-full`. | Legacy URLs now fail startup by design. Project/database separation, query-override rejection and credential-safe errors remain tested. |
+| `test_support/postgres_safety.py` | Replaced endpoint-specific branching with one mandatory Supabase project-reference path. Renamed the human purpose marker and preserved explicit destructive opt-in plus live host/role/port/database/TLS checks. | This code guards destructive tests. Focused fail-closed tests cover each identity component and protected-project reuse. |
+| `tests/test_database_configuration.py`, `tests/test_postgres_safety.py`, `tests/test_supabase_configuration.py`, `tests/test_startup_hardening.py`, `tests/test_admin_cors.py` | Converted provider fixtures and assertions to distinct placeholder Supabase projects without weakening startup, redaction, separation or safety behavior. | The real PostgreSQL selection still requires an approved disposable project. |
+| `../.github/workflows/backend-postgres.yml`, `../.github/workflows/backend-quality.yml`, `.env.example` | Removed the obsolete endpoint secret, renamed the test-purpose marker, and removed the obsolete deployment-file trigger. | Repository/organization secrets require manual cleanup; the project reference remains required. |
+| Legacy deployment manifest and its dedicated test | Deleted. Railway configuration and its tests remain authoritative. | This does not remove an external service or its secrets. Retain the pre-cleanup commit during the rollback window. |
+| Architecture, environment, testing, production, migration and design documents | Replaced active compatibility instructions with Supabase/Railway-only guidance while preserving generic credential-history, backup, forensic and rollback requirements. | Historical Git objects remain and must be handled through the separately authorized history-remediation process. |
+
+The cleanup began from clean commit `1336043`, which remains the exact
+Supabase-compatible rollback point. Application models, migrations, business
+routes/services, API contracts, cryptography, RBAC, forensic implementations,
+requirements, `run.py`, `railway.json`, `gunicorn.conf.py` and frontend source
+were not changed by this cleanup increment.
+
 ## D. Files intentionally unchanged
 
 `app/models.py`, business route/service modules, cryptography, authentication and
 RBAC implementations, forensic verifiers, all existing migration files,
-`migrations/env.py`, `run.py`, backend dependency requirements and `../render.yaml`
-remain unchanged. Existing tests remain, with additions to the OpenAPI test.
+`migrations/env.py`, `run.py`, backend dependency requirements, Railway and
+Gunicorn configuration remain unchanged. Existing behavioral tests remain;
+obsolete legacy-provider configuration tests were replaced with Supabase safety tests.
 No Docker, microservices, Supabase Auth, Edge Functions or Realtime were added.
 No Android code, production secrets or deployed resources were modified.
 
@@ -134,8 +160,8 @@ an approved disposable database; exclusion is not a pass.
 
 | Check/command | Exact final result |
 | --- | --- |
-| `python -m pytest --cov=app --cov-branch --cov-report=term --cov-fail-under=90 --tb=short --junitxml=.pytest_cache_local/production-integration-results.xml` | **459 passed, 38 deselected, 525.56 seconds; 90.64% coverage**, unchanged 90% threshold. Covers backend/API, authentication/RBAC, device/policy/sync, startup/readiness and forensic tests in the normal local selection. |
-| `python -m pytest tests/test_database_inventory.py tests/test_openapi_contract.py -q --tb=short` after final helper/contract changes | **20 passed in 4.65 seconds**. These overlap the full suite; do not add the counts as separate unique tests. Nine newly added cases were included in this later run. |
+| `python -m pytest --cov=app --cov-branch --cov-report=term --cov-fail-under=90 --tb=short --junitxml=.pytest_cache_local/provider-cleanup-results.xml` | **468 passed, 38 deselected, 646.70 seconds; 90.59% coverage**, unchanged 90% threshold. Covers backend/API, authentication/RBAC, device/policy/sync, startup/readiness, provider configuration and forensic tests in the normal local selection. |
+| Focused database configuration, Supabase safety, startup and CORS regression selection | **113 passed in 14.38 seconds** before the full suite. A final added direct-port rejection case was then covered by `tests/test_supabase_configuration.py`: **34 passed in 0.32 seconds**. These checks overlap the full suite except that final additional parameter; counts are not cumulative. |
 | `python -m ruff check .` | **All checks passed.** |
 | `python -m ruff format --check .` | **100 files already formatted.** |
 | `python -m mypy app test_support scripts` | **Success: no issues found in 43 source files.** |
@@ -148,8 +174,9 @@ an approved disposable database; exclusion is not a pass.
 | `npm run lint` | **Exit 0, no lint errors.** |
 | `npm run build` with `VITE_API_BASE_URL=https://api.example.invalid/api/v1` | **TypeScript and Vite 8.1.4 pass**, 366 modules, final JavaScript 280.00 kB (89.63 kB gzip). Placeholder build is not deployable configuration. |
 | `npm audit --audit-level=moderate` | **Found 0 vulnerabilities.** |
+| Current-tree scan for legacy provider names, configuration filenames, hostnames and obsolete environment markers | **PASS, zero matches.** Normal programming uses of the verb “render” are unrelated and retained. |
 | `git diff --check` | **Exit 0**, no whitespace errors; Git reports expected CRLF-to-LF normalization warnings for two text files. |
-| `git diff --exit-code` on protected model/route/service/crypto/RBAC/observability/migration/entry/requirements/Render paths | **Exit 0**, no changes. |
+| `git diff --exit-code` on protected model/route/service/crypto/RBAC/observability/migration/entry/requirements/deployment paths | **Exit 0**, no changes. |
 | Live PostgreSQL, production connectivity/SSL, Linux Gunicorn, hosted CI, real Redis, browser-to-staging, Android devices and Sentry delivery | **NOT RUN / NOT VERIFIED.** No approved external configuration or device evidence was available. |
 
 The first new OpenAPI method test failed because its dictionary discarded
@@ -160,6 +187,8 @@ expressions produced the final clean medium/high scan above. Baseline frontend
 build failures from the missing button module and TypeScript integration errors
 were fixed before the successful builds. Earlier sandbox temporary-directory
 errors were resolved with authorized test execution, not by skipping tests.
+The provider cleanup focused suite and full regression suite passed on their
+first completed runs; no failing application test was removed or weakened.
 
 ## J. Remaining risks and readiness gates
 
@@ -182,14 +211,14 @@ flawless production behavior can be established from local tests alone.
 
 ## K. Rollback
 
-Retain the source database, independent verified backups, source release/config
-and a provider-compatible rollback release. Before target writes, stop target
-writers and restore the verified source routing/release combination. After
-target writes, stop writers and preserve evidence; use a compatible release on
-Supabase or a separately verified reverse transfer. Never silently revert to a
-stale source, downgrade forensic migrations or merge divergent audit chains.
-Local code changes can be reverted by reviewed file diffs without altering the
-schema; do not discard unrelated work or operator evidence.
+Retain independent verified Supabase backups and clean commit `1336043` during
+the observation window. Reverting the cleanup commits restores compatibility
+code without changing the active database or schema. Do not point current
+writes at a stale database, downgrade forensic migrations or merge divergent
+audit chains. Local code changes can be reverted by reviewed file diffs without
+discarding unrelated work or operator evidence. Once legacy external resources
+are deleted, rollback remains Supabase plus the recorded Railway release and
+verified database backups.
 
 ## L. MANUAL ACTION REQUIRED
 
@@ -197,28 +226,42 @@ These actions require actual accounts, credentials, infrastructure or devices.
 The [database migration runbook](database-migration-runbook.md) gives ordered
 commands, SQL privilege setup, evidence gates and rollback instructions:
 
-1. Record deployed revision, source version/schema, client API hostname and
-   credential-remediation evidence (runbook section 1).
-2. Create isolated target/rehearsal/disposable-test projects; choose direct or
-   session connection, enable SSL, install CA, disable Data API, configure and
-   verify restricted roles (section 2). Keep secrets server-side.
-3. Capture read-only inventory, migration head, schema/counts/sequences,
-   extensions/roles/grants and forensic results (section 3). Reports contain
-   sensitive metadata and fingerprints; keep them under controlled access.
-4. Make an independent backup and complete an actual restore rehearsal. Compare
-   frozen fingerprints/schema/audit evidence, verify any historical migration
-   requirements and run the guarded PostgreSQL/migration/concurrency suite only
-   against disposable test data (section 4 and `testing.md`).
-5. Configure Railway in staging, Redis, environment secrets, CA/IPv6 and exact
-   CORS; run the hosted CI and real Gunicorn startup, signed requests, RBAC,
-   rate limits, readiness, log/Sentry and frontend HTTPS tests (section 5).
-6. Verify Android airplane-mode/restart/cached enforcement and reconnect behavior
-   on actual devices. Identify how existing queued work reaches supported APIs.
-7. Record final maintenance approval, stop ALL source writers, repeat the frozen
-   transfer/evidence comparison and only then switch traffic (section 6). Keep
-   the source and independent backups for the approved retention period.
+1. In GitHub **Settings → Secrets and variables → Actions**, remove the unused
+   legacy endpoint-ID secret from repository and environment scopes. Confirm
+   `POSTGRES_TEST_PROJECT_REF` is a variable containing only the dedicated
+   disposable test project reference. The workflow supplies
+   `POSTGRES_TEST_PURPOSE=backend-integration-test` itself.
+2. Ensure the runtime and migration URL secrets contain Supabase direct or
+   session-pooler port-5432 URLs with `sslmode=verify-full`. Provision the
+   trusted CA for both Railway runtime and pre-deploy execution. Never put these
+   URLs in frontend variables, source, issues or logs.
+3. Run hosted PostgreSQL CI against an empty disposable test project. It must
+   pass migration, PostgreSQL and concurrency tests before production rollout.
+4. Capture the live production inventory, migration head, roles/grants, schema,
+   sequences and forensic verification. Make an independent backup and perform
+   an actual restore rehearsal. Keep reports under controlled access.
+5. In Railway staging, verify Redis, exact CORS, CA/IPv6 or session connectivity,
+   Gunicorn startup, migrations, signed requests, RBAC, rate limits, readiness,
+   log privacy, Sentry and frontend HTTPS flows. Repeat approved smoke checks on
+   the production release and retain their evidence.
+6. Confirm DNS and Android clients use the stable Railway API hostname. Verify
+   airplane-mode, restart, cached enforcement and reconnect behavior on actual
+   devices, including any queued work supported by deployed APIs.
+7. Disable automatic deployment on the retired hosting service, detach its
+   custom domain after DNS cutover, and suspend it for the approved rollback
+   window. Confirm the Railway Redis service is independent. After the window,
+   explicitly delete the retired web/key-value services, deploy hooks, service
+   secrets, environment groups and repository integration. Verify its provider
+   hostname no longer serves the API.
+8. Retain the former database project until connection monitoring shows no
+   clients and backup/restore evidence is accepted. Revoke its passwords and API
+   keys. Only the account owner should permanently delete that project and then
+   verify billing status. Project deletion is irreversible.
+9. Complete the historical credential scan, revocation and separately approved
+   Git-history remediation described in `production-runbook.md`. Current-tree
+   cleanup does not remove secrets from old Git objects.
 
-No source deletion, history rewrite, external migration or production cutover
+No external service deletion, history rewrite, migration or production cutover
 was performed by this implementation.
 
 ## M. Next frontend integration steps
@@ -230,3 +273,14 @@ pagination and 429 handling. Add browser integration tests for those flows,
 CORS, expired/revoked tokens and denied permissions. Validate token-storage and
 content-security decisions before publishing the authenticated UI. Complete
 the external gates above before claiming production readiness.
+
+## N. Sources
+
+1. Supabase, [Connect to your database](https://supabase.com/docs/guides/database/connecting-to-postgres) — direct, session and transaction connection selection.
+2. Supabase, [Postgres SSL Enforcement](https://supabase.com/docs/guides/platform/ssl-enforcement) — `verify-full` and CA requirements.
+3. Supabase, [Database Backups](https://supabase.com/docs/guides/platform/backups) — backups, PITR and restore limitations.
+4. Supabase, [Securing your Data API](https://supabase.com/docs/guides/api/securing-your-api) — Data API exposure and privilege controls.
+5. Railway, [Deploy a Flask App](https://docs.railway.com/guides/flask) — Flask/Gunicorn deployment model.
+6. Railway, [Pre-deploy commands](https://docs.railway.com/deployments/pre-deploy-command) — migration execution before application start.
+7. Railway, [Config as Code reference](https://docs.railway.com/config-as-code/reference) — `railway.json` deployment configuration.
+8. Railway, [Outbound networking](https://docs.railway.com/networking/outbound-networking) — runtime network configuration.

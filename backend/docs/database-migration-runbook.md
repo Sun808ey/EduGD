@@ -270,8 +270,8 @@ verified old routing/application/source combination and resume source writers.
 After target writes: never switch silently to the stale source. Stop writers,
 preserve target data/evidence and deploy a compatible release against Supabase,
 or obtain approval for a verified reverse transfer preserving all new records.
-The old Neon-only release cannot connect to Supabase. Keep a provider-compatible
-rollback release and its requirements. Never downgrade forensic migrations or
+Keep the recorded Supabase-compatible rollback release and its requirements.
+Never downgrade forensic migrations or
 merge divergent audit chains automatically. Source deletion and history rewrites
 require separate explicit owner approval.
 

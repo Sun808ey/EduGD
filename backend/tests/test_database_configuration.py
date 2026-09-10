@@ -14,16 +14,24 @@ from app.config import (
     validate_database_separation,
 )
 
+DEVELOPMENT_PROJECT = "abcdefghijklmnopqrst"
+TEST_PROJECT = "bcdefghijklmnopqrstu"
+PRODUCTION_PROJECT = "cdefghijklmnopqrstuv"
 DEVELOPMENT_URL = (
-    "postgresql://ep-development-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    f"postgresql://runtime.{DEVELOPMENT_PROJECT}:placeholder@"
+    "aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full"
 )
-TEST_URL = "postgresql://ep-integration.us-east-2.aws.neon.tech/neondb?sslmode=require"
+TEST_URL = (
+    f"postgresql://runtime:placeholder@db.{TEST_PROJECT}.supabase.co:5432/"
+    "postgres?sslmode=verify-full"
+)
 PRODUCTION_URL = (
-    "postgresql://ep-production-pooler.us-east-2.aws.neon.tech/"
-    "neondb?sslmode=verify-full"
+    f"postgresql://runtime.{PRODUCTION_PROJECT}:placeholder@"
+    "aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full"
 )
 MIGRATION_URL = (
-    "postgresql://ep-development.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    f"postgresql://migration:placeholder@db.{DEVELOPMENT_PROJECT}.supabase.co:5432/"
+    "postgres?sslmode=verify-full"
 )
 DATABASE_VARIABLES = (
     "DATABASE_URL",
@@ -100,12 +108,12 @@ def test_missing_environment_database_fails_closed(
     "database_url",
     [
         "sqlite:///development.db",
-        ("postgresql://ep-development-pooler.example.com/neondb?sslmode=require"),
-        ("postgresql://ep-development-pooler.us-east-2.aws.neon.tech/neondb"),
-        ("postgresql://ep-development.us-east-2.aws.neon.tech/neondb?sslmode=require"),
+        "postgresql://runtime:placeholder@db.example.invalid/postgres?sslmode=verify-full",
+        DEVELOPMENT_URL.replace("verify-full", "require"),
+        DEVELOPMENT_URL.replace(":5432", ":6543"),
     ],
 )
-def test_development_rejects_unsafe_or_non_pooled_database_url(
+def test_development_rejects_unsafe_or_unsupported_database_url(
     monkeypatch: pytest.MonkeyPatch,
     database_url: str,
 ) -> None:
@@ -118,7 +126,7 @@ def test_development_rejects_unsafe_or_non_pooled_database_url(
     assert database_url not in str(error.value)
 
 
-def test_postgres_testing_accepts_direct_neon_url(
+def test_postgres_testing_accepts_direct_supabase_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("POSTGRES_TEST_DATABASE_URL", TEST_URL)
@@ -126,17 +134,13 @@ def test_postgres_testing_accepts_direct_neon_url(
     assert resolve_database_uri(PostgresTestingConfig) == TEST_URL
 
 
-def test_migrations_require_direct_neon_url(
+def test_migrations_accept_persistent_supabase_urls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("MIGRATION_DATABASE_URL", DEVELOPMENT_URL)
-
-    with pytest.raises(RuntimeError, match="MIGRATION_DATABASE_URL"):
-        resolve_migration_database_uri("development", None)
-
     monkeypatch.setenv("MIGRATION_DATABASE_URL", MIGRATION_URL)
-
     assert resolve_migration_database_uri("development", None) == MIGRATION_URL
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", DEVELOPMENT_URL)
+    assert resolve_migration_database_uri("development", None) == DEVELOPMENT_URL
 
 
 def test_sqlite_unit_tests_reuse_the_application_database_for_migrations() -> None:
@@ -145,18 +149,21 @@ def test_sqlite_unit_tests_reuse_the_application_database_for_migrations() -> No
     assert resolve_migration_database_uri("testing", application_url) == application_url
 
 
-def test_configured_application_databases_must_use_separate_branches(
+def test_configured_application_databases_must_use_separate_projects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("DEVELOPMENT_DATABASE_URL", DEVELOPMENT_URL)
-    reused_test_url = DEVELOPMENT_URL.replace("-pooler", "")
-    monkeypatch.setenv("POSTGRES_TEST_DATABASE_URL", reused_test_url)
+    same_project_direct_url = (
+        f"postgresql://runtime:placeholder@db.{DEVELOPMENT_PROJECT}.supabase.co:5432/"
+        "postgres?sslmode=verify-full"
+    )
+    monkeypatch.setenv("POSTGRES_TEST_DATABASE_URL", same_project_direct_url)
 
-    with pytest.raises(RuntimeError, match="separate Neon branches"):
+    with pytest.raises(RuntimeError, match="separate Supabase projects"):
         validate_database_separation()
 
 
-def test_separate_neon_branches_are_accepted(
+def test_separate_supabase_projects_are_accepted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("DEVELOPMENT_DATABASE_URL", DEVELOPMENT_URL)
@@ -287,7 +294,7 @@ def test_application_keeps_direct_migration_url_separate(
     assert application.config["MIGRATION_DATABASE_URI"] == MIGRATION_URL
 
 
-def test_migration_url_must_target_the_active_application_branch(
+def test_migration_url_must_target_the_active_application_project(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("DEVELOPMENT_DATABASE_URL", DEVELOPMENT_URL)
@@ -296,5 +303,5 @@ def test_migration_url_must_target_the_active_application_branch(
         TEST_URL,
     )
 
-    with pytest.raises(RuntimeError, match="active application branch"):
+    with pytest.raises(RuntimeError, match="active Supabase project"):
         create_app("development")

@@ -1,30 +1,40 @@
+from types import SimpleNamespace
+
 import pytest
 
 from test_support.postgres_safety import (
-    APPROVED_POSTGRES_TEST_BRANCH,
+    APPROVED_POSTGRES_TEST_PURPOSE,
     PostgresTestSafetyError,
     validate_connected_postgres_test_environment,
     validate_postgres_test_environment,
 )
 
+PROJECT = "abcdefghijklmnopqrst"
+DEVELOPMENT_PROJECT = "bcdefghijklmnopqrstu"
+PRODUCTION_PROJECT = "cdefghijklmnopqrstuv"
+OTHER_PROJECT = "defghijklmnopqrstuvw"
 APPLICATION_URL = (
-    "postgresql://ep-integration-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    f"postgresql://runtime.{PROJECT}:placeholder@"
+    "aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full"
 )
 MIGRATION_URL = (
-    "postgresql://ep-integration.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    f"postgresql://migration:placeholder@db.{PROJECT}.supabase.co:5432/"
+    "postgres?sslmode=verify-full"
 )
 DEVELOPMENT_URL = (
-    "postgresql://ep-development-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    f"postgresql://runtime:placeholder@db.{DEVELOPMENT_PROJECT}.supabase.co:5432/"
+    "postgres?sslmode=verify-full"
 )
 PRODUCTION_URL = (
-    "postgresql://ep-production-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    f"postgresql://runtime:placeholder@db.{PRODUCTION_PROJECT}.supabase.co:5432/"
+    "postgres?sslmode=verify-full"
 )
 
 
 def safe_environment(**overrides: str) -> dict[str, str]:
     environment = {
-        "POSTGRES_TEST_BRANCH_NAME": APPROVED_POSTGRES_TEST_BRANCH,
-        "POSTGRES_TEST_ENDPOINT_ID": "ep-integration",
+        "POSTGRES_TEST_PURPOSE": APPROVED_POSTGRES_TEST_PURPOSE,
+        "POSTGRES_TEST_PROJECT_REF": PROJECT,
         "POSTGRES_TEST_DATABASE_URL": APPLICATION_URL,
         "MIGRATION_DATABASE_URL": MIGRATION_URL,
         "ALLOW_DESTRUCTIVE_POSTGRES_TESTS": "false",
@@ -35,26 +45,23 @@ def safe_environment(**overrides: str) -> dict[str, str]:
     return environment
 
 
-def test_guard_accepts_separated_pooled_and_direct_test_urls() -> None:
+def test_guard_accepts_separated_session_and_direct_test_urls() -> None:
     approved = validate_postgres_test_environment(
         safe_environment(),
         require_migration=True,
     )
 
-    assert approved.branch_name == APPROVED_POSTGRES_TEST_BRANCH
-    assert approved.endpoint_id == "ep-integration"
+    assert approved.purpose == APPROVED_POSTGRES_TEST_PURPOSE
+    assert approved.project_ref == PROJECT
     assert approved.destructive_allowed is False
     assert "postgresql" not in repr(approved)
+    assert "placeholder" not in repr(approved)
 
 
 @pytest.mark.parametrize(
     ("overrides", "require_migration", "expected_name"),
     [
-        (
-            {"POSTGRES_TEST_DATABASE_URL": ""},
-            False,
-            "POSTGRES_TEST_DATABASE_URL",
-        ),
+        ({"POSTGRES_TEST_DATABASE_URL": ""}, False, "POSTGRES_TEST_DATABASE_URL"),
         ({"MIGRATION_DATABASE_URL": ""}, True, "MIGRATION_DATABASE_URL"),
         (
             {"POSTGRES_TEST_DATABASE_URL": "sqlite:///:memory:"},
@@ -64,59 +71,45 @@ def test_guard_accepts_separated_pooled_and_direct_test_urls() -> None:
         (
             {
                 "POSTGRES_TEST_DATABASE_URL": (
-                    "postgresql://ep-integration.us-east-2.aws.neon.tech/"
-                    "neondb?sslmode=require"
+                    "postgresql://runtime:placeholder@db.example.invalid/postgres"
+                    "?sslmode=verify-full"
                 )
             },
             False,
-            "POSTGRES_TEST_DATABASE_URL",
-        ),
-        (
-            {"MIGRATION_DATABASE_URL": APPLICATION_URL},
-            True,
-            "MIGRATION_DATABASE_URL",
+            "Supabase project",
         ),
         (
             {
-                "MIGRATION_DATABASE_URL": (
-                    "postgresql://ep-other.us-east-2.aws.neon.tech/"
-                    "neondb?sslmode=require"
+                "POSTGRES_TEST_DATABASE_URL": APPLICATION_URL.replace(
+                    PROJECT, OTHER_PROJECT
                 )
             },
+            False,
+            "POSTGRES_TEST_PROJECT_REF",
+        ),
+        (
+            {"MIGRATION_DATABASE_URL": MIGRATION_URL.replace(PROJECT, OTHER_PROJECT)},
             True,
-            "same dedicated Neon test branch",
+            "same dedicated Supabase project",
+        ),
+        (
+            {"MIGRATION_DATABASE_URL": MIGRATION_URL.replace("/postgres?", "/other?")},
+            True,
+            "same dedicated Supabase project",
         ),
         (
             {
-                "POSTGRES_TEST_DATABASE_URL": (
-                    "postgresql://ep-integration-pooler.us-east-2.aws.neon.tech/neondb"
+                "POSTGRES_TEST_DATABASE_URL": APPLICATION_URL.replace(
+                    "verify-full", "require"
                 )
             },
             False,
-            "TLS",
+            "verify-full",
         ),
-        ({"POSTGRES_TEST_BRANCH_NAME": ""}, False, "POSTGRES_TEST_BRANCH_NAME"),
-        ({"POSTGRES_TEST_ENDPOINT_ID": ""}, False, "POSTGRES_TEST_ENDPOINT_ID"),
-        (
-            {"POSTGRES_TEST_ENDPOINT_ID": "ep-development"},
-            False,
-            "POSTGRES_TEST_ENDPOINT_ID",
-        ),
-        (
-            {"POSTGRES_TEST_ENDPOINT_ID": "integration"},
-            False,
-            "POSTGRES_TEST_ENDPOINT_ID",
-        ),
-        (
-            {"POSTGRES_TEST_BRANCH_NAME": "development"},
-            False,
-            "POSTGRES_TEST_BRANCH_NAME",
-        ),
-        (
-            {"POSTGRES_TEST_BRANCH_NAME": "another-test-branch"},
-            False,
-            "POSTGRES_TEST_BRANCH_NAME",
-        ),
+        ({"POSTGRES_TEST_PURPOSE": ""}, False, "POSTGRES_TEST_PURPOSE"),
+        ({"POSTGRES_TEST_PURPOSE": "development"}, False, "POSTGRES_TEST_PURPOSE"),
+        ({"POSTGRES_TEST_PROJECT_REF": ""}, False, "POSTGRES_TEST_PROJECT_REF"),
+        ({"POSTGRES_TEST_PROJECT_REF": "invalid"}, False, "POSTGRES_TEST_PROJECT_REF"),
     ],
 )
 def test_guard_rejects_unsafe_configuration(
@@ -135,7 +128,7 @@ def test_guard_rejects_unsafe_configuration(
     "protected_variable",
     ["DEVELOPMENT_DATABASE_URL", "PRODUCTION_DATABASE_URL"],
 )
-def test_guard_rejects_a_protected_branch_even_with_pooling_difference(
+def test_guard_rejects_protected_project_reuse(
     protected_variable: str,
 ) -> None:
     environment = safe_environment()
@@ -156,33 +149,23 @@ def test_guard_requires_exact_destructive_opt_in() -> None:
         safe_environment(ALLOW_DESTRUCTIVE_POSTGRES_TESTS="true"),
         require_destructive=True,
     )
-
     assert approved.destructive_allowed is True
 
 
-@pytest.mark.parametrize(
-    "missing_variable",
-    ["MIGRATION_DATABASE_URL"],
-)
-def test_destructive_guard_requires_direct_migration_target(
-    missing_variable: str,
-) -> None:
+def test_destructive_guard_requires_migration_target() -> None:
     environment = safe_environment(ALLOW_DESTRUCTIVE_POSTGRES_TESTS="true")
-    environment.pop(missing_variable)
+    environment.pop("MIGRATION_DATABASE_URL")
 
-    with pytest.raises(PostgresTestSafetyError, match=missing_variable):
-        validate_postgres_test_environment(
-            environment,
-            require_destructive=True,
-        )
+    with pytest.raises(PostgresTestSafetyError, match="MIGRATION_DATABASE_URL"):
+        validate_postgres_test_environment(environment, require_destructive=True)
 
 
 def test_guard_errors_and_result_never_disclose_credentials() -> None:
-    username = "placeholder-user"
+    username = f"placeholder-user.{PROJECT}"
     password = "placeholder-password"
     credential_url = APPLICATION_URL.replace(
-        "postgresql://",
-        f"postgresql://{username}:{password}@",
+        f"runtime.{PROJECT}:placeholder",
+        f"{username}:{password}",
     )
     environment = safe_environment(
         POSTGRES_TEST_DATABASE_URL=credential_url,
@@ -219,52 +202,56 @@ def test_invalid_url_does_not_retain_a_parser_exception() -> None:
     assert password not in str(error.value)
 
 
-class FakeConnectionInfo:
-    def __init__(
-        self,
-        *,
-        host: str = "ep-integration-pooler.us-east-2.aws.neon.tech",
-        dbname: str = "neondb",
-        ssl_in_use: bool = True,
-    ) -> None:
-        self.host = host
-        self.dbname = dbname
-        self.ssl_in_use = ssl_in_use
+def connection_info(**overrides: object) -> SimpleNamespace:
+    values: dict[str, object] = {
+        "host": "aws-0-eu-west-1.pooler.supabase.com",
+        "user": f"runtime.{PROJECT}",
+        "port": 5432,
+        "dbname": "postgres",
+        "ssl_in_use": True,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
 
 
-class FakeConnection:
-    def __init__(self, info: FakeConnectionInfo) -> None:
-        self.info = info
-
-
-def test_connected_guard_accepts_exact_endpoint_database_and_tls() -> None:
+def test_connected_guard_accepts_exact_project_database_role_port_and_tls() -> None:
     approved = validate_postgres_test_environment(safe_environment())
-
     validate_connected_postgres_test_environment(
-        FakeConnection(FakeConnectionInfo()),
+        SimpleNamespace(info=connection_info()),
         approved,
     )
 
 
 @pytest.mark.parametrize(
-    ("connection_info", "expected_message"),
+    ("field", "value", "expected_message"),
     [
-        (
-            FakeConnectionInfo(host="ep-development-pooler.us-east-2.aws.neon.tech"),
-            "endpoint",
-        ),
-        (FakeConnectionInfo(dbname="other_database"), "database"),
-        (FakeConnectionInfo(ssl_in_use=False), "TLS"),
+        ("host", "other.pooler.supabase.com", "endpoint"),
+        ("user", f"other.{PROJECT}", "endpoint"),
+        ("port", 6543, "endpoint"),
+        ("dbname", "other_database", "database"),
+        ("ssl_in_use", False, "TLS"),
     ],
 )
 def test_connected_guard_fails_closed_for_wrong_live_identity(
-    connection_info: FakeConnectionInfo,
+    field: str,
+    value: object,
     expected_message: str,
 ) -> None:
     approved = validate_postgres_test_environment(safe_environment())
+    info = connection_info(**{field: value})
 
     with pytest.raises(PostgresTestSafetyError, match=expected_message):
         validate_connected_postgres_test_environment(
-            FakeConnection(connection_info),
+            SimpleNamespace(info=info),
             approved,
+        )
+
+
+def test_connected_guard_rejects_expected_url_outside_approved_project() -> None:
+    approved = validate_postgres_test_environment(safe_environment())
+    with pytest.raises(PostgresTestSafetyError, match="outside"):
+        validate_connected_postgres_test_environment(
+            SimpleNamespace(info=connection_info()),
+            approved,
+            expected_database_url=MIGRATION_URL.replace(PROJECT, OTHER_PROJECT),
         )

@@ -75,7 +75,8 @@ def test_production_requires_admin_frontend_origins(
 ) -> None:
     monkeypatch.setenv(
         "PRODUCTION_DATABASE_URL",
-        "postgresql://ep-production-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require",
+        "postgresql://runtime.abcdefghijklmnopqrst:placeholder@"
+        "aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full",
     )
     monkeypatch.delenv("MIGRATION_DATABASE_URL", raising=False)
     monkeypatch.setattr("app.Redis.from_url", Mock(return_value=Mock()))

@@ -180,3 +180,4 @@ target/
 frontend/package-lock.json
 /11env.txt
 /secrets.txt
+/backend/operator-evidence/

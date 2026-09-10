@@ -4,6 +4,7 @@ import os
 from collections.abc import Mapping
 from secrets import token_urlsafe
 from typing import Any
+from urllib.parse import urlsplit
 
 from flask import Flask, Response, request
 from redis import Redis
@@ -249,6 +250,29 @@ def _admin_frontend_origins(app: Flask) -> frozenset[str]:
     )
     if "*" in origins:
         raise RuntimeError("ADMIN_FRONTEND_ORIGINS cannot contain a wildcard")
+    if app.config["APP_ENV"] == "production":
+        for origin in origins:
+            try:
+                parsed = urlsplit(origin)
+                valid = (
+                    parsed.scheme == "https"
+                    and bool(parsed.hostname)
+                    and parsed.username is None
+                    and parsed.password is None
+                    and not parsed.path
+                    and not parsed.query
+                    and not parsed.fragment
+                    and not any(character.isspace() for character in origin)
+                    and "\\" not in origin
+                    and (parsed.port is None or 1 <= parsed.port <= 65535)
+                    and origin == f"https://{parsed.netloc}"
+                )
+            except ValueError:
+                valid = False
+            if not valid:
+                raise RuntimeError(
+                    "ADMIN_FRONTEND_ORIGINS must contain exact HTTPS origins"
+                )
     return origins
 
 

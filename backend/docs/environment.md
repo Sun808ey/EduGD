@@ -21,7 +21,7 @@ file or in Git.
   synchronization events and must be distinct from every other secret.
 - `SENTRY_DSN` enables the approved Sentry integration outside test
   environments.
-- `REDIS_URL` identifies the Render Key Value/Redis service used for shared
+- `REDIS_URL` identifies the existing shared Redis service used for
   production rate-limit state. Production startup and readiness fail closed
   when it is missing or unreachable.
 
@@ -44,15 +44,20 @@ type without rendering the potentially sensitive exception message.
 
 ## Database variables
 
-The approved target configuration uses separate Neon branches and variables:
+Use separate Neon branches or Supabase projects for each environment. Neon
+compatibility remains available for rollback. Supabase is the new production
+target; provisioning is manual, not implied by this configuration.
 
-- `DEVELOPMENT_DATABASE_URL` uses the pooled development connection.
+- `DEVELOPMENT_DATABASE_URL` identifies the separate development connection.
 - `POSTGRES_TEST_DATABASE_URL` identifies the isolated PostgreSQL integration
   and migration test branch.
 - `POSTGRES_TEST_ENDPOINT_ID` is the non-secret `ep-*` identifier from that
   branch's pooled/direct connection hostname and must match both URLs.
-- `PRODUCTION_DATABASE_URL` uses the pooled production connection.
-- `MIGRATION_DATABASE_URL` uses a direct Neon connection for migrations.
+- `POSTGRES_TEST_PROJECT_REF` is the non-secret approved Supabase test project
+  reference, required instead of the Neon endpoint marker for Supabase tests.
+- `PRODUCTION_DATABASE_URL` identifies the production runtime connection.
+- `MIGRATION_DATABASE_URL` identifies the matching database using the migration
+  owner: direct for Neon; direct or session-pooler for Supabase as described below.
 - `PAIRING_TOKEN_PEPPER` is a deployment-secret HMAC pepper of at least 32
   characters. It is required whenever enrollment administration or an
   enforcing device-enrollment mode is enabled.
@@ -65,14 +70,22 @@ The approved target configuration uses separate Neon branches and variables:
 - `ENROLLMENT_ADMIN_ENABLED` independently gates token administration routes.
 
 Application startup selects its database variable from the active environment.
-Development and production require pooled Neon URLs. PostgreSQL integration
-testing accepts its isolated test-branch URL. All PostgreSQL URLs require TLS.
+Development and production require pooled URLs when using Neon. Supabase uses
+direct or session-pooler connections on port 5432 for runtime and migrations,
+with `sslmode=verify-full` and a trusted certificate chain. Direct connections
+are preferred for this persistent deployment; verify outbound IPv6 or use the
+session pooler for IPv4-only environments. Transaction port 6543 is rejected.
+PostgreSQL integration testing accepts its isolated approved provider target.
+All PostgreSQL URLs require TLS.
 Configured development, test, and production URLs are rejected if they resolve
-to the same Neon branch.
+to the same Neon branch or Supabase project, even through different poolers.
 
 Migration commands require `MIGRATION_DATABASE_URL` and reject pooled Neon
 endpoints. The direct migration endpoint must identify the same branch as the
-active application URL. Normal application startup does not require the
+active application URL and database. Supabase direct/session migration URLs
+must likewise match the runtime project and database. Parameters overriding
+host, database, user, service or connection options are rejected. Normal
+application startup does not require the
 migration variable.
 
 SQLite in memory remains limited to fast unit tests that do not depend on
@@ -102,8 +115,7 @@ API level is the authoritative compatibility value.
 ## Python and dependency baseline
 
 - The backend targets Python 3.12 compatibility.
-- The existing local project virtual environment was created with Python 3.14.
-- Python 3.12.10 is installed separately for compatibility verification.
+- The verified local project virtual environment uses Python 3.12.10.
 - `requirements.txt` remains the authoritative pinned dependency set until an
   approved dependency-management change.
 
@@ -119,12 +131,25 @@ Production never uses `memory://`; all Gunicorn workers share `REDIS_URL`.
 Production defaults to `SQLALCHEMY_POOL_SIZE=3` and
 `SQLALCHEMY_MAX_OVERFLOW=2`. Both values are validated at application creation:
 pool size must be 1–10, overflow must be 0–10, and their sum must not exceed 10
-per worker. With the two Gunicorn workers declared in `render.yaml`, the default
-application connection ceiling is `2 × (3 + 2) = 10`. This is an application
-budget, not an assumed Neon plan limit. Confirm it against the Neon allocation
+per worker. The retained Render configuration and new Railway configuration
+both use one worker, making the default per-instance ceiling `1 × (3 + 2) = 5`.
+Budget additionally for overlapping deployments, migrations and platform
+services. This is an application budget, not an assumed provider limit. Confirm
+it against the actual database allocation
 before changing worker or pool settings.
 
-Render is the supported production runtime. `ProxyFix` trusts exactly one
-Render proxy hop in production and is disabled elsewhere. Do not add another
-proxy in front of Render without reviewing this boundary, because forwarded
+Railway is the target runtime; Render files are retained for the existing
+deployment. `ProxyFix` trusts exactly one proxy hop in production and is
+disabled elsewhere. Verify Railway forwarded headers and signed raw request
+targets in staging. Do not add another proxy without reviewing this boundary,
+because forwarded
 addresses feed rate limits and audit pseudonyms.
+
+Production `ADMIN_FRONTEND_ORIGINS` must contain exact HTTPS origins without
+paths, credentials, queries or fragments. Local HTTP origins remain supported
+in development. The frontend receives only a public `VITE_API_BASE_URL` ending
+in `/api/v1` and optional public `VITE_SENTRY_DSN`. No database or server secrets
+belong in any `VITE_*` variable.
+
+See [database migration runbook](database-migration-runbook.md) for the complete
+operator procedure, TLS trust, restricted runtime grants and approval gates.

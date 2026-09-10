@@ -22,10 +22,10 @@ Run the same commands used by CI:
 ```powershell
 python -m ruff format --check .
 python -m ruff check .
-python -m mypy app test_support
+python -m mypy app test_support scripts
 python -m pytest --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=90
 python -m pip_audit -r requirements.txt --strict
-python -m bandit -r app test_support -c pyproject.toml -ll
+python -m bandit -r app test_support scripts -c pyproject.toml -ll
 ```
 
 The thresholds are explicit:
@@ -40,3 +40,9 @@ The thresholds are explicit:
 
 PostgreSQL, migration, and concurrency tests remain separately approval-gated
 and are not part of this credential-free CI baseline.
+
+The frontend workflow uses Node 24, `npm ci`, the Node test runner, ESLint,
+TypeScript/Vite build and npm audit. It builds with a non-routable example API
+URL for verification only; that artifact must not be deployed. Production
+builds require the real approved public API URL. Full administrator UI tests
+remain deferred until those screens exist.

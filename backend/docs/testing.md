@@ -7,7 +7,7 @@ semantics or may change database state.
 
 - `unit` identifies isolated tests that do not require PostgreSQL semantics.
 - `postgres` identifies tests that connect only to the approved Neon test
-  branch.
+  branch or dedicated Supabase test project.
 - `migration` identifies tests that inspect or change PostgreSQL migration
   state.
 - `concurrency` identifies bounded PostgreSQL transaction or race tests.
@@ -70,3 +70,28 @@ must call the guard with its destructive requirement enabled.
 Destructive PostgreSQL execution additionally requires an exact
 `ALLOW_DESTRUCTIVE_POSTGRES_TESTS=true` value and the separately required user
 approval. Never use development or production database URLs for these tests.
+
+## Supabase test approval
+
+The purpose marker remains `POSTGRES_TEST_BRANCH_NAME=backend-integration-test`.
+For Supabase set `POSTGRES_TEST_PROJECT_REF` to the exact approved project
+reference and configure runtime/migration URLs for that project and database.
+Use direct or session-pooler port 5432 with `sslmode=verify-full`. Tenant-qualified
+pooler usernames are mandatory. Do not reuse a production project with another
+schema or role. The guard also checks the actual libpq host, user/tenant,
+database, port and TLS. It does not create, clear or approve a project.
+
+After separate destructive-test approval, run the CI selection on the EMPTY
+disposable test project only:
+
+```powershell
+python -m pytest -m "postgres or migration or concurrency"
+```
+
+Do not run this command on a production-data restore rehearsal. Read-only
+source/target verification uses `scripts.database_inventory`, described in the
+[migration runbook](database-migration-runbook.md). Unavailable external tests
+remain unresolved deployment gates, not passing tests.
+
+For a local Windows pytest temporary-directory permission error, rerun with
+authorized filesystem access; do not disable or remove migration tests.

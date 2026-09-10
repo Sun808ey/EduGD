@@ -7,10 +7,13 @@ from dataclasses import dataclass, field
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import ArgumentError
 
+from app.config import database_project_identity, validate_postgres_database_uri
+
 APP_DATABASE_VARIABLE = "POSTGRES_TEST_DATABASE_URL"
 MIGRATION_DATABASE_VARIABLE = "MIGRATION_DATABASE_URL"
 BRANCH_NAME_VARIABLE = "POSTGRES_TEST_BRANCH_NAME"
 ENDPOINT_ID_VARIABLE = "POSTGRES_TEST_ENDPOINT_ID"
+PROJECT_REF_VARIABLE = "POSTGRES_TEST_PROJECT_REF"
 DESTRUCTIVE_OPT_IN_VARIABLE = "ALLOW_DESTRUCTIVE_POSTGRES_TESTS"
 APPROVED_POSTGRES_TEST_BRANCH = "backend-integration-test"
 PROTECTED_DATABASE_VARIABLES = (
@@ -43,6 +46,7 @@ class ApprovedPostgresTestEnvironment:
     branch_name: str
     endpoint_id: str
     destructive_allowed: bool
+    project_ref: str | None = None
 
     def __repr__(self) -> str:
         return (
@@ -72,6 +76,19 @@ def validate_postgres_test_environment(
             f"{BRANCH_NAME_VARIABLE} must identify the approved dedicated "
             "PostgreSQL test branch"
         )
+
+    raw_application_url = values.get(APP_DATABASE_VARIABLE, "")
+    if raw_application_url:
+        candidate = _validate_url(
+            APP_DATABASE_VARIABLE, raw_application_url, require_pooled=True
+        )
+        if database_project_identity(candidate).startswith("supabase:"):
+            return _validate_supabase_test_environment(
+                values,
+                candidate,
+                require_migration=require_migration,
+                require_destructive=require_destructive,
+            )
 
     endpoint_id = values.get(ENDPOINT_ID_VARIABLE, "").strip().lower()
     if not endpoint_id:
@@ -110,7 +127,10 @@ def validate_postgres_test_environment(
             migration_database_url,
             require_direct=True,
         )
-        if _endpoint_identity(application_url) != _endpoint_identity(migration_url):
+        if (
+            _endpoint_identity(application_url) != _endpoint_identity(migration_url)
+            or application_url.database != migration_url.database
+        ):
             _fail(
                 f"{APP_DATABASE_VARIABLE} and {MIGRATION_DATABASE_VARIABLE} "
                 "must target the same dedicated Neon test branch"
@@ -149,6 +169,14 @@ def validate_connected_postgres_test_environment(
 
     configured_url = expected_database_url or approved.application_database_url
     parsed_url = _validate_url("approved PostgreSQL test URL", configured_url)
+    approved_url = _validate_url(
+        "approved application URL", approved.application_database_url
+    )
+    if (
+        _endpoint_identity(parsed_url) != _endpoint_identity(approved_url)
+        or parsed_url.database != approved_url.database
+    ):
+        _fail("Requested PostgreSQL endpoint/database is outside the approved target")
     driver_connection = getattr(
         getattr(connection, "connection", None),
         "driver_connection",
@@ -161,6 +189,19 @@ def validate_connected_postgres_test_environment(
     actual_host = getattr(connection_info, "host", "")
     actual_database = getattr(connection_info, "dbname", "")
     tls_active = getattr(connection_info, "ssl_in_use", False)
+    if approved.project_ref is not None:
+        if (
+            database_project_identity(parsed_url) != f"supabase:{approved.project_ref}"
+            or actual_host != parsed_url.host
+            or getattr(connection_info, "user", None) != parsed_url.username
+            or str(getattr(connection_info, "port", "")) != str(parsed_url.port or 5432)
+        ):
+            _fail("Connected PostgreSQL endpoint or tenant does not match approval")
+        if actual_database != parsed_url.database:
+            _fail("Connected PostgreSQL database does not match the approved target")
+        if tls_active is not True:
+            _fail("Connected PostgreSQL session must use TLS")
+        return
     if _host_identity(actual_host) != _endpoint_identity(parsed_url):
         _fail("Connected PostgreSQL endpoint does not match the approved target")
     if _endpoint_id(actual_host) != approved.endpoint_id:
@@ -188,19 +229,60 @@ def _validate_url(
     if parsed_url.drivername not in POSTGRES_DRIVERS:
         _fail(f"{variable_name} must contain a PostgreSQL URL")
 
-    hostname = (parsed_url.host or "").lower()
-    if not hostname.endswith(".neon.tech"):
-        _fail(f"{variable_name} must target Neon PostgreSQL")
-    if parsed_url.query.get("sslmode") not in SECURE_SSL_MODES:
-        _fail(f"{variable_name} must require PostgreSQL TLS")
+    try:
+        return validate_postgres_database_uri(
+            variable_name,
+            raw_url,
+            require_pooled=require_pooled,
+            require_direct=require_direct,
+        )
+    except RuntimeError as error:
+        raise PostgresTestSafetyError(str(error)) from None
 
-    endpoint_name = hostname.partition(".")[0]
-    is_pooled = endpoint_name.endswith("-pooler")
-    if require_pooled and not is_pooled:
-        _fail(f"{variable_name} must use a pooled Neon connection")
-    if require_direct and is_pooled:
-        _fail(f"{variable_name} must use a direct Neon connection")
-    return parsed_url
+
+def _validate_supabase_test_environment(
+    values: Mapping[str, str],
+    application_url: URL,
+    *,
+    require_migration: bool,
+    require_destructive: bool,
+) -> ApprovedPostgresTestEnvironment:
+    project_ref = values.get(PROJECT_REF_VARIABLE, "")
+    if (
+        not project_ref
+        or database_project_identity(application_url) != f"supabase:{project_ref}"
+    ):
+        _fail(f"{APP_DATABASE_VARIABLE} must match the approved {PROJECT_REF_VARIABLE}")
+    destructive_allowed = values.get(DESTRUCTIVE_OPT_IN_VARIABLE) == "true"
+    if require_destructive and not destructive_allowed:
+        _fail(
+            f"{DESTRUCTIVE_OPT_IN_VARIABLE} must be exactly true for destructive PostgreSQL tests"
+        )
+    migration_raw = values.get(MIGRATION_DATABASE_VARIABLE) or None
+    if (require_migration or require_destructive) and not migration_raw:
+        _fail(f"{MIGRATION_DATABASE_VARIABLE} is required for migration tests")
+    migration_url = None
+    if migration_raw:
+        migration_url = _validate_url(
+            MIGRATION_DATABASE_VARIABLE, migration_raw, require_direct=True
+        )
+        if (
+            database_project_identity(migration_url)
+            != database_project_identity(application_url)
+            or migration_url.database != application_url.database
+        ):
+            _fail(
+                "Application and migration URLs must target the same dedicated Supabase project and database"
+            )
+    _reject_protected_database_reuse(values, application_url, migration_url)
+    return ApprovedPostgresTestEnvironment(
+        application_database_url=values[APP_DATABASE_VARIABLE],
+        migration_database_url=migration_raw,
+        branch_name=APPROVED_POSTGRES_TEST_BRANCH,
+        endpoint_id="",
+        destructive_allowed=destructive_allowed,
+        project_ref=project_ref,
+    )
 
 
 def _reject_protected_database_reuse(
@@ -229,6 +311,8 @@ def _reject_protected_database_reuse(
 
 
 def _endpoint_identity(database_url: URL) -> str:
+    if database_project_identity(database_url).startswith("supabase:"):
+        return database_project_identity(database_url)
     return _host_identity(database_url.host or "")
 
 

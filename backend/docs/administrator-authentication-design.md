@@ -334,7 +334,7 @@ created during these increments.
 ## Acceptance requirements before enrollment Sub-step 3 resumes
 
 - The administrator persistence migration passes upgrade, downgrade, and
-  upgrade verification on the approved Neon integration-test branch.
+  upgrade verification on the approved disposable Supabase test project.
 - Bootstrap and recovery never accept passwords on the command line or log
   secret material.
 - Authentication uses generic failures and verified constant-work behavior.

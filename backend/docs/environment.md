@@ -44,20 +44,20 @@ type without rendering the potentially sensitive exception message.
 
 ## Database variables
 
-Use separate Neon branches or Supabase projects for each environment. Neon
-compatibility remains available for rollback. Supabase is the new production
-target; provisioning is manual, not implied by this configuration.
+Use separate Supabase projects for development, integration testing, staging,
+and production. Provisioning is manual and is not implied by this configuration.
 
 - `DEVELOPMENT_DATABASE_URL` identifies the separate development connection.
 - `POSTGRES_TEST_DATABASE_URL` identifies the isolated PostgreSQL integration
-  and migration test branch.
-- `POSTGRES_TEST_ENDPOINT_ID` is the non-secret `ep-*` identifier from that
-  branch's pooled/direct connection hostname and must match both URLs.
+  and migration test project.
+- `POSTGRES_TEST_PURPOSE` must be exactly `backend-integration-test` so an
+  operator cannot accidentally select destructive tests without the expected
+  purpose marker.
 - `POSTGRES_TEST_PROJECT_REF` is the non-secret approved Supabase test project
-  reference, required instead of the Neon endpoint marker for Supabase tests.
+  reference and must match the configured and connected database URLs.
 - `PRODUCTION_DATABASE_URL` identifies the production runtime connection.
 - `MIGRATION_DATABASE_URL` identifies the matching database using the migration
-  owner: direct for Neon; direct or session-pooler for Supabase as described below.
+  owner through a direct or session-pooler connection as described below.
 - `PAIRING_TOKEN_PEPPER` is a deployment-secret HMAC pepper of at least 32
   characters. It is required whenever enrollment administration or an
   enforcing device-enrollment mode is enabled.
@@ -70,20 +70,17 @@ target; provisioning is manual, not implied by this configuration.
 - `ENROLLMENT_ADMIN_ENABLED` independently gates token administration routes.
 
 Application startup selects its database variable from the active environment.
-Development and production require pooled URLs when using Neon. Supabase uses
-direct or session-pooler connections on port 5432 for runtime and migrations,
+Supabase uses direct or session-pooler connections on port 5432 for runtime and migrations,
 with `sslmode=verify-full` and a trusted certificate chain. Direct connections
 are preferred for this persistent deployment; verify outbound IPv6 or use the
 session pooler for IPv4-only environments. Transaction port 6543 is rejected.
 PostgreSQL integration testing accepts its isolated approved provider target.
 All PostgreSQL URLs require TLS.
 Configured development, test, and production URLs are rejected if they resolve
-to the same Neon branch or Supabase project, even through different poolers.
+to the same Supabase project, including through different connection methods.
 
-Migration commands require `MIGRATION_DATABASE_URL` and reject pooled Neon
-endpoints. The direct migration endpoint must identify the same branch as the
-active application URL and database. Supabase direct/session migration URLs
-must likewise match the runtime project and database. Parameters overriding
+Migration commands require `MIGRATION_DATABASE_URL`. Direct/session migration
+URLs must match the runtime project and database. Parameters overriding
 host, database, user, service or connection options are rejected. Normal
 application startup does not require the
 migration variable.

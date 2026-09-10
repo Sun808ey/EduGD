@@ -5,15 +5,14 @@ It does not mean later remediation increments have been implemented.
 
 ## Current deployment decision
 
-The backend now supports Supabase direct/session PostgreSQL connections through
-configuration while retaining Neon behavior. Railway uses the existing Flask
+The backend accepts Supabase direct/session PostgreSQL connections. Railway uses the existing Flask
 factory and `run:app`; SQLAlchemy, models, migration history, RBAC, device
 protocol and forensic formats are preserved. Shared Redis remains mandatory
 because the existing production limiter requires it. Supabase Data API must be
 disabled; no Supabase Auth, Realtime or Edge Functions are introduced.
 
-The historical Neon-only deployment descriptions below are superseded by
-`environment.md` and `database-migration-runbook.md`. Source data migration,
+The deployment configuration is defined by `environment.md`, `railway.json`,
+and `database-migration-runbook.md`. Source data migration,
 provider setup, Android offline/endpoint evidence and final cutover remain
 operator gates. Android code and a queued-event upload endpoint are not present
 in this checkout. Existing policy-sync contracts do not prove those features.
@@ -134,10 +133,10 @@ append-only evidence; never claim all audit tables have identical controls.
 
 - Approved tools are Ruff, mypy, pytest-cov, pip-audit, and Bandit.
 - Black is not approved because Ruff is the selected formatter.
-- Development, PostgreSQL integration testing, and production use separate Neon
-  branches.
-- Application traffic uses pooled Neon URLs through
+- Development, PostgreSQL integration testing, and production use separate
+  Supabase projects.
+- Application traffic uses direct or session-pooler Supabase URLs through
   `DEVELOPMENT_DATABASE_URL` or `PRODUCTION_DATABASE_URL`.
 - PostgreSQL tests use `POSTGRES_TEST_DATABASE_URL`.
-- Flask-Migrate and Alembic use the direct `MIGRATION_DATABASE_URL`, never a
-  pooled application connection.
+- Flask-Migrate and Alembic use the separately credentialed
+  `MIGRATION_DATABASE_URL` for the same Supabase project and database.

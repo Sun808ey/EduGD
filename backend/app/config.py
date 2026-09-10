@@ -11,18 +11,10 @@ from sqlalchemy.exc import ArgumentError
 
 BACKEND_DIRECTORY = Path(__file__).resolve().parent.parent
 
-NEON_HOST_SUFFIX = ".neon.tech"
-SECURE_POSTGRES_SSL_MODES = frozenset(
-    {
-        "require",
-        "verify-ca",
-        "verify-full",
-    }
-)
 APPLICATION_DATABASE_ENVIRONMENTS = (
-    ("DEVELOPMENT_DATABASE_URL", True),
-    ("POSTGRES_TEST_DATABASE_URL", False),
-    ("PRODUCTION_DATABASE_URL", True),
+    "DEVELOPMENT_DATABASE_URL",
+    "POSTGRES_TEST_DATABASE_URL",
+    "PRODUCTION_DATABASE_URL",
 )
 POSTGRES_CONNECTION_TIMEOUT_SECONDS = 3
 DEFAULT_PRODUCTION_POOL_SIZE = 3
@@ -114,7 +106,6 @@ class Config:
     SQLALCHEMY_ENGINE_OPTIONS: dict[str, object] = {}
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     DATABASE_ENV_VAR: str | None = None
-    REQUIRE_POOLED_DATABASE_URL = False
     LOG_LEVEL = "INFO"
     RATELIMIT_DEFAULT: list[str] = []
     RATELIMIT_ENABLED = True
@@ -140,7 +131,6 @@ class Config:
 class DevelopmentConfig(Config):
     DEBUG = _environment_flag("FLASK_DEBUG")
     DATABASE_ENV_VAR = "DEVELOPMENT_DATABASE_URL"
-    REQUIRE_POOLED_DATABASE_URL = True
     SQLALCHEMY_ENGINE_OPTIONS = POSTGRES_ENGINE_OPTIONS
     LOG_LEVEL = "DEBUG" if DEBUG else "INFO"
     ADMIN_FRONTEND_ORIGINS = os.getenv(
@@ -171,7 +161,6 @@ class PostgresTestingConfig(Config):
 
 class ProductionConfig(Config):
     DATABASE_ENV_VAR = "PRODUCTION_DATABASE_URL"
-    REQUIRE_POOLED_DATABASE_URL = True
     SQLALCHEMY_ENGINE_OPTIONS: dict[str, object] = {}
     RATELIMIT_STORAGE_URI = os.getenv("REDIS_URL")
     TRUSTED_PROXY_HOPS = 1
@@ -211,7 +200,6 @@ def resolve_database_uri(configuration: type[Config]) -> str | None:
     validate_postgres_database_uri(
         configuration.DATABASE_ENV_VAR,
         normalized_uri,
-        require_pooled=configuration.REQUIRE_POOLED_DATABASE_URL,
     )
     return normalized_uri
 
@@ -231,15 +219,14 @@ def resolve_migration_database_uri(
     validate_postgres_database_uri(
         "MIGRATION_DATABASE_URL",
         normalized_uri,
-        require_direct=True,
     )
     return normalized_uri
 
 
 def validate_database_separation() -> None:
-    branch_variables: dict[str, str] = {}
+    project_variables: dict[str, str] = {}
 
-    for variable_name, require_pooled in APPLICATION_DATABASE_ENVIRONMENTS:
+    for variable_name in APPLICATION_DATABASE_ENVIRONMENTS:
         database_uri = os.getenv(variable_name)
         if not database_uri:
             continue
@@ -248,16 +235,14 @@ def validate_database_separation() -> None:
         parsed_url = validate_postgres_database_uri(
             variable_name,
             normalized_uri,
-            require_pooled=require_pooled,
         )
-        branch_identity = database_project_identity(parsed_url)
-        existing_variable = branch_variables.get(branch_identity)
+        project_identity = database_project_identity(parsed_url)
+        existing_variable = project_variables.get(project_identity)
         if existing_variable is not None:
             raise RuntimeError(
-                "Configured application databases must use separate Neon branches "
-                "or Supabase projects"
+                "Configured application databases must use separate Supabase projects"
             )
-        branch_variables[branch_identity] = variable_name
+        project_variables[project_identity] = variable_name
 
 
 def validate_migration_target(
@@ -271,7 +256,6 @@ def validate_migration_target(
     migration_url = validate_postgres_database_uri(
         "MIGRATION_DATABASE_URL",
         migration_database_uri,
-        require_direct=True,
     )
     if (
         database_project_identity(application_url)
@@ -279,17 +263,13 @@ def validate_migration_target(
         or application_url.database != migration_url.database
     ):
         raise RuntimeError(
-            "MIGRATION_DATABASE_URL must target the active application branch "
-            "or project and database"
+            "MIGRATION_DATABASE_URL must target the active Supabase project and database"
         )
 
 
 def validate_postgres_database_uri(
     variable_name: str,
     database_uri: str,
-    *,
-    require_pooled: bool = False,
-    require_direct: bool = False,
 ) -> URL:
     try:
         parsed_url = make_url(_normalize_database_uri(database_uri))
@@ -333,60 +313,34 @@ def validate_postgres_database_uri(
         raise RuntimeError(f"{variable_name} must identify a host and database")
 
     ssl_mode = parsed_url.query.get("sslmode")
-    if not isinstance(ssl_mode, str) or ssl_mode not in SECURE_POSTGRES_SSL_MODES:
-        raise RuntimeError(f"{variable_name} must require PostgreSQL TLS")
-
-    if hostname.endswith(".supabase.co") or hostname.endswith(".pooler.supabase.com"):
-        if port not in {None, 5432}:
-            raise RuntimeError(f"{variable_name} requires direct or session port 5432")
-        try:
-            database_project_identity(parsed_url)
-        except ValueError:
-            raise RuntimeError(
-                f"{variable_name} must identify a Supabase project"
-            ) from None
-        if not parsed_url.username:
-            raise RuntimeError(f"{variable_name} requires a database role")
-        if ssl_mode != "verify-full":
-            raise RuntimeError(f"{variable_name} must use verify-full PostgreSQL TLS")
-        return parsed_url
-
-    if not re.fullmatch(r"ep-[a-z0-9-]+(?:\.[a-z0-9-]+)+\.neon\.tech", hostname):
-        raise RuntimeError(f"{variable_name} must target Neon or Supabase PostgreSQL")
     if port not in {None, 5432}:
-        raise RuntimeError(f"{variable_name} must use PostgreSQL port 5432")
-
-    is_pooled = hostname.split(".", maxsplit=1)[0].endswith("-pooler")
-    if require_pooled and not is_pooled:
-        raise RuntimeError(f"{variable_name} must use a pooled Neon connection")
-    if require_direct and is_pooled:
-        raise RuntimeError(f"{variable_name} must use a direct Neon connection")
+        raise RuntimeError(f"{variable_name} requires direct or session port 5432")
+    try:
+        database_project_identity(parsed_url)
+    except ValueError:
+        raise RuntimeError(
+            f"{variable_name} must identify a Supabase project"
+        ) from None
+    if not parsed_url.username:
+        raise RuntimeError(f"{variable_name} requires a database role")
+    if ssl_mode != "verify-full":
+        raise RuntimeError(f"{variable_name} must use verify-full PostgreSQL TLS")
 
     return parsed_url
 
 
-def _neon_branch_identity(database_url: URL) -> str:
-    hostname = (database_url.host or "").lower()
-    endpoint_name, separator, remainder = hostname.partition(".")
-    if endpoint_name.endswith("-pooler"):
-        endpoint_name = endpoint_name.removesuffix("-pooler")
-    return f"{endpoint_name}{separator}{remainder}"
-
-
 def database_project_identity(database_url: URL) -> str:
-    """Identify the provider tenant, including shared-pooler tenant routing."""
+    """Identify the Supabase project, including shared-pooler tenant routing."""
     hostname = (database_url.host or "").lower()
     direct = re.fullmatch(r"db\.([a-z0-9]{20})\.supabase\.co", hostname)
     if direct:
-        return f"supabase:{direct[1]}"
+        return direct[1]
     if re.fullmatch(r"aws-[a-z0-9-]+\.pooler\.supabase\.com", hostname):
         tenant = re.fullmatch(r"[^.\s]+\.([a-z0-9]{20})", database_url.username or "")
         if tenant:
-            return f"supabase:{tenant[1]}"
+            return tenant[1]
         raise ValueError("Supabase session connection requires a tenant-qualified role")
-    if hostname.endswith(NEON_HOST_SUFFIX):
-        return f"neon:{_neon_branch_identity(database_url)}"
-    raise ValueError("Unsupported PostgreSQL project identity")
+    raise ValueError("Unsupported Supabase project identity")
 
 
 __all__ = [

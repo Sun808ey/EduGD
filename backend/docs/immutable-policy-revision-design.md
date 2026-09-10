@@ -350,6 +350,6 @@ Implementation is accepted only when:
 - every assignment references one exact immutable revision;
 - old and newly created revisions remain reconstructable;
 - direct and ORM mutation attempts fail;
-- the approved Neon migration cycle passes;
+- the approved Supabase migration cycle passes on a disposable test project;
 - full regression coverage remains above the configured threshold; and
 - downgrade either preserves all history or fails before changing state.

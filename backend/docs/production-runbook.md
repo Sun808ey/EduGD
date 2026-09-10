@@ -2,7 +2,7 @@
 
 ## Non-negotiable pre-deployment gates
 
-1. Rotate every Neon password and application secret that ever appeared in
+1. Rotate every former database-provider password and application secret that appeared in
    `.history` or `.github/env.txt`. Historical values are compromised even
    after file deletion.
 2. Scan the current tree and all Git revisions with an approved secret scanner.
@@ -11,8 +11,8 @@
    `.github/env.txt` from Git history with `git filter-repo`. The repository
    owner performs the force-push; every collaborator must re-clone afterward.
 4. Confirm separate development, integration-test, staging and production
-   database targets. Preserve Neon compatibility and follow the Supabase
-   direct/session, verify-full TLS configuration in the migration runbook.
+   Supabase projects and follow the direct/session, verify-full TLS
+   configuration in the migration runbook.
 5. Run the complete quality workflow and the explicitly safety-gated PostgreSQL
    migration/concurrency suite on `backend-integration-test`.
 
@@ -34,7 +34,7 @@ Enable provider-side secret scanning and push protection where available. A
 push that introduces a real credential is a release blocker, even when the
 credential is quickly deleted in a later commit.
 
-## Railway deployment and retained Render reference
+## Railway deployment
 
 The step-by-step [database migration runbook](database-migration-runbook.md)
 is authoritative for the Supabase/Railway transition. `backend/railway.json`
@@ -42,12 +42,6 @@ uses Railpack, a separate pre-deploy migration, Gunicorn and dependency-aware
 readiness. `gunicorn.conf.py` uses one worker/four threads, binding Railway PORT,
 with a five-connection default pool ceiling per instance. Include deployment
 overlap and provider services when checking the real database connection limit.
-
-`render.yaml` is intentionally retained for the existing deployment. Its actual
-configuration runs migrations in the BUILD command and uses one worker, not the
-two-worker/pre-deploy arrangement described by the older runbook. Do not reuse
-that build command for Railway. Freeze source auto-deployment/migration hooks
-during cutover; retaining the file is not approval to rerun its migrations.
 
 Before production migration, verify an independent backup through a restore
 rehearsal. Railway runs `flask --app run.py db upgrade` once in pre-deploy only

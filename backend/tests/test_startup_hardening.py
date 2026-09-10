@@ -8,10 +8,12 @@ from app import create_app
 from app.extensions import limiter
 
 DEVELOPMENT_URL = (
-    "postgresql://ep-development-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    "postgresql://runtime.abcdefghijklmnopqrst:placeholder@"
+    "aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full"
 )
 PRODUCTION_URL = (
-    "postgresql://ep-production-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    "postgresql://runtime.bcdefghijklmnopqrstu:placeholder@"
+    "aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full"
 )
 DATABASE_VARIABLES = (
     "DEVELOPMENT_DATABASE_URL",

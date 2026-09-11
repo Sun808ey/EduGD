@@ -4,15 +4,11 @@ function safeFilename(filename: string | undefined): string | undefined {
   if (!filename) return undefined
   try {
     const url = new URL(filename)
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined
+    if (!['https:', 'http:'].includes(url.protocol)) return undefined
     return `${url.origin}${url.pathname}`
-  } catch {
-    return undefined
-  }
+  } catch { return undefined }
 }
 
-// Keep only operational error fields. Never forward HTTP context, breadcrumbs,
-// user identity, extras or arbitrary exception text from API responses.
 export function scrubSentryEvent(event: ErrorEvent): ErrorEvent {
   return {
     type: event.type,
@@ -24,11 +20,11 @@ export function scrubSentryEvent(event: ErrorEvent): ErrorEvent {
     release: event.release,
     message: 'Frontend error',
     exception: event.exception ? {
-      values: event.exception.values?.map(value => ({
+      values: event.exception.values?.map((value) => ({
         type: value.type,
         value: 'Frontend exception details withheld',
         stacktrace: value.stacktrace ? {
-          frames: value.stacktrace.frames?.map(frame => ({
+          frames: value.stacktrace.frames?.map((frame) => ({
             filename: safeFilename(frame.filename),
             lineno: frame.lineno,
             colno: frame.colno,

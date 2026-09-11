@@ -1,7 +1,8 @@
 import axios, { AxiosHeaders } from 'axios'
+import { resolveApiBaseUrl } from '@/lib/environment.ts'
 
 const api = axios.create({
-  baseURL: (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:5000/api/v1').replace(/\/$/, ''),
+  baseURL: resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.PROD),
   timeout: Number(import.meta.env.VITE_API_TIMEOUT ?? 30000),
 })
 

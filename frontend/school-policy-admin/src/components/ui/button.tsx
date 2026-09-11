@@ -1,8 +1,8 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import type { VariantProps } from "class-variance-authority"
 
-import { cn } from "@/lib/utils"
-import { buttonVariants } from "@/components/ui/button-variants"
+import { cn } from "@/lib/utils.ts"
+import { buttonVariants } from "@/components/ui/button-variants.ts"
 
 type ButtonProps = Omit<ButtonPrimitive.Props, "className"> & {
   className?: string

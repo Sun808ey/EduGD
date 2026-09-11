@@ -19,7 +19,6 @@ export default defineConfig([
       },
     },
   },
-  globalIgnores(['src/**/*.js']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

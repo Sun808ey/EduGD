@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import api from '@/services/api'
-import { authService } from '@/services/auth.service'
+import api from '@/services/api.ts'
+import { authService } from '@/services/auth.service.ts'
 
-vi.mock('@/services/api', () => ({
+vi.mock('@/services/api.ts', () => ({
   default: {
     post: vi.fn(),
     get: vi.fn(),

@@ -1,4 +1,4 @@
-import api from '@/services/api'
+import api from '@/services/api.ts'
 import type {
   AuditEventSummary,
   DeviceSummary,

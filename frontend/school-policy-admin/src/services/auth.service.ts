@@ -1,4 +1,4 @@
-import api from '@/services/api'
+import api from '@/services/api.ts'
 import type { CurrentAdministratorResponse, LoginResponse } from '@/types/api'
 
 const AUTH_TOKEN_KEY = 'edu_admin_token'

@@ -160,20 +160,21 @@ an approved disposable database; exclusion is not a pass.
 
 | Check/command | Exact final result |
 | --- | --- |
-| `python -m pytest --cov=app --cov-branch --cov-report=term --cov-fail-under=90 --tb=short --junitxml=.pytest_cache_local/provider-cleanup-results.xml` | **468 passed, 38 deselected, 646.70 seconds; 90.59% coverage**, unchanged 90% threshold. Covers backend/API, authentication/RBAC, device/policy/sync, startup/readiness, provider configuration and forensic tests in the normal local selection. |
+| `python -m pytest --cov=app --cov-branch --cov-report=term --cov-fail-under=90 --tb=short` | **469 passed, 38 deselected, 295.55 seconds; 90.59% coverage**, unchanged 90% threshold. Covers backend/API, authentication/RBAC, device/policy/sync, startup/readiness, provider configuration and forensic tests in the normal local selection. |
 | Focused database configuration, Supabase safety, startup and CORS regression selection | **113 passed in 14.38 seconds** before the full suite. A final added direct-port rejection case was then covered by `tests/test_supabase_configuration.py`: **34 passed in 0.32 seconds**. These checks overlap the full suite except that final additional parameter; counts are not cumulative. |
 | `python -m ruff check .` | **All checks passed.** |
-| `python -m ruff format --check .` | **100 files already formatted.** |
+| `python -m ruff format --check .` | **87 files already formatted.** |
 | `python -m mypy app test_support scripts` | **Success: no issues found in 43 source files.** |
 | `python -m bandit -r app test_support scripts -c pyproject.toml -ll` | **Exit 0, zero medium/high issues; one low finding** (existing testing pepper literal). No suppression or lowered threshold added. |
 | `python -m pip check` | **No broken requirements found.** |
 | `python -m pip_audit -r requirements.txt --strict` | **No known vulnerabilities found.** |
 | Alembic `ScriptDirectory` graph inspection | **16 revisions; single head `e4a1b7c9d2f6`.** Local test fixtures exercise the SQLite migration path. Actual PostgreSQL schema/migration verification remains blocked. |
 | `create_app('testing')` and test-client `GET /api/v1/health` | **HTTP 200**, `{"service":"school-policy-api","status":"running"}`. This is testing-factory startup, not a real production Gunicorn process. |
-| `npm test` after final privacy change | **3 passed, 0 failed, 0 skipped.** |
-| `npm run lint` | **Exit 0, no lint errors.** |
-| `npm run build` with `VITE_API_BASE_URL=https://api.example.invalid/api/v1` | **TypeScript and Vite 8.1.4 pass**, 366 modules, final JavaScript 280.00 kB (89.63 kB gzip). Placeholder build is not deployable configuration. |
-| `npm audit --audit-level=moderate` | **Found 0 vulnerabilities.** |
+| `npm run test:coverage` | **26 passed**; 98.63% statements, 92.98% branches, 98.11% functions and 99.46% lines. |
+| `npm run test:e2e` | **10 passed** across desktop and emulated mobile Chromium, including accessibility, storage, rate-limit, revoked-session and read-only-RBAC checks. |
+| `npm run typecheck` / `npm run lint` | **Exit 0**, no type or lint errors. |
+| `npm run build` with `VITE_API_BASE_URL=https://api.example.invalid/api/v1` | **TypeScript and Vite 8.3.0 pass**, 2,575 modules, route-level chunks and largest JavaScript asset 366.76 kB (117.86 kB gzip). Placeholder build is not deployable configuration. |
+| `npm audit --audit-level=moderate` and `npm audit --omit=dev --audit-level=moderate` | **Found 0 vulnerabilities.** |
 | Current-tree scan for legacy provider names, configuration filenames, hostnames and obsolete environment markers | **PASS, zero matches.** Normal programming uses of the verb “render” are unrelated and retained. |
 | `git diff --check` | **Exit 0**, no whitespace errors; Git reports expected CRLF-to-LF normalization warnings for two text files. |
 | `git diff --exit-code` on protected model/route/service/crypto/RBAC/observability/migration/entry/requirements/deployment paths | **Exit 0**, no changes. |
@@ -266,13 +267,17 @@ was performed by this implementation.
 
 ## M. Next frontend integration steps
 
-Implement login/session expiry/logout and permission-aware navigation using the
-existing Bearer API. Add device, policy, enrollment and audit views against
-documented routes. Preserve server-authoritative RBAC, structured errors,
-pagination and 429 handling. Add browser integration tests for those flows,
-CORS, expired/revoked tokens and denied permissions. Validate token-storage and
-content-security decisions before publishing the authenticated UI. Complete
-the external gates above before claiming production readiness.
+The production frontend implementation is complete. It now provides
+memory-only Bearer authentication, session expiry/logout, permission-aware
+mutations, API-backed device/policy/enrollment/audit views, structured errors,
+pagination, 429 handling, CSP/security headers, runtime response validation and
+desktop/mobile browser tests. The detailed implementation and readiness record
+is in `../../frontend/school-policy-admin/docs/production-frontend-audit.md`.
+
+Deploy it first to a stable Vercel staging origin, add that exact origin to
+Railway `ADMIN_FRONTEND_ORIGINS`, run the protected Supabase PostgreSQL job and
+complete the browser/Android staging checks. These external gates must pass
+before the repository-wide production verdict changes to PASS.
 
 ## N. Sources
 

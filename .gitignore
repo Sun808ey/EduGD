@@ -20,11 +20,8 @@ backend/.coverage.*
 backend/.pytest-tmp-quality/
 backend/.pytest-tmp-quality-full/
 
-# Frontend generated artifacts outside tracked TS source
+# Frontend generated artifacts
 frontend/package-lock.json
-frontend/school-policy-admin/tsconfig.tsbuildinfo
-frontend/school-policy-admin/vite.config.js
-frontend/school-policy-admin/src/**/*.js
 
 # Misc accidental lockfiles in non-node packages
 backend/package-lock.json

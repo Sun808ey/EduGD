@@ -16,7 +16,7 @@ if (sentryDsn && sentryDsn !== 'YOUR_DSN') {
   Sentry.init({ dsn: sentryDsn, environment: import.meta.env.MODE, release: import.meta.env.VITE_APP_RELEASE, sendDefaultPii: false, sampleRate: 0.25, tracesSampleRate: 0, beforeSend: scrubSentryEvent })
 }
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, retry: (count, error) => count < 2 && (!(error instanceof Error) || !('status' in error) || Number((error as { status?: number }).status) >= 500) }, mutations: { retry: false } } })
+const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, retry: (count, error) => { const status = error instanceof Error && 'status' in error ? (error as { status?: unknown }).status : undefined; return count < 2 && (typeof status !== 'number' || !Number.isFinite(status) || status >= 500) } }, mutations: { retry: false } } })
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

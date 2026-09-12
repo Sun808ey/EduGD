@@ -31,7 +31,7 @@ export const adminService = {
     const policies: Policy[] = []
     let page = 1
     while (true) {
-      const result = await this.listPolicies({ page, perPage: 100 }, 'active', signal)
+      const result = await adminService.listPolicies({ page, perPage: 100 }, 'active', signal)
       policies.push(...result.policies)
       if (!result.pagination.has_next) return policies
       page += 1

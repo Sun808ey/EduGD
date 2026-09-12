@@ -3,7 +3,9 @@ import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
-const sourceDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'src')
+const sourceDirectory = path
+  .resolve(path.dirname(fileURLToPath(import.meta.url)), 'src')
+  .replaceAll('\\', '/')
 
 export default defineConfig({
   plugins: [react()],
@@ -19,12 +21,12 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       include: [
         'src/auth/**/*.ts',
-        'src/context/**/*.tsx',
+        'src/context/**/*.{ts,tsx}',
         'src/lib/**/*.ts',
         'src/schemas/**/*.ts',
         'src/services/**/*.ts',
       ],
-      exclude: ['src/**/*.test.ts', 'src/test/'],
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/test/'],
       thresholds: {
         statements: 90,
         branches: 85,

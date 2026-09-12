@@ -91,6 +91,22 @@ requirements were not changed to obtain the passing result.
 
 ## GitHub synchronization and remaining gates
 
+**Phase 1 synchronization completed.** GitHub main was verified at
+`c9a659812d8eafd7d36d02f9c92d99c179534e46`, matching the reviewed local merge.
+This documentation follow-up records the observed hosted-CI blocker.
+
+All three hosted workflows were created for that commit but executed zero steps.
+GitHub's check annotations state: "The job was not started because your account
+is locked due to a billing issue." This is an account-level execution blocker,
+not a hosted test result. The account owner must resolve GitHub billing and
+rerun the workflows; no billing settings were changed here.
+
+| Hosted run | Observed result |
+| --- | --- |
+| [Backend quality](https://github.com/Sun808ey/EduGD/actions/runs/34693358124) | Not started: account billing lock |
+| [Frontend quality](https://github.com/Sun808ey/EduGD/actions/runs/34693358169) | Not started: account billing lock |
+| [PostgreSQL integration](https://github.com/Sun808ey/EduGD/actions/runs/34693358135) | Not started: account billing lock |
+
 The GitHub environment `backend-integration-test` exists. Its read-only public
 metadata exposed no protection rules. Classic main branch protection was also
 reported absent; repository rulesets were not established by that endpoint.

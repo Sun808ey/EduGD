@@ -122,6 +122,12 @@ androidDPC/**/build/
 
 androidDPC/local.properties
 
+# Preserve ignores for the alternate Android directory used on main.
+android/.gradle/
+android/**/build/
+android/local.properties
+*.jar
+
 ###############################################################################
 # Android Signing Keys
 ###############################################################################

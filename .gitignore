@@ -30,6 +30,21 @@ desktop.ini
 *.p12
 *.jks
 *.keystore
+*.pfx
+*.p8
+*.cer
+*.der
+*.p7b
+*.p7c
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+certs/
+certificates/
+
+# No automatic certificate exception. Force-add only the individually reviewed
+# public backend/certs/supabase-ca.pem described in the migration runbook.
 
 ###############################################################################
 # Logs
@@ -86,6 +101,27 @@ backend/instance/
 *.db
 *.sqlite
 *.sqlite3
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Database exports can contain application rows and credentials.
+*.dump
+*.dump.*
+*.pgdump
+*.pgdump.*
+*.backup
+*.backup.*
+*.sql
+*.sql.*
+backups/
+database-dumps/
+pg_dumps/
+# Authored migrations remain reviewable source, not database exports.
+!/backend/migrations/**/*.sql
 
 ###############################################################################
 # Flask Migrations
@@ -186,4 +222,4 @@ target/
 frontend/package-lock.json
 /11env.txt
 /secrets.txt
-/backend/operator-evidence/
+operator-evidence/

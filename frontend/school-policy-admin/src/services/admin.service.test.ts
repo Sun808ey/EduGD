@@ -43,7 +43,8 @@ describe('administrator API service', () => {
     vi.mocked(api.get)
       .mockResolvedValueOnce({ data: { policies: [policy], pagination: { page: 1, per_page: 100, total: 2, has_next: true } } })
       .mockResolvedValueOnce({ data: { policies: [{ ...policy, policy_uuid: deviceUuid }], pagination: { page: 2, per_page: 100, total: 2, has_next: false } } })
-    await expect(adminService.listAllPolicies()).resolves.toHaveLength(2)
+    const { listAllPolicies } = adminService
+    await expect(listAllPolicies()).resolves.toHaveLength(2)
     expect(api.get).toHaveBeenCalledTimes(2)
   })
 

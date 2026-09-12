@@ -1,7 +1,10 @@
 # EduG production integration implementation report
 
-Verified locally on 10 September 2026. External platform configuration and
-production state have not been inspected or changed.
+Initial integration verification: 10 September 2026. Reviewed for Phase 1 on
+12 September 2026, including the subsequently completed administrator portal.
+The dated implementation tables below retain the initial work record; current
+synchronization evidence is in [the Phase 1 report](phase-1-synchronization-report.md).
+Production platform configuration and production state remain unverified.
 
 ## A. Executive summary
 
@@ -39,7 +42,7 @@ cutover approval. No production database was contacted.
 | Logging | Existing Flask logging, error handling and Sentry remain. Gunicorn access logs omit request targets/headers/addresses; optional frontend Sentry drops request/user context and exception text. |
 | Security | Strong secret validation, body limits, replay defenses and one trusted proxy hop already exist. Production CORS now requires exact HTTPS origins. Historical-secret remediation remains externally unverified. |
 | Deployment | Railway is the sole configured backend platform and runs migrations as a separate pre-deploy command. |
-| Frontend | React/Vite/TypeScript/Axios foundation exists; starter UI and empty feature pages are not an implemented administrator application. A missing button-variant module blocked the baseline build. |
+| Frontend | The React/Vite/TypeScript administrator portal is implemented, including authentication, device/policy/enrollment/audit views and permission-aware actions. The starter UI and missing-module finding describe the pre-implementation baseline, now superseded by the frontend audit and section M. |
 | Android | No Android sources in this checkout. DevicePolicyManager → local deterministic engine → Room/queue → synchronization is the required external architecture, not a verified implementation here. Cloud connectivity must never become a prerequisite for cached enforcement. |
 
 The relevant backend, migrations, tests, configuration, dependencies, CI,
@@ -139,7 +142,7 @@ backend address is public `VITE_API_BASE_URL=https://<api-host>/api/v1`, supplie
 at build time. `VITE_SENTRY_DSN` may contain only the optional public browser DSN.
 No database or signing credentials belong in any `VITE_*` variable. Configure
 the exact HTTPS frontend origin server-side. See the frontend README for local
-development and the remaining UI/auth/error-handling work.
+development, implemented UI/auth/error handling and remaining staging checks.
 
 ## H. Security
 
@@ -201,7 +204,7 @@ first completed runs; no failing application test was removed or weakened.
 | Authentication/RBAC | PASS | Local regressions preserve contracts; target runtime-role verification still required. |
 | Security | FAIL | Historical-secret closure and deployed TLS/proxy/privilege verification unresolved. |
 | Deployment | FAIL | Railway/Linux startup and real service prerequisites not verified. |
-| Frontend integration readiness | FAIL | Browser/API staging flows and actual public endpoint/origin remain unverified; administrator UI is a scaffold. |
+| Frontend integration readiness | FAIL | Administrator UI is implemented and has local browser tests; real browser/API staging flows and actual public endpoint/origin remain unverified. |
 | Rate limiting | FAIL | Local behavior covered; shared production Redis and proxy identity require staging verification. |
 | Logging/error tracking | FAIL | Local logging/privacy checks pass; live log/Sentry delivery and privacy not verified. |
 | Forensic/audit integrity | FAIL | Local chain tests are insufficient to prove transferred data, PostgreSQL triggers or concurrency integrity. |

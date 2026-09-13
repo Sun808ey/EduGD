@@ -44,18 +44,27 @@ type without rendering the potentially sensitive exception message.
 
 ## Database variables
 
-Use separate Supabase projects for development, integration testing, staging,
-and production. Provisioning is manual and is not implied by this configuration.
+Use only two hosted Supabase projects under the approved Free-tier plan:
+staging `dviuaqtlbuefmfmswwqt` and production `hszskxrgkptbytuquyfu`.
+Do not create a third development/test project or run destructive tests on either.
+Local `APP_ENV=testing` uses SQLite; PostgreSQL integration coverage remains
+pending a compatible disposable local/ephemeral setup. Provider changes require
+explicit approval; variable definitions do not authorize provisioning.
+See the [environment resource map](environment-resource-map.md) for the observed
+inventory, proposed assignments, credential boundaries and remaining controls.
 
-- `DEVELOPMENT_DATABASE_URL` identifies the separate development connection.
+- `DEVELOPMENT_DATABASE_URL` is supported, but no hosted development project
+  is assigned under this plan.
 - `POSTGRES_TEST_DATABASE_URL` identifies the isolated PostgreSQL integration
-  and migration test project.
+  and migration test project; leave it unset for both assigned hosted projects.
 - `POSTGRES_TEST_PURPOSE` must be exactly `backend-integration-test` so an
   operator cannot accidentally select destructive tests without the expected
   purpose marker.
 - `POSTGRES_TEST_PROJECT_REF` is the non-secret approved Supabase test project
   reference and must match the configured and connected database URLs.
-- `PRODUCTION_DATABASE_URL` identifies the production runtime connection.
+- `PRODUCTION_DATABASE_URL` identifies the runtime connection in production
+  mode. Staging uses `APP_ENV=production` for hardening with its own staging URL
+  in this environment-local variable. `APP_ENV=staging` is unsupported.
 - `MIGRATION_DATABASE_URL` identifies the matching database using the migration
   owner through a direct or session-pooler connection as described below.
 - `PAIRING_TOKEN_PEPPER` is a deployment-secret HMAC pepper of at least 32
@@ -128,16 +137,15 @@ Production never uses `memory://`; all Gunicorn workers share `REDIS_URL`.
 Production defaults to `SQLALCHEMY_POOL_SIZE=3` and
 `SQLALCHEMY_MAX_OVERFLOW=2`. Both values are validated at application creation:
 pool size must be 1–10, overflow must be 0–10, and their sum must not exceed 10
-per worker. The retained Render configuration and new Railway configuration
-both use one worker, making the default per-instance ceiling `1 × (3 + 2) = 5`.
+per worker. The Railway configuration uses one worker, making the default
+per-instance ceiling `1 × (3 + 2) = 5`.
 Budget additionally for overlapping deployments, migrations and platform
 services. This is an application budget, not an assumed provider limit. Confirm
 it against the actual database allocation
 before changing worker or pool settings.
 
-Railway is the target runtime; Render files are retained for the existing
-deployment. `ProxyFix` trusts exactly one proxy hop in production and is
-disabled elsewhere. Verify Railway forwarded headers and signed raw request
+Railway is the configured backend runtime. `ProxyFix` trusts exactly one proxy
+hop in production and is disabled elsewhere. Verify Railway forwarded headers and signed raw request
 targets in staging. Do not add another proxy without reviewing this boundary,
 because forwarded
 addresses feed rate limits and audit pseudonyms.

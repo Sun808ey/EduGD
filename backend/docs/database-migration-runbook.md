@@ -17,8 +17,11 @@ against production, the source, or a rehearsal copy of production data.
    outage and device restart. Confirm how queued events are replayed. No Android
    code or event-upload API exists in this checkout; these are external evidence
    requirements, not implemented features of this change.
-4. Create separate Supabase production, rehearsal/staging and disposable test
-   projects. Do not use a production copy for destructive test execution.
+4. Use only the approved Free-tier staging and production projects in the
+   [environment resource map](environment-resource-map.md). Do not create a third
+   hosted test project. Neither assigned project nor a production copy may be
+   used for destructive integration tests. PostgreSQL integration verification
+   remains pending a compatible disposable local/ephemeral setup; it is not waived.
 5. Choose PostgreSQL versions/extensions compatible with the source. Inventory
    all non-system schemas; the supplied detailed verification covers `public`
    EduG tables. Additional application schemas need an expanded reviewed scope.
@@ -97,7 +100,7 @@ against production, the source, or a rehearsal copy of production data.
    `service_role` and PUBLIC on EduG objects. Default privileges depend on the
    actual migration owner; record that owner and review its `pg_default_acl`.
    Do not blanket-grant runtime DML on future tables. New migrations must include
-   a reviewed runtime privilege update. Test these grants on disposable staging.
+   a reviewed runtime privilege update. Verify these grants through approved staging checks without destructive tests.
 
 ## 3. Read-only inventory
 

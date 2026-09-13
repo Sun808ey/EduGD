@@ -226,21 +226,27 @@ verified database backups.
 
 ## L. MANUAL ACTION REQUIRED
 
+**13 September 2026 revision:** Follow the two-project Free-tier
+[environment resource map](environment-resource-map.md). Neither staging nor
+production may receive destructive integration tests. Historical test evidence
+in this report is unchanged. Provider changes require explicit approval.
+
 These actions require actual accounts, credentials, infrastructure or devices.
 The [database migration runbook](database-migration-runbook.md) gives ordered
 commands, SQL privilege setup, evidence gates and rollback instructions:
 
 1. In GitHub **Settings → Secrets and variables → Actions**, remove the unused
    legacy endpoint-ID secret from repository and environment scopes. Confirm
-   `POSTGRES_TEST_PROJECT_REF` is a variable containing only the dedicated
-   disposable test project reference. The workflow supplies
+   neither approved hosted project is assigned to `POSTGRES_TEST_PROJECT_REF`
+   or the test URL secrets. The workflow supplies
    `POSTGRES_TEST_PURPOSE=backend-integration-test` itself.
 2. Ensure the runtime and migration URL secrets contain Supabase direct or
    session-pooler port-5432 URLs with `sslmode=verify-full`. Provision the
    trusted CA for both Railway runtime and pre-deploy execution. Never put these
    URLs in frontend variables, source, issues or logs.
-3. Run hosted PostgreSQL CI against an empty disposable test project. It must
-   pass migration, PostgreSQL and concurrency tests before production rollout.
+3. Implement a compatible no-cost disposable local/ephemeral PostgreSQL test
+   path. Migration, PostgreSQL and concurrency checks remain rollout gates;
+   SQLite-only results do not satisfy them. Do not provision a third hosted project.
 4. Capture the live production inventory, migration head, roles/grants, schema,
    sequences and forensic verification. Make an independent backup and perform
    an actual restore rehearsal. Keep reports under controlled access.

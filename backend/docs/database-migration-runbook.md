@@ -189,10 +189,16 @@ arguments. Never run with shell tracing or print the password file.
 
 ## 5. Configure Railway without releasing production traffic
 
-1. Create a backend service from this repository with root directory `/backend`
-   and configuration path `/backend/railway.json`. Disable automatic production
-   deployments until the migration release is approved. Do not initially attach
-   production credentials to a deployment that could run pre-deploy migrations.
+1. Create an empty backend service only after explicit approval, then prepare
+   the repository connection with root directory `/backend`. For new services,
+   do not set `/backend/railway.json` as the configuration path: Railway no longer
+   allows new services to opt into legacy Config as Code. Use reviewed dashboard
+   settings or Infrastructure as Code, preserving the build/start/healthcheck
+   settings described below. See [Railway's current guidance](https://docs.railway.com/config-as-code)
+   and the [environment resource map](environment-resource-map.md).
+   Leave the source unconnected until configuration and release approvals are
+   complete. Keep automatic production deployments disabled. Do not attach
+   production credentials to a deployment that could run unapproved migrations.
 2. Use Railpack, set `RAILPACK_PYTHON_VERSION=3.12.10` to match the verified
    baseline (review security updates separately), and verify the build log.
    Build only installs requirements; `flask --app run.py db upgrade` is the

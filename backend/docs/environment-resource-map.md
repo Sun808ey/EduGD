@@ -2,8 +2,28 @@
 
 ## Status and scope
 
-**Staging and production references confirmed by the owner on 13 September
-2026. Live configuration and isolation remain unverified.** This map separates the required design from resources observed on
+**Latest instruction: steps 1 and 2 must use zero-cost Redis alternatives.**
+The [zero-cost Redis implementation plan](zero-cost-redis-plan.md) supersedes
+proposals below to add Railway production Redis. Upstash Free staging and Aiven
+Free Valkey production were proposed. Upstash staging, its TLS endpoint and
+synthetic probe writes are now explicitly approved, as is retirement of the
+existing Railway staging Redis after replacement verification. Upstash Free staging database `5c8b39a5-c1f5-4a0d-923b-a9bebb84374e`
+has been created; the owner reports the staging live probe PASS. The approved
+Railway staging Redis service and volume have been deleted and their absence
+verified in the dashboard. Aiven production approval remains pending. Historical
+resource IDs below are retained as history, not as active inventory.
+Step 3 is paused until steps 1 and 2 are verified.
+
+**The owner confirmed both Supabase projects are active (healthy), on Free,
+and in `eu-west-1` on 13 September 2026.** The Supabase assignment checkpoint
+is satisfied by owner confirmation. The owner also confirmed `blissful-luck`
+as the EduG Railway host and reported that the Free-capacity check passed.
+The owner supplied distinct Railway staging/production environment IDs and
+confirmed staging was created empty, production remained unchanged, and no
+deployments or migrations were started. The owner also confirmed production has no EduG API or Redis service.
+The empty staging API has since been created and verified as recorded below.
+The empty production API has also been created with separate explicit approval.
+Redis provisioning, credential isolation and Vercel assignments remain pending. Historical dashboard observations date from
 12 September 2026. It does not authorize deployment, migrations, destructive
 tests, credential replacement or changes to unrelated services.
 
@@ -14,21 +34,29 @@ testing is not assigned a project under the revised Free-tier plan.
 ## Required resource map
 
 Only two hosted Supabase projects are approved. Their references below were
-provided by the owner and are distinct; live status and credentials have not
-been independently verified. Railway and Vercel assignments remain proposed.
+provided by the owner and are distinct. Status, plan, region and organization
+are owner-confirmed; no independent dashboard or credential verification is claimed.
+The Railway project and environment assignments are owner-confirmed. The staging
+and production API IDs are dashboard-verified; Redis and Vercel assignments
+remain pending.
 All provider changes require explicit approval; this map authorizes no paid
 plans, add-ons, credit purchases or billable overages.
 
 | Environment | Supabase | Railway | Vercel |
 | --- | --- | --- | --- |
-| Staging | `dviuaqtlbuefmfmswwqt` (owner-confirmed staging) | Dedicated `staging` environment with its own API service, Redis and secrets; project/environment IDs pending | Separate project, proposed `edug-admin-staging`, with a stable HTTPS domain; project/domain pending |
-| Production | `hszskxrgkptbytuquyfu` (owner-confirmed production) | Dedicated `production` environment with its own API service, Redis and secrets; project/environment IDs pending | Existing `edug-admin` is a candidate; observed domain `edug-admin.vercel.app`; assignment and backend target still require verification |
+| Staging | `dviuaqtlbuefmfmswwqt`; active/healthy, Free, `eu-west-1` (owner-confirmed) | `blissful-luck` (`7d0c485e-3e9f-411c-9412-af8dd6f32481`); `staging` environment `a8928189-e7bb-46be-8788-856816caecd0`; empty API `edug-api-staging`, service `5ac7afd9-8d99-4ab6-92b8-3e4adab1f058` (offline); Railway Redis and volume retired. Replacement: Upstash Free `5c8b39a5-c1f5-4a0d-923b-a9bebb84374e`, external TLS, owner-reported probe PASS; API connection pending | Separate project, proposed `edug-admin-staging`, with a stable HTTPS domain; project/domain pending |
+| Production | `hszskxrgkptbytuquyfu`; active/healthy, Free, `eu-west-1` (owner-confirmed) | `blissful-luck` (`7d0c485e-3e9f-411c-9412-af8dd6f32481`); `production` environment `48e80896-15ef-4616-837e-d59240fc503a`; empty API `edug-api-production`, service `8e9b3d47-6efe-4e32-aef3-74fa69b99ef5` (dashboard-verified, offline); Redis absent | Existing `edug-admin` is a candidate; observed domain `edug-admin.vercel.app`; assignment and backend target still require verification |
 
 Use the same reviewed code revision for staging and promotion to production.
 Do not treat `feature/frontend-production` as a permanent staging branch merely
 because of its name. Record the intended deployment branches separately when
 configuring automatic deployments; leave production auto-deployment disabled
 until the deployment gates pass.
+
+Both projects belong to organization
+[`ogicyjubywkbhvkcgraf`](https://supabase.com/dashboard/org/ogicyjubywkbhvkcgraf),
+as confirmed by the owner. This confirmation does not authorize migrations,
+deployments or credential changes.
 
 ## Observed inventory
 
@@ -37,7 +65,7 @@ These are non-secret dashboard identifiers, not connection strings or tokens.
 | Provider | Observed resource | What is established | What remains unknown |
 | --- | --- | --- | --- |
 | Supabase | `Sun808ey's Project`, dashboard project `hldwbhnaoschhelecksq`, region `eu-west-1` | One project visible in the selected Free organization | Existing data, clients, intended environment, runtime roles and credential scope; do not designate it disposable |
-| Railway | `blissful-luck`, project `7d0c485e-3e9f-411c-9412-af8dd6f32481` | Dashboard lists no services; possible candidate for EduG | Intended ownership/purpose, environment inventory and token scopes |
+| Railway | `blissful-luck`, project `7d0c485e-3e9f-411c-9412-af8dd6f32481` | Owner-confirmed EduG host; owner reports Free-capacity check passed. Earlier dashboard observation listed no services | Environment IDs and absent production API/Redis confirmed by owner; service creation, configuration and token scopes pending |
 | Railway | `serene-appreciation`, project `c6d8efd6-7ddb-4cf8-b6dc-767b3d244f09` | `production` environment contains online service `PLuwebz` | No evidence connects it to EduG; leave untouched |
 | Vercel | `sun-g/edug-admin` | Linked to `Sun808ey/EduGD`; stable domain `edug-admin.vercel.app`; feature-branch previews exist | Environment-specific API URL, production branch/root settings and deployment readiness |
 | Vercel | Other projects in `sun-g` | Other repositories are listed | Outside this map; do not repurpose them |
@@ -45,18 +73,20 @@ These are non-secret dashboard identifiers, not connection strings or tokens.
 ## Free-tier capacity and test policy
 
 The older Supabase reference in the historical inventory is not assigned to this
-plan. Do not delete, pause or repurpose it automatically. Verify the two assigned
-projects' organization, regions and active status before configuration.
+plan. Do not delete, pause or repurpose it automatically. The owner has now
+confirmed the two assigned projects' organization, region, Free plan and healthy
+status. No third active project is part of this plan.
 
 - Supabase Free permits two active projects, includes a 500 MB database per
   project, and pauses inactive projects after one week. Automatic backups and
   point-in-time recovery are not included. Arrange approved manual backup and
   restore checks; do not commit dumps or promise continuous availability.[3]
-- Railway Free provides $1 of monthly credit. The observed account was on Trial;
-  temporary credits do not establish ongoing Free capacity. Verify eligibility
-  and combined API/Redis usage before deployment. Two always-running stacks have
-  not been demonstrated to fit Free. Keep required Redis hardening; do not rely
-  on paid environment RBAC or upgrade automatically.[6]
+- Railway Free provides $1 of monthly credit.[6] The owner confirmed that the
+  Free-capacity check passed for EduG on `blissful-luck`; this checkpoint is
+  satisfied by owner confirmation. The earlier Trial observation is historical.
+  No independent usage measurements or continuous-uptime guarantee are claimed.
+  Keep deployed usage within Free allowances and retain required Redis hardening;
+  do not rely on paid environment RBAC or upgrade automatically.
 - Use separate Vercel Hobby projects and provider domains without paid custom
   environments. Hobby is limited to personal, non-commercial use; confirm the
   application's eligibility before deployment. Confirm actual domain names and
@@ -98,7 +128,8 @@ The two URLs for one environment must resolve to that same project/database,
 using direct or session connections with certificate-verifying TLS. Reusing a
 Supabase project with another schema, role or pooler hostname is not isolation.
 
-Create Railway staging as an **empty environment**. Railway's duplication flow
+Railway staging was created as an **empty environment**, as confirmed by the
+owner. Preserve that separation during subsequent service configuration. Railway's duplication flow
 copies unsealed variables as well as services; deployment before reviewing copied values
 could connect staging to production. Railway isolates private networking by
 environment, but external Supabase credentials still require explicit separation.
@@ -142,18 +173,32 @@ the overall isolation outcome complete. This map adds no runtime behavior.
 
 ## Manual configuration sequence
 
-1. **Assignments received; live verification pending.** After explicit approval,
-   verify staging `dviuaqtlbuefmfmswwqt` and production
-   `hszskxrgkptbytuquyfu` in the dashboard, including regions and active Free
-   status. Keep independent credentials in the secret manager. Do not create
-   a third project. Review hosted destructive CI scope as described above.
-2. Confirm the Railway project and ongoing Free API/Redis capacity. Obtain
-   explicit approval before establishing separate `staging` and
-   `production` environments, starting staging empty. Record each environment
-   ID, API service ID and Redis service ID. Configure only the matching
-   environment's credentials, private service references and deployment-token
-   scope. Keep production deployment and pre-deploy migration inactive during
-   setup.
+1. **Supabase assignment checkpoint complete by owner confirmation.** Staging
+   `dviuaqtlbuefmfmswwqt` and production `hszskxrgkptbytuquyfu` are distinct,
+   active/healthy, Free and in `eu-west-1`, organization `ogicyjubywkbhvkcgraf`.
+   Keep independent credentials in the secret manager. No third project is
+   authorized. Hosted destructive CI scope review remains pending as described
+   above; project health does not establish credential isolation or test safety.
+2. **Railway environment assignment checkpoint complete by owner confirmation.**
+   Use `blissful-luck`, project `7d0c485e-3e9f-411c-9412-af8dd6f32481`:
+   staging `a8928189-e7bb-46be-8788-856816caecd0` and production
+   `48e80896-15ef-4616-837e-d59240fc503a`. Both IDs have valid UUID syntax and
+   differ; syntax checks do not independently verify provider ownership.
+   Staging was created empty, production remained unchanged, and no deployments
+   or migrations were started. The supplied confirmation contains only non-secret
+   identifiers and setup status.
+
+   **Production service inventory complete by owner confirmation.** EduG API:
+   absent, name/ID N/A. Redis: absent, name/ID N/A. Staging was created empty.
+   The owner confirmed no configuration, deployment, migration, commit or push
+   was performed during this inventory check. N/A denotes absence, not an ID.
+
+   **Approved empty staging API creation completed.** Service
+   `edug-api-staging` has ID `5ac7afd9-8d99-4ab6-92b8-3e4adab1f058`.
+   The dashboard shows it offline, unexposed and with no active deployment.
+   The separately approved empty production API was also created; see its
+   verification below. Redis and subsequent configuration/deployments remain
+   unapproved.
 3. Confirm `edug-admin` as the production Vercel project and establish a separate
    stable staging project/domain. Record both project IDs, roots, deployment
    branches and domains. Assign public API URLs to matching environments only;
@@ -169,6 +214,235 @@ the next dependent step. No secrets are needed in chat. Until then this document
 is a proposed resource map with an observed inventory, not a completed isolation
 certificate.
 
+## Approved empty staging API creation
+
+Following explicit owner approval, created `edug-api-staging` in staging
+`a8928189-e7bb-46be-8788-856816caecd0`, service ID
+`5ac7afd9-8d99-4ab6-92b8-3e4adab1f058`. The dashboard was checked on
+13 September 2026: source is unconnected, the service is offline and unexposed,
+and the Deployments tab states there is no active deployment. No repository,
+image, variables, credentials or volume was attached; no workload or migration
+was started. Production was not modified.
+
+Railway first staged one empty-service addition. Its review dialog showed only
+`edug-api-staging will be added`. Applying that change using the dashboard's
+**Deploy Changes** button persisted the empty service without a workload
+deployment; the pending-change banner disappeared. No Git commit or push was
+performed. This completes empty-service creation only.[8][9]
+
+The dashboard still displays a Trial countdown. The owner's Free-capacity
+confirmation remains recorded, but ongoing Free eligibility must not be inferred
+from the Trial balance before running services.
+
+The service settings also display a notice that new services cannot opt into
+legacy Config as Code after 28 August 2026. Before any API deployment, review the
+supported configuration path instead of assuming `backend/railway.json` will be
+applied. Official documentation confirms that new services cannot opt in and
+identifies Infrastructure as Code as the replacement.[11] The migration runbook
+now requires supported dashboard settings or reviewed IaC before deployment.
+No provider configuration migration was performed in this step.
+
+Redis is a separate approval step because provisioning the database starts a
+running service and consumes resources. After approval, the intended design is
+one private Redis service per environment, each referenced only by its matching
+API. Do not create Redis merely to obtain a service ID while deployments are
+still prohibited.[9][10]
+
+Before attaching the API repository or deploying, review environment credentials,
+Free resource limits and migration authorization. `backend/railway.json` currently
+sets `preDeployCommand` to `flask --app run.py db upgrade`; an API deployment can
+therefore run migrations. Empty-service creation does not approve that command.
+Production service creation and all deployment/migration actions require their
+own explicit approval. Vercel assignments and the hosted destructive-test scope
+review remain outstanding; this inventory is not proof of complete isolation.
+
+## Remaining Phase 2.1 checkpoints
+
+| Item | Current evidence | Remaining action |
+| --- | --- | --- |
+| Supabase assignments | Two distinct owner-confirmed healthy Free projects in `eu-west-1` | Preserve their separate credential scopes |
+| Railway environments | Two owner-confirmed distinct IDs in `blissful-luck` | Preserve environment separation |
+| Staging API | Empty service created and dashboard-verified offline | Configure only after approval |
+| Production API | Empty service `8e9b3d47-6efe-4e32-aef3-74fa69b99ef5` created and dashboard-verified offline | Configure only after approval |
+| Redis | Upstash Free staging created; owner-reported live probe PASS; legacy Railway staging Redis and volume retired; production store absent | Separate Aiven Free Valkey approval and production verification pending; API references and Railway connectivity remain unconfigured |
+| Vercel | Production candidate `edug-admin`; staging unassigned | Confirm production assignment and Hobby eligibility; approve staging project setup and record IDs/domains |
+| Credential/routing isolation | Requirements documented; no deployed validation evidence | Configure and verify matching databases, Redis, secrets and frontend/API targets |
+| PostgreSQL test safety | Existing workflow still enables destructive hosted tests | Review hosted secret scope; neither approved project may be used; compatible disposable test path remains pending |
+| Deployment configuration | Legacy JSON cannot configure new Railway services | Review dashboard settings or IaC before connecting sources; migrations require approval |
+
+## Approved empty production API creation
+
+Following explicit owner approval, created `edug-api-production` in `blissful-luck`
+production environment `48e80896-15ef-4616-837e-d59240fc503a`. Service ID:
+`8e9b3d47-6efe-4e32-aef3-74fa69b99ef5`, distinct from the staging API ID.
+
+Dashboard verification on 13 September 2026 showed an unconnected source,
+an offline and unexposed service, and no active deployment. No repository,
+image, variables, secrets, volume or public domain was attached. The change
+review contained only the empty production service addition; applying it cleared
+the pending-change banner without starting a workload or migration. Staging was
+not modified. No Git commit or push was performed.
+
+Both empty API service creation checkpoints are now complete. Redis provisioning,
+service configuration, Vercel assignments and isolation verification remain
+pending. This approval does not extend to those changes or to a paid plan.
+
+## Completion audit and next approval
+
+Phase 2.1 is **incomplete**. The two Supabase assignments, Railway environment
+assignments and empty API service creation are recorded. Empty services do not
+prove database connectivity, Redis availability, credential isolation or frontend
+routing. Redis and Vercel assignments, supported deployment configuration and
+hosted-test safety remain open in the checklist above.
+
+The following **staging Redis provisioning** plan was explicitly approved and
+executed; verified results are recorded below:
+
+1. In `blissful-luck`, select staging environment
+   `a8928189-e7bb-46be-8788-856816caecd0` and review its current included-credit
+   balance and Redis template resource/volume settings before applying changes.
+2. Provision one standard Redis service named `edug-redis-staging`, using the
+   provider template's generated credentials kept inside Railway. This starts
+   a Redis workload and consumes included credits; it is not an empty service.
+   Keep the template's private networking; do not add Public Access or a TCP
+   proxy. Review any template volume as part of the approval, rather than adding
+   unreviewed storage. No paid upgrade, credit purchase or overage is authorized.
+3. Verify the service belongs to staging, record its non-secret ID and check
+   its running status and private-only networking without exposing credentials.
+   Leave both API services unconnected/offline. Do not modify production,
+   connect Supabase, run migrations or populate API credentials in this step.
+4. If the template cannot be provisioned within the zero-payment constraint,
+   stop before applying it. Production Redis needs separate approval after the
+   staging result and resource usage have been reviewed.
+
+Railway's documentation says Trial transitions to Free with $1 monthly credit;
+that does not establish that two complete always-running stacks fit the budget.
+It also warns that Trial-created stateful volumes are deleted 30 days after
+credit expiry. The Free-only operating plan therefore needs a reviewed retention
+and recovery decision before treating Redis storage as durable.[12] No paid
+retention feature is approved. Redis is private by default, while public access
+requires a TCP proxy; leave that public access disabled.[10]
+
+## Approved staging Redis provisioning result
+
+Historical result: this Railway service and its volume were subsequently retired
+after the Upstash staging probe passed, as recorded below.
+
+On 13 September 2026, provisioned the approved Railway Redis template in
+`blissful-luck` staging `a8928189-e7bb-46be-8788-856816caecd0` and renamed it
+`edug-redis-staging`.
+
+| Property | Dashboard-verified result |
+| --- | --- |
+| Service ID | `f189c590-df15-4297-9286-1afa643a171f` |
+| Deployment ID | `1a7b9f92-4e09-4ee8-9983-cfa70700b681` |
+| Image/status | `redis:8.2`; ACTIVE, deployment successful, service online |
+| Networking | Unexposed; Add Public Access remains available, no TCP proxy added; private hostname `redis.railway.internal` |
+| Volume | `redis-volume-Zt_B`, ID `1ba54880-ce0f-4abb-bd94-fa89d9bdf68b` |
+| Storage | 500 MB maximum, mounted at `/data` |
+| Available allowance at creation | Trial dashboard showed 18 days or $4.56 remaining |
+| API state | Staging and production API services both remained offline; production has no active deployment |
+
+The database menu provisioned and deployed the template immediately. Its attached
+volume was inspected after provisioning and matched the 500 MB allowance; no
+additional volume or storage increase was requested. Generated credentials stayed
+inside Railway and were not displayed, copied to the APIs or written to Git.
+No public endpoint, paid plan, paid add-on or credit purchase was enabled. The
+Redis workload and stored data consume the available included allowance; future
+usage has not been measured or guaranteed to fit the recurring Free allowance.
+Trial volume retention limitations described above still apply.
+
+No API deployment, Supabase connection or migration was performed. Production
+Redis is still absent. Production Redis provisioning, API configuration and
+Vercel assignment remain separate pending steps requiring approval as applicable.
+No Git commit or push was performed. Dashboard health is not an authenticated
+application-to-Redis connectivity test; that verification remains pending API
+configuration.
+
+## Sequential completion gates
+
+Proceed in this order, recording evidence for each gate before advancing. A
+successful provisioning step is not proof of flawless end-to-end operation.
+
+1. **Staging Redis operational and Free-budget review.** The following Railway
+   measurements are historical; the resource has since been retired and replaced
+   by Upstash Free, with an owner-reported local probe PASS. Application usage
+   and Railway-to-Upstash connectivity remain unverified. Earlier creation,
+   private networking and the attached 500 MB volume were verified. On the
+   subsequent 13 September dashboard review, Cost by Service displayed 0.09 GB
+   RAM, 0.02 vCPU and 0.29 GB volume for staging Redis. Current costs rounded to
+   zero and the Trial balance still displayed $4.56; neither proves zero ongoing
+   consumption. If those resource levels were sustained, the illustrative cost
+   is `(0.09 * 10) + (0.02 * 20) + (0.29 * 0.15) = $1.3435/month`, before APIs,
+   production Redis or egress.[6] This short observation is not a representative
+   monthly forecast. Gather representative average usage and settle a Free-only
+   operating/retention plan before expanding. Do not treat the previous owner
+   capacity confirmation as proof against newer measured evidence.
+2. **Production Redis-compatible store.** Only after gate 1 passes and explicit
+   approval is given, follow the zero-cost implementation plan (not a new
+   Railway Redis deployment) with independent generated credentials;
+   verify its environment, ID, volume, running status and total Free budget.
+3. **Frontend assignments.** Confirm the production Vercel project and Hobby
+   eligibility, then obtain approval for the separate staging project. Record
+   both IDs, deployment branches, roots and exact HTTPS domains. Verify them
+   before assigning API targets.
+4. **Deployment configuration and test safety.** Prepare supported Railway
+   dashboard settings or reviewed IaC for the new services. Ensure destructive
+   PostgreSQL CI cannot target either assigned project. Complete the compatible
+   disposable test path and required configuration guards before rollout;
+   SQLite-only coverage is insufficient. Do not run migrations at this gate.
+5. **Environment-specific configuration.** With explicit approval, configure
+   runtime/migration roles, TLS trust, separate secrets, private Redis references,
+   API URLs and exact CORS origins. Verify each environment's identities and
+   absence of cross-environment credentials without exposing secret values.
+6. **Staging integration verification.** After migration/deployment approval,
+   verify staging readiness, PostgreSQL/TLS and authenticated Redis connectivity,
+   frontend routing, rate limiting and isolation. Record actual results and
+   resource usage. Resolve every failure before promotion.
+7. **Production verification and final audit.** Obtain the separate production
+   release/migration approval, perform approved smoke and isolation checks, and
+   reconcile the resource map with live settings. Mark the complete outcome only
+   when all gates have evidence; a resource map or healthy container alone is
+   insufficient. Committing and pushing remain the owner's task.
+
+The earlier sequential review made no provider changes. Subsequently, the owner
+approved Upstash Free staging and retirement of the identified Railway Redis
+service and volume; both actions are now complete as recorded below. Production
+Redis must not be provisioned before its separate provider approval. No paid
+upgrade is authorized or applied.
+
+## Upstash staging replacement created
+
+Created the approved `edug-redis-staging` database on Upstash Free in Ireland
+(`eu-west-1`), ID `5c8b39a5-c1f5-4a0d-923b-a9bebb84374e`. Dashboard verified
+Free Tier and TLS enabled; TCP endpoint `set-mayfly-105830.upstash.io:6379`.
+No payment method was added. The owner reported
+`PASS: staging TLS/auth, expiry and fixed-window checks.` after running the
+command in [the zero-cost plan](zero-cost-redis-plan.md). This is an owner-reported
+local test, not an agent-observed probe or verification from Railway.
+No production setup, API deployment, Supabase migration, commit or push occurred.
+
+## Approved Railway staging Redis retirement
+
+On 13 September 2026, after the owner-reported Upstash PASS, applied the already
+approved deletion of exactly these staging resources:
+
+- Service `edug-redis-staging`, ID `f189c590-df15-4297-9286-1afa643a171f`.
+- Volume `redis-volume-Zt_B`, ID `1ba54880-ce0f-4abb-bd94-fa89d9bdf68b`.
+
+Railway's final destructive-change review listed only these two resources in
+`blissful-luck/staging`. After applying and reloading, the staging architecture
+showed only `edug-api-staging` offline; neither Redis resource nor a pending
+change banner remained. A separate production dashboard check showed only
+`edug-api-production` offline. No API configuration, deployment, Supabase change,
+Git commit or push was performed. Retirement removes these metered resources;
+it does not reverse prior credit consumption or establish the whole app's cost.
+
+Staging provider creation, owner-reported compatibility probe and legacy resource
+retirement are complete. Production provider approval and verification,
+Railway-to-provider connectivity, representative usage and environment isolation
+remain pending. Step 3 remains paused; Phase 2.1 is not fully complete.
+
 ## Sources
 
 Pricing and Hobby guidance checked 13 September 2026; other guidance accessed
@@ -183,3 +457,11 @@ configuration must be checked again when provisioning.
 
 6. Railway, [Pricing plans](https://docs.railway.com/pricing/plans): Free allowance and temporary Trial credits.
 7. Vercel, [Hobby plan](https://vercel.com/docs/plans/hobby): eligibility and usage limits.
+
+8. Railway, [Services](https://docs.railway.com/services): empty service creation and separate deployment step; checked 13 September 2026.
+9. Railway, [railway add](https://docs.railway.com/cli/add): empty services and automatic database deployment; checked 13 September 2026.
+10. Railway, [Redis](https://docs.railway.com/databases/redis): provisioning and service connection variables; checked 13 September 2026.
+
+11. Railway, [Config as Code](https://docs.railway.com/config-as-code) and [Infrastructure as Code](https://docs.railway.com/infrastructure-as-code): new-service restrictions and replacement configuration workflow; checked 13 September 2026.
+
+12. Railway, [Free Trial](https://docs.railway.com/pricing/free-trial): transition to Free and Trial volume retention; checked 13 September 2026.

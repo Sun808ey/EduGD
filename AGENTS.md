@@ -12,3 +12,11 @@
   database dumps, operator evidence and local certificates out of Git.
 - A public Supabase CA may be staged only after individual review under
   `backend/docs/database-migration-runbook.md`; do not broadly allow certificates.
+
+- Use Free-tier resources only. Approved hosted Supabase projects are staging
+  `dviuaqtlbuefmfmswwqt` and production `hszskxrgkptbytuquyfu`; do not create a
+  third project or run destructive integration tests against either. Follow
+  `backend/docs/environment-resource-map.md`. Obtain explicit approval before
+  provider configuration, deployments, migrations or credential changes. Do not
+  enable paid plans, add-ons or billable overages without an explicit override
+  of the Free-only constraint.

@@ -223,7 +223,9 @@ def test_authorization_rechecks_postgres_permissions_for_each_request(
     access_token = _login(postgres_authentication_app).get_json()["access_token"]
     headers = _authorization_header(access_token)
 
-    with postgres_authentication_app.test_request_context(headers=headers):
+    with postgres_authentication_app.test_request_context(
+        "/api/v1/admin/permission-probe", headers=headers
+    ):
         allowed = postgres_authentication_app.make_response(protected())
 
     administrator = _administrator()
@@ -235,7 +237,9 @@ def test_authorization_rechecks_postgres_permissions_for_each_request(
     )
     db.session.commit()
 
-    with postgres_authentication_app.test_request_context(headers=headers):
+    with postgres_authentication_app.test_request_context(
+        "/api/v1/admin/permission-probe", headers=headers
+    ):
         denied = postgres_authentication_app.make_response(protected())
 
     assert allowed.status_code == 200

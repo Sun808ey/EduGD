@@ -10,7 +10,11 @@ synthetic probe writes are now explicitly approved, as is retirement of the
 existing Railway staging Redis after replacement verification. Upstash Free staging database `5c8b39a5-c1f5-4a0d-923b-a9bebb84374e`
 has been created; the owner reports the staging live probe PASS. The approved
 Railway staging Redis service and volume have been deleted and their absence
-verified in the dashboard. Aiven production approval remains pending. Historical
+verified in the dashboard. One Aiven Free Valkey production service with external
+TLS and temporary verification writes is now explicitly approved; account
+production service is Running on Free-1 as of 14 September 2026;
+TLS certificate/hostname verification passed and the owner reports the
+production authenticated probe PASS. Historical
 resource IDs below are retained as history, not as active inventory.
 Step 3 is paused until steps 1 and 2 are verified.
 
@@ -23,7 +27,8 @@ confirmed staging was created empty, production remained unchanged, and no
 deployments or migrations were started. The owner also confirmed production has no EduG API or Redis service.
 The empty staging API has since been created and verified as recorded below.
 The empty production API has also been created with separate explicit approval.
-Redis provisioning, credential isolation and Vercel assignments remain pending. Historical dashboard observations date from
+Redis provisioning and owner-reported local probes are complete; credential
+isolation and Vercel assignments remain pending. Historical dashboard observations date from
 12 September 2026. It does not authorize deployment, migrations, destructive
 tests, credential replacement or changes to unrelated services.
 
@@ -45,7 +50,7 @@ plans, add-ons, credit purchases or billable overages.
 | Environment | Supabase | Railway | Vercel |
 | --- | --- | --- | --- |
 | Staging | `dviuaqtlbuefmfmswwqt`; active/healthy, Free, `eu-west-1` (owner-confirmed) | `blissful-luck` (`7d0c485e-3e9f-411c-9412-af8dd6f32481`); `staging` environment `a8928189-e7bb-46be-8788-856816caecd0`; empty API `edug-api-staging`, service `5ac7afd9-8d99-4ab6-92b8-3e4adab1f058` (offline); Railway Redis and volume retired. Replacement: Upstash Free `5c8b39a5-c1f5-4a0d-923b-a9bebb84374e`, external TLS, owner-reported probe PASS; API connection pending | Separate project, proposed `edug-admin-staging`, with a stable HTTPS domain; project/domain pending |
-| Production | `hszskxrgkptbytuquyfu`; active/healthy, Free, `eu-west-1` (owner-confirmed) | `blissful-luck` (`7d0c485e-3e9f-411c-9412-af8dd6f32481`); `production` environment `48e80896-15ef-4616-837e-d59240fc503a`; empty API `edug-api-production`, service `8e9b3d47-6efe-4e32-aef3-74fa69b99ef5` (dashboard-verified, offline); Redis absent | Existing `edug-admin` is a candidate; observed domain `edug-admin.vercel.app`; assignment and backend target still require verification |
+| Production | `hszskxrgkptbytuquyfu`; active/healthy, Free, `eu-west-1` (owner-confirmed) | `blissful-luck` (`7d0c485e-3e9f-411c-9412-af8dd6f32481`); `production` environment `48e80896-15ef-4616-837e-d59240fc503a`; empty API `edug-api-production`, service `8e9b3d47-6efe-4e32-aef3-74fa69b99ef5` (dashboard-verified, offline); external Aiven Free-1 `edug-production/edug-redis-production`, owner-reported probe PASS; API connection pending | Existing `edug-admin` is a candidate; observed domain `edug-admin.vercel.app`; assignment and backend target still require verification |
 
 Use the same reviewed code revision for staging and promotion to production.
 Do not treat `feature/frontend-production` as a permanent staging branch merely
@@ -264,7 +269,7 @@ review remain outstanding; this inventory is not proof of complete isolation.
 | Railway environments | Two owner-confirmed distinct IDs in `blissful-luck` | Preserve environment separation |
 | Staging API | Empty service created and dashboard-verified offline | Configure only after approval |
 | Production API | Empty service `8e9b3d47-6efe-4e32-aef3-74fa69b99ef5` created and dashboard-verified offline | Configure only after approval |
-| Redis | Upstash Free staging created; owner-reported live probe PASS; legacy Railway staging Redis and volume retired; production store absent | Separate Aiven Free Valkey approval and production verification pending; API references and Railway connectivity remain unconfigured |
+| Redis | Upstash Free staging created; owner-reported live probe PASS; legacy Railway staging Redis and volume retired; Aiven production Running on Free-1, TLS handshake passed | Both local probes owner-reported PASS; API references, Railway connectivity and usage validation remain pending |
 | Vercel | Production candidate `edug-admin`; staging unassigned | Confirm production assignment and Hobby eligibility; approve staging project setup and record IDs/domains |
 | Credential/routing isolation | Requirements documented; no deployed validation evidence | Configure and verify matching databases, Redis, secrets and frontend/API targets |
 | PostgreSQL test safety | Existing workflow still enables destructive hosted tests | Review hosted secret scope; neither approved project may be used; compatible disposable test path remains pending |
@@ -439,9 +444,43 @@ Git commit or push was performed. Retirement removes these metered resources;
 it does not reverse prior credit consumption or establish the whole app's cost.
 
 Staging provider creation, owner-reported compatibility probe and legacy resource
-retirement are complete. Production provider approval and verification,
-Railway-to-provider connectivity, representative usage and environment isolation
-remain pending. Step 3 remains paused; Phase 2.1 is not fully complete.
+retirement are complete. Production provider creation and owner-reported local
+probe are also complete. Railway-to-provider connectivity, representative usage
+and environment isolation remain pending. Step 3 remains paused; Phase 2.1 is not fully complete.
+
+## Approved Aiven production setup: onboarding checkpoint
+
+On 13 September 2026, the owner approved one Aiven Free Valkey production service
+named `edug-redis-production`, external TLS and temporary synthetic verification
+writes, without paid upgrades or API deployment. On 14 September, authenticated
+access to `/welcome` was verified in Chrome Sun. The selected Valkey plan displays
+Free forever, 1 CPU, 1 GB RAM and auto-assigned Europe. Prepared project name
+`edug-production` and service name `edug-redis-production`; creation has not been
+submitted because required name and country details await the owner's reply.
+No Aiven resource has been created; service identity, host, exact region and
+live compatibility remain unknown. Continue the approved scope after those
+details arrive without asking for the same approval again. Both APIs remain
+offline; step 3 remains paused.
+
+### Aiven production created, 14 September 2026
+
+The owner supplied the required onboarding details, which were entered before
+creation. Created one service `edug-redis-production` in project `edug-production`,
+organization/account `a5dea12e0be4`. Persisted settings confirm Free-1, 1 CPU,
+1 GB RAM, one Valkey 9.1.1 node and `valkey_ssl` enabled. Creation time is
+03:35 UTC; provider DigitalOcean, region `ams` (Amsterdam, Netherlands).
+Endpoint: `edug-redis-production-edug-production.a.aivencloud.com:22050`.
+Public internet with the default IP allowlist; no paid upgrade, API configuration
+or deployment, migration, Git commit or push was performed.
+
+After provisioning, refreshed settings show Running and Free-1. An initial DNS
+lookup during the build failed; the subsequent direct TLS 1.3 handshake passed
+certificate-chain and hostname verification with system trust. Authentication
+and synthetic-write compatibility checks subsequently passed by owner report
+on 14 September 2026: `PASS: production TLS/auth, expiry and fixed-window checks.`
+The authenticated probe was run locally by the owner, not from Railway. No
+repeat probe is currently required. This
+endpoint differs from staging, but full integration and isolation are unverified.
 
 ## Sources
 

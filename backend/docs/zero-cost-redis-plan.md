@@ -3,8 +3,12 @@
 Status: **Upstash staging assignment, external TLS endpoint, synthetic probe
 writes and Railway staging Redis retirement explicitly approved. Upstash Free database
 created; owner reports the staging live probe PASS. Approved Railway staging
-Redis service and volume retirement is dashboard-verified. Production approval
-and integration checks remain pending. Step 3 remains paused.** Reviewed 13 September 2026.
+Redis service and volume retirement is dashboard-verified. One Aiven Free Valkey
+production service, external TLS and temporary verification writes are explicitly
+approved; Aiven production is Running on Free-1. Certificate and hostname
+verification passed over TLS 1.3; the owner reports the production authenticated
+compatibility probe PASS. Both local provider probes have now passed.
+Step 3 remains paused.** Updated 14 September 2026.
 
 ## Decision and constraints
 
@@ -14,15 +18,15 @@ backend's installed Redis protocol client and rate-limiter library. Do not use
 trial credits as evidence of ongoing zero cost, create duplicate accounts to
 bypass limits, share a store through different key prefixes, or weaken TLS.
 
-The proposed assignments are **Upstash Free for staging** and **Aiven Free
+The approved assignments are **Upstash Free for staging** and **Aiven Free
 Valkey for production**. Upstash staging is explicitly approved and provisioned; Aiven production
-remains a proposed assignment requiring separate approval. Valkey is a Redis-compatible alternative, not Redis itself; the
+was created on Free-1 on 14 September 2026. Valkey is a Redis-compatible alternative, not Redis itself; the
 actual pinned client/library combination must pass the live probe before use.
 
 | Candidate | Free offering and limitations | Decision |
 | --- | --- | --- |
 | Upstash Free | One Free database; 256 MB, 500,000 monthly commands, 10 GB monthly bandwidth; TLS supported | Proposed staging store; verify Free eligibility in the owner's account [1][2] |
-| Aiven Free Valkey | One service of this type per organization; single node, 1 GB RAM, maxmemory 50%, backups; no credit card needed or time limit | Proposed production store, subject to live compatibility and account checks [3] |
+| Aiven Free Valkey | One service of this type per organization; single node, 1 GB RAM, maxmemory 50%, backups; no credit card needed or time limit | Created on Free-1; owner-reported production compatibility probe PASS [3] |
 | Redis Cloud Free | Free Essentials does not support TLS | Rejected for external connections; no plaintext credentials over the public network [4] |
 | Railway Redis | Existing staging Redis consumes metered resources, even while idle | Not accepted as the ongoing zero-cost Redis design; do not add production Redis there |
 
@@ -88,7 +92,7 @@ Probe output suppresses provider exceptions because they can contain secrets.
 
 Six local safety regression checks passed (target/TLS rejection before network
 access, write opt-in and exception redaction). **The owner subsequently reported
-the staging live probe PASS; no production probe has run.**
+both staging and production live probes PASS.**
 A successful local test is not proof of hosted compatibility, network access
 from Railway, quota adequacy or cross-environment isolation.
 
@@ -165,7 +169,7 @@ Both API services remain unconfigured by this step. Aiven production and step 3
 remain untouched. Approvals persist; no repeat approval is needed for the same
 Upstash setup, synthetic probe or identified Railway retirement scope.
 
-**Next approval checkpoint:** one Aiven Free Valkey service named
+**Production approval received on 13 September 2026:** one Aiven Free Valkey service named
 `edug-redis-production`, using its authenticated external TLS endpoint and
 short-lived synthetic verification writes. Confirm the account's permanent
 Free allowance before creation; no paid trial, upgrade, payment method or API
@@ -173,6 +177,99 @@ deployment is included. The owner must personally complete sign-in and any
 account terms. Production provisioning has not started. Provider limits,
 representative usage and Railway egress still need validation before any
 claim of sustainable zero-cost application operation.
+
+**Historical sign-in checkpoint (13 September):** the Aiven console opened at
+`https://console.aiven.io/login` and requires authentication. The owner must sign
+in (or sign up and personally complete any account terms), then confirm the
+console is ready. Do not add payment details or create a paid trial service.
+After sign-in, inspect the organization's unused Free Valkey allowance, select
+the permanent Free plan, review the service name and price, and create only the
+approved service. Record its non-secret identity and endpoint before the
+production probe. This same scope does not require repeat approval. No Aiven
+service, credential change or API deployment was performed at this checkpoint.
+Official Free-tier terms were rechecked on 13 September 2026: no credit card or
+time limit, one Free Valkey per organization, no SLA and possible inactivity
+power-off remain documented.[3][9]
+
+The owner subsequently reported sign-in at `/welcome`. In the connected Chrome
+Sun profile, the available Aiven tab still showed an email-verification-required
+message; opening `/welcome` returned to `/login`. An authenticated console is
+therefore not yet accessible to the agent. Complete verification and sign-in in
+the connected profile, or identify the browser/profile containing the signed-in
+session. No service was created and the existing approval remains valid.
+
+**Onboarding checkpoint (14 September 2026, subsequently completed):** the authenticated `/welcome` page
+is now accessible in Chrome Sun. Valkey is selected with the displayed Free
+plan: 1 CPU, 1 GB RAM, auto-assigned cloud in Europe, monthly cost Free and
+"Free forever. No credit card required." The page also advertises trial
+credits, but the selected service plan is Free, not a paid trial plan.
+Prepared project name `edug-production` and service name `edug-redis-production`.
+Creation has not been submitted: the required personal name is blank and the
+country default needs owner confirmation. The owner has been asked for these
+details; do not infer them from the email address or local timezone. Service
+identity, endpoint and live verification remain pending. Approval persists.
+
+## Aiven production creation result
+
+On 14 September 2026, entered the owner-supplied onboarding details and created
+only `edug-redis-production` in project `edug-production`. The creation screen
+showed monthly cost Free and Free forever; persisted service settings confirm
+**Free-1 (1 CPU, 1 GB RAM, backups for disaster recovery)**. The separate platform
+trial banner applies to non-free services; no paid service, payment method or
+upgrade was selected.
+
+- Organization/account ID: `a5dea12e0be4` (My Organization).
+- Service identity: project `edug-production`, service `edug-redis-production`.
+- Created: 14 September 2026, 03:35 UTC.
+- Provider/region: DigitalOcean, `ams` (Amsterdam, Netherlands).
+- Version: Valkey 9.1.1, one node (verified after startup).
+- Endpoint: `edug-redis-production-edug-production.a.aivencloud.com:22050`.
+- Settings: `valkey_ssl` enabled; public internet, default IP allowlist open to
+  all; no static IPs. No API credential or application data was attached.
+- Current status: Running; Free-1 confirmed after refresh. Owner-reported authenticated probe PASS on 14 September 2026.
+
+The production hostname differs from the Upstash staging hostname. This proves
+distinct endpoint assignments, not full credential or application isolation.
+An initial certificate-only connection attempt could not resolve the new host
+during provisioning. After startup, a direct connection passed certificate-chain
+and hostname verification using the default system trust store and TLS 1.3.
+This agent-observed handshake did not authenticate or write keys. No additional
+CA file was required for this handshake.
+
+**Completed manual checkpoint:** the owner ran the production probe with private
+URI entry and reported PASS on 14 September 2026. Command retained for reference
+(run from `backend`; no repeat is currently required):
+
+```powershell
+venv/Scripts/python.exe -m scripts.verify_redis_service --environment production --expected-host edug-redis-production-edug-production.a.aivencloud.com --approve-probe-writes --prompt-url
+```
+
+Privately copy the service URI from Aiven Connection information and change only
+its `valkeys://` scheme to `rediss://` for the pinned Redis client. Keep the
+credentials, hostname and port intact. Supply it only at the hidden prompt and
+share only PASS/FAIL. Do not disable certificate verification. If the provider
+requires a CA file, keep it outside Git and supply `REDIS_PROBE_CA_FILE`.
+Neither API has been deployed; step 3 remains paused.
+
+## Redis checkpoint audit, 14 September 2026
+
+The owner reported `PASS: production TLS/auth, expiry and fixed-window checks.`
+This is an owner-reported local probe result, alongside the earlier staging
+PASS. The agent independently verified the production TLS handshake and service
+Running/Free-1 settings; it did not observe the authenticated probe execution.
+
+Completed: separate Upstash Free staging and Aiven Free-1 production resources,
+local TLS/authentication, TTL and fixed-window checks reported PASS for both,
+and approved retirement of the Railway staging Redis service and volume.
+No secret values were supplied in the result or recorded in this document.
+
+Remaining before full integration acceptance: verify connectivity from each
+intended Railway environment, matching credential scope and API references,
+representative command/memory/egress usage within Free allowances, and deployed
+application isolation. Neither API is configured or deployed by this checkpoint.
+Provider provisioning and local compatibility checks are complete; this does
+not establish flawless end-to-end operation or sustainable whole-app zero cost.
+Step 3 remains paused. No migration, Git commit or push was performed.
 
 ## Sources
 

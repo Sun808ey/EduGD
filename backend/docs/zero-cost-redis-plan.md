@@ -1,5 +1,15 @@
 # Zero-cost Redis setup: steps 1 and 2
 
+**Continuation, 14 September 2026:** the owner authorized steps 3–7 in order.
+Step 3 frontend assignments and step 4 local verification passed (38 isolated
+PostgreSQL tests and 495 default backend tests). Step 5 non-secret Railway
+settings were applied without deployment; private configuration is pending.
+Steps 6 and 7 have not started. See the current status
+at the top of [the resource map](environment-resource-map.md). Earlier statements
+that step 3 is paused describe the preceding Redis-only scope. CLI inventory now
+shows both old volume records as deleted but pending provider cleanup; final
+purging and billing are not established by dashboard absence.
+
 Status: **Upstash staging assignment, external TLS endpoint, synthetic probe
 writes and Railway staging Redis retirement explicitly approved. Upstash Free database
 created; owner reports the staging live probe PASS. Approved Railway staging

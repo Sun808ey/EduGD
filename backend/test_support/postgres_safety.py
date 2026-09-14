@@ -16,6 +16,7 @@ PURPOSE_VARIABLE = "POSTGRES_TEST_PURPOSE"
 PROJECT_REF_VARIABLE = "POSTGRES_TEST_PROJECT_REF"
 DESTRUCTIVE_OPT_IN_VARIABLE = "ALLOW_DESTRUCTIVE_POSTGRES_TESTS"
 APPROVED_POSTGRES_TEST_PURPOSE = "backend-integration-test"
+PROTECTED_PROJECT_REFS = frozenset({"dviuaqtlbuefmfmswwqt", "hszskxrgkptbytuquyfu"})
 PROTECTED_DATABASE_VARIABLES = (
     "DEVELOPMENT_DATABASE_URL",
     "PRODUCTION_DATABASE_URL",
@@ -71,6 +72,8 @@ def validate_postgres_test_environment(
     project_ref = values.get(PROJECT_REF_VARIABLE, "").strip().lower()
     if not re.fullmatch(r"[a-z0-9]{20}", project_ref):
         _fail(f"{PROJECT_REF_VARIABLE} must contain a Supabase project reference")
+    if project_ref in PROTECTED_PROJECT_REFS:
+        _fail("Assigned staging and production projects cannot be test targets")
 
     application_database_url = values.get(APP_DATABASE_VARIABLE, "")
     if not application_database_url:
@@ -174,7 +177,10 @@ def _validate_url(variable_name: str, raw_url: str) -> URL:
         _fail(f"{variable_name} must contain a PostgreSQL URL")
 
     try:
-        return validate_postgres_database_uri(variable_name, raw_url)
+        validated = validate_postgres_database_uri(variable_name, raw_url)
+        if database_project_identity(validated) in PROTECTED_PROJECT_REFS:
+            _fail("Assigned staging and production projects cannot be test targets")
+        return validated
     except RuntimeError as error:
         raise PostgresTestSafetyError(str(error)) from None
 

@@ -255,3 +255,23 @@ def test_connected_guard_rejects_expected_url_outside_approved_project() -> None
             approved,
             expected_database_url=MIGRATION_URL.replace(PROJECT, OTHER_PROJECT),
         )
+
+
+@pytest.mark.parametrize("protected", ["dviuaqtlbuefmfmswwqt", "hszskxrgkptbytuquyfu"])
+@pytest.mark.parametrize(
+    "target",
+    [
+        "POSTGRES_TEST_PROJECT_REF",
+        "POSTGRES_TEST_DATABASE_URL",
+        "MIGRATION_DATABASE_URL",
+    ],
+)
+def test_assigned_projects_rejected_without_other_environment_urls(
+    protected: str, target: str
+) -> None:
+    environment = safe_environment(ALLOW_DESTRUCTIVE_POSTGRES_TESTS="true")
+    environment.pop("DEVELOPMENT_DATABASE_URL")
+    environment.pop("PRODUCTION_DATABASE_URL")
+    environment[target] = environment[target].replace(PROJECT, protected)
+    with pytest.raises(PostgresTestSafetyError, match="cannot be test targets"):
+        validate_postgres_test_environment(environment, require_destructive=True)

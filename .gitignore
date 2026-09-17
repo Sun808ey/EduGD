@@ -25,3 +25,10 @@ frontend/package-lock.json
 
 # Misc accidental lockfiles in non-node packages
 backend/package-lock.json
+
+# Local credentials and deployment metadata
+backend/certs/
+/11env.txt
+/secrets.txt
+operator-evidence/
+.vercel

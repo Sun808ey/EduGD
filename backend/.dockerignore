@@ -20,3 +20,7 @@
 **/*.pem
 **/*.key
 **/*.crt
+!gunicorn.conf.py
+# Only the individually reviewed public Supabase CA may enter a runtime image.
+!certs/
+!certs/supabase-ca.pem

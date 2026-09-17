@@ -99,6 +99,7 @@ finally:
         engine.dispose()
 
 print(json.dumps(result), flush=True)
+raise SystemExit(0 if result["production_preflight"] == "PASS" else 1)
 '@
 
 try {
@@ -106,8 +107,12 @@ try {
     $edugPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($edugSecure)
     $env:EDUG_PRODUCTION_MIGRATION_URL = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($edugPointer)
     Push-Location $edugBackend
-    try { $edugCheck | & $edugPython - }
-    finally { Pop-Location }
+    try {
+        $edugOutput = @($edugCheck | & $edugPython -)
+        $edugExitCode = $LASTEXITCODE
+        $edugOutput | Write-Output
+        if ($edugExitCode -ne 0) { throw 'Embedded verification failed.' }
+    } finally { Pop-Location }
 } finally {
     Remove-Item Env:EDUG_PRODUCTION_MIGRATION_URL -ErrorAction SilentlyContinue
     if ($edugPointer -ne [IntPtr]::Zero) {

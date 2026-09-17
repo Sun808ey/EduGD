@@ -1,7 +1,6 @@
 """Bootstrap only the guarded disposable database, then run integration tests."""
 
-import subprocess
-import sys
+import pytest
 
 from flask_migrate import upgrade
 from sqlalchemy import create_engine
@@ -28,9 +27,7 @@ def main() -> int:
     application = create_app("postgres-testing")
     with application.app_context():
         upgrade()
-    return subprocess.call(
-        [sys.executable, "-m", "pytest", "-m", "postgres or migration or concurrency"]
-    )
+    return pytest.main(["-m", "postgres or migration or concurrency"])
 
 
 if __name__ == "__main__":

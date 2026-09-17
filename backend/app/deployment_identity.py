@@ -40,13 +40,21 @@ def validate_deployment_identity(values: Mapping[str, str]) -> None:
             raise RuntimeError(
                 "Deployed services must not contain test/development URLs"
             )
-    for name in ("PRODUCTION_DATABASE_URL", "MIGRATION_DATABASE_URL"):
-        raw = values.get(name)
-        if name == "MIGRATION_DATABASE_URL" and not raw:
-            continue
-        parsed = validate_postgres_database_uri(name, raw or "")
-        if database_project_identity(parsed) != project:
-            raise RuntimeError("Database project does not match deployment assignment")
+    production_database = validate_postgres_database_uri(
+        "PRODUCTION_DATABASE_URL", values.get("PRODUCTION_DATABASE_URL", "")
+    )
+    if database_project_identity(production_database) != project:
+        raise RuntimeError("Database project does not match deployment assignment")
+    migration_raw = values.get("MIGRATION_DATABASE_URL")
+    if migration_raw:
+        migration_database = validate_postgres_database_uri(
+            "MIGRATION_DATABASE_URL", migration_raw
+        )
+        if (
+            database_project_identity(migration_database) != project
+            or migration_database.database != production_database.database
+        ):
+            raise RuntimeError("Migration database does not match runtime database")
     try:
         redis = urlsplit(values.get("REDIS_URL", ""))
         valid_redis = (

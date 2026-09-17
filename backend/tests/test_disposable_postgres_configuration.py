@@ -15,9 +15,18 @@ def test_disposable_stack_cannot_publish_database_or_use_hosted_secrets() -> Non
         assert "env_file" not in service
         assert "network_mode" not in service
     values = configuration["services"]["tests"]["environment"]
-    approved = validate_postgres_test_environment(values, require_destructive=True)
+    password_reference = "${EDUG_DISPOSABLE_POSTGRES_TOKEN:?required}"
+    assert values["POSTGRES_TEST_DATABASE_URL"].count(password_reference) == 1
+    assert values["MIGRATION_DATABASE_URL"].count(password_reference) == 1
+    assert configuration["services"]["postgres"]["environment"]["POSTGRES_PASSWORD"] == password_reference
+    resolved_values = {
+        name: value.replace(password_reference, "generated-for-this-test")
+        for name, value in values.items()
+    }
+    approved = validate_postgres_test_environment(
+        resolved_values, require_destructive=True
+    )
     assert (
         f"db.{approved.project_ref}.supabase.co"
         in configuration["services"]["postgres"]["networks"]["isolated"]["aliases"]
     )
-    assert "${" not in str(values)

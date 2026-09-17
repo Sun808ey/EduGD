@@ -66,7 +66,16 @@ def test_cross_environment_migration_url_rejected() -> None:
     values["MIGRATION_DATABASE_URL"] = deployment_values("production")[
         "PRODUCTION_DATABASE_URL"
     ]
-    with pytest.raises(RuntimeError, match="Database project"):
+    with pytest.raises(RuntimeError, match="Migration database"):
+        validate_deployment_identity(values)
+
+
+def test_migration_url_for_different_database_is_rejected() -> None:
+    values = deployment_values("production")
+    values["MIGRATION_DATABASE_URL"] = values["PRODUCTION_DATABASE_URL"].replace(
+        "/postgres?", "/separate_database?"
+    )
+    with pytest.raises(RuntimeError, match="Migration database"):
         validate_deployment_identity(values)
 
 

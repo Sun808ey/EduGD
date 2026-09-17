@@ -8,7 +8,9 @@ permissions or deployed network paths. Those remain separate checks.
 Start Docker Desktop's Linux engine, then run from `backend`:
 
 ```powershell
+$env:EDUG_DISPOSABLE_POSTGRES_TOKEN = [guid]::NewGuid().ToString("N")
 docker compose -f compose.postgres-test.yml run --build --rm tests
+Remove-Item Env:EDUG_DISPOSABLE_POSTGRES_TOKEN
 ```
 
 After the run, remove only this named stack and its disposable certificate volume:
@@ -22,8 +24,7 @@ in tmpfs. `db.eduglocaltest0000001.supabase.co` is a Docker DNS alias for this
 local container, not a real Supabase assignment. The alias preserves the existing
 identity and verify-full TLS validation. A temporary certificate is generated
 inside the stack and shared read-only with PostgreSQL and the test runner.
-Its private key never enters the repository or image. The fixed disposable
-password is only for this isolated synthetic database; never reuse it elsewhere.
+Its private key never enters the repository or image. Generate a fresh disposable password for every run; it exists only in the current shell and isolated synthetic database.
 Image/dependency downloads require internet during build, not hosted credentials.
 
 The runner image uses explicit COPY paths and a restrictive `.dockerignore` to

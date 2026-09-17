@@ -2,7 +2,6 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { AdminShell } from '@/components/layout/AdminShell'
 import { LoginPage } from '@/pages/LoginPage'
-import { useAuth } from '@/hooks/useAuth'
 import { DashboardPage } from '@/pages/dashboard'
 import { DevicesPage } from '@/pages/devices'
 import { PoliciesPage } from '@/pages/policies'
@@ -12,8 +11,6 @@ import { DeviceDetailPage } from '@/pages/DeviceDetailPage'
 import { LandingPage } from '@/pages/LandingPage'
 
 function App() {
-  const { isAuthenticated } = useAuth()
-
   return (
     <BrowserRouter>
       <Routes>
@@ -27,8 +24,8 @@ function App() {
           <Route path="/policies/:policyUuid" element={<PolicyDetailPage />} />
           <Route path="/logs" element={<LogsPage />} />
         </Route>
-        <Route path="/" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
-        <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
+        <Route path="/" element={<LandingPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )

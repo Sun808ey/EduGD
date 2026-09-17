@@ -58,3 +58,6 @@ build/
 
 .env.local
 .env.*.local
+coverage/
+test-results/
+.vercel

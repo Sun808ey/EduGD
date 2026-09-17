@@ -102,6 +102,22 @@ against production, the source, or a rehearsal copy of production data.
    Do not blanket-grant runtime DML on future tables. New migrations must include
    a reviewed runtime privilege update. Verify these grants through approved staging checks without destructive tests.
 
+   Inspect `pg_class.relrowsecurity` and `pg_policies` as well as SQL grants.
+   Supabase may enable RLS automatically on new tables. For the reviewed EduG
+   backend tables, the dedicated `edug_runtime` role requires a role-specific
+   `FOR ALL TO edug_runtime USING (true) WITH CHECK (true)` policy, named
+   `edug_backend_runtime`. Apply only to individually reviewed application
+   tables and the read-only Alembic version table; preserve narrower SQL grants.
+   This is a server-only role: Flask enforces administrator/device authorization.
+   Do not give this policy to PUBLIC or Data API roles, disable RLS, or grant
+   BYPASSRLS. Review existing policies before adding any policy.
+
+   An owner connection may lack permission to `SET ROLE edug_runtime`.
+   Do not grant extra membership just to test. Verify catalog ACLs as owner,
+   then verify actual TLS/password access and readiness using the runtime role
+   in the approved hosted one-shot check. Catalog checks alone do not prove
+   the sealed runtime password or connection URL works.
+
 ## 3. Read-only inventory
 
 Use a secure operator shell with `SOURCE_DATABASE_URL` and

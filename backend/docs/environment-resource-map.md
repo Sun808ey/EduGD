@@ -2,14 +2,39 @@
 
 ## Status and scope
 
-**Latest progress, 14 September 2026:** the owner authorized steps 3–7 in
+**Workbook continuation:** the owner authorized completion against `inter.md`
+for the academic proof of concept, subject to current Free-only instructions.
+The [workbook reconciliation](setup-workbook-reconciliation.md) records current
+evidence and supersedes stale pending-input statements below. Fresh installation,
+saved/sealed variables and the selected enrollment settings are owner-confirmed.
+Browser access is restored: both Supabase projects now have SSL enforcement on
+and Data API disabled, dashboard-verified. Production SSL was enabled during
+this continuation. The encrypted staging owner handoff passed validation and
+TLS connection checks. Staging migrations reached `e4a1b7c9d2f6` with 18 public
+tables; restricted runtime grants and 18 role-specific RLS policies committed
+after 126 permission checks. The hosted diagnostic now passes after correcting
+public CA inclusion in the runtime image. Staging API deployment
+`7e5c7c43-2c34-4719-afc8-b132b6eb81f9` is healthy at
+`https://edug-api-staging-staging.up.railway.app`; health/readiness return 200
+and allowed/disallowed CORS checks pass. Administrator bootstrap is verified:
+one administrator, five permissions and one bootstrap audit event. Frontend
+deployment/authentication verification passed. Production owner preflight then
+confirmed the assigned database, verified TLS, effective migration privileges
+and an empty schema. Alembic reached `e4a1b7c9d2f6` with exactly 18 public
+tables. The runtime security transaction passed 126 permission checks, enabled
+RLS on all 18 tables, installed 18 `edug_backend_runtime` policies and denied
+the Data API roles. Production runtime connectivity, Railway deployment,
+public readiness, Vercel deployment and CORS verification now pass. The
+production API is `https://edug-api-production-production.up.railway.app` and
+the production frontend is `https://edug-admin.vercel.app`.
+
+**Latest progress, 17 September 2026:** the owner authorized steps 3–7 in
 sequence using zero-cost plans and confirmed EduG is strictly personal and
-non-commercial. Step 3 resource-assignment checks passed as recorded below.
-Step 4 local verification passed: 38 isolated PostgreSQL tests and the 495-test
-default backend suite passed, along with targeted configuration checks, Ruff
-and type checking. Step 5 is partially applied and awaits private credentials
-and source-data inventory. Steps 6 and 7 have not started.
-Earlier pause/approval statements below are historical where superseded here.
+non-commercial. Supabase schema/security checks, Redis TLS checks, Railway API
+deployments and Vercel frontend deployments now pass for staging and
+production. Android offline-device acceptance remains outstanding because this
+checkout has no Android implementation. Earlier pause and approval statements
+below are historical where superseded here.
 
 ### Verified frontend assignments (step 3)
 

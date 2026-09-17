@@ -9,6 +9,7 @@ import { PoliciesPage } from '@/pages/policies'
 import { PolicyDetailPage } from '@/pages/PolicyDetailPage'
 import { LogsPage } from '@/pages/logs'
 import { DeviceDetailPage } from '@/pages/DeviceDetailPage'
+import { LandingPage } from '@/pages/LandingPage'
 
 function App() {
   const { isAuthenticated } = useAuth()
@@ -16,6 +17,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/landing" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute><AdminShell /></ProtectedRoute>}>
           <Route path="/dashboard" element={<DashboardPage />} />

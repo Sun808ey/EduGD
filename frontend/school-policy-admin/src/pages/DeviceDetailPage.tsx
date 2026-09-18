@@ -1,27 +1,35 @@
-import { ArrowLeft, Laptop, ShieldCheck } from 'lucide-react'
+import { useState } from 'react'
+import type { FormEvent } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminService } from '@/services/admin.service'
-import type { DeviceDetail } from '@/types/api'
+import { ActionDialog } from '@/components/ui/ActionDialog'
+import { ErrorState, LoadingState } from '@/components/ui/AsyncState'
+import { useAuth } from '@/hooks/useAuth'
+import { errorMessage } from '@/services/errors'
+import { formatDate } from '@/lib/format'
 
 export function DeviceDetailPage() {
   const { deviceUuid = '' } = useParams()
-  const [device, setDevice] = useState<DeviceDetail | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { hasPermission } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
   const [error, setError] = useState('')
-
-  useEffect(() => {
-    if (!deviceUuid) return
-    adminService.getDevice(deviceUuid).then(setDevice).catch(() => setError('This device could not be loaded.')).finally(() => setLoading(false))
-  }, [deviceUuid])
-
-  if (loading) return <div className="grid min-h-64 place-items-center text-sm text-slate-500">Loading device...</div>
-  if (error || !device) return <section className="space-y-6"><BackLink /><div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error || 'Device not found.'}</div></section>
-
-  return <section className="space-y-8"><BackLink /><header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Device detail</p><h1 className="mt-2 break-all text-3xl font-semibold tracking-tight">{device.device_uuid}</h1><p className="mt-2 text-sm text-slate-600">Registered {formatDate(device.registered_at)}</p></div><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">{device.status}</span></header><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><InfoCard label="Enrollment" value={device.enrollment_state ?? 'Unknown'} /><InfoCard label="Android" value={device.android_version ?? 'Unknown'} /><InfoCard label="API level" value={String(device.api_level ?? 'Unknown')} /><InfoCard label="Last sync" value={formatDate(device.last_sync_at)} /></div><div className="grid gap-6 xl:grid-cols-2"><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-center gap-3"><Laptop className="size-5 text-slate-500" /><h2 className="font-semibold">Device identity</h2></div><dl className="mt-6 space-y-4 text-sm"><Row label="Device UUID" value={device.device_uuid} /><Row label="Created" value={formatDate(device.created_at)} /><Row label="Updated" value={formatDate(device.updated_at)} /></dl></section><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-center gap-3"><ShieldCheck className="size-5 text-slate-500" /><h2 className="font-semibold">Active policy</h2></div>{device.active_policy_assignment ? <dl className="mt-6 space-y-4 text-sm"><Row label="Policy" value={`${device.active_policy_assignment.policy_name} v${device.active_policy_assignment.policy_version}`} /><Row label="Assigned" value={formatDate(device.active_policy_assignment.assigned_at)} /><Row label="Revision" value={device.active_policy_assignment.policy_revision_uuid} /></dl> : <p className="mt-6 text-sm text-slate-500">No policy is currently assigned.</p>}</section></div></section>
+  const cache = useQueryClient()
+  const device = useQuery({ queryKey: ['device', deviceUuid], queryFn: ({ signal }) => adminService.getDevice(deviceUuid, signal), enabled: Boolean(deviceUuid) })
+  const assignment = useQuery({ queryKey: ['assignment', deviceUuid], queryFn: ({ signal }) => adminService.getCurrentAssignment(deviceUuid, signal), enabled: Boolean(deviceUuid) })
+  const revoke = useMutation({ mutationFn: () => adminService.revokeDeviceCredential(deviceUuid, reason.trim()), onSuccess: async () => { setOpen(false); setReason(''); await cache.invalidateQueries({ queryKey: ['device', deviceUuid] }) }, onError: (caught) => setError(errorMessage(caught)) })
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (reason.trim()) revoke.mutate() }
+  if (device.isLoading || assignment.isLoading) return <LoadingState label="Loading device…" />
+  if (device.isError || assignment.isError || !device.data) return <ErrorState message="This device could not be loaded." retry={() => { void device.refetch(); void assignment.refetch() }} />
+  return <section className="space-y-6"><Link to="/devices" className="inline-flex items-center gap-2 font-semibold text-emerald-700"><ArrowLeft className="size-4" />Devices</Link><header><h1 className="break-all text-3xl font-semibold">{device.data.device_uuid}</h1><p className="mt-2 text-sm text-slate-600">Registered {formatDate(device.data.registered_at)}</p></header>
+    <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Info label="Status" value={device.data.status} /><Info label="Enrollment" value={device.data.enrollment_state ?? 'Unknown'} /><Info label="Last sync" value={formatDate(device.data.last_sync_at)} /><Info label="Android" value={`${device.data.android_version ?? 'Unknown'} / API ${device.data.api_level ?? 'Unknown'}`} /></dl>
+    <section className="rounded-2xl border bg-white p-5"><h2 className="font-semibold">Current policy assignment</h2>{assignment.data?.assignment ? <dl className="mt-4 space-y-2 text-sm"><InfoRow label="Policy" value={`${assignment.data.assignment.policy_name} v${assignment.data.assignment.policy_version}`} /><InfoRow label="Revision" value={assignment.data.assignment.policy_revision_uuid} /><InfoRow label="Assigned" value={formatDate(assignment.data.assignment.assigned_at)} /></dl> : <p className="mt-3 text-sm text-slate-500">No policy is assigned.</p>}</section>
+    {hasPermission('device_credential.revoke') && <button type="button" onClick={() => setOpen(true)} className="rounded-lg bg-red-700 px-4 py-2 font-semibold text-white">Revoke active credential</button>}
+    <ActionDialog open={open} onOpenChange={setOpen} title="Revoke device credential" description="The device must enroll again before authenticated synchronization can continue." submitLabel="Revoke credential" busy={revoke.isPending} destructive onSubmit={submit}>{error && <div role="alert" className="rounded bg-red-50 p-3 text-sm text-red-800">{error}</div>}<label className="block text-sm font-medium">Reason<input required maxLength={512} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 w-full rounded-lg border px-3 py-2" /></label></ActionDialog>
+  </section>
 }
 
-function BackLink() { return <Link to="/devices" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 hover:text-emerald-900"><ArrowLeft className="size-4" />Back to devices</Link> }
-function InfoCard({ label, value }: { label: string; value: string }) { return <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">{label}</p><p className="mt-2 truncate text-lg font-semibold">{value}</p></div> }
-function Row({ label, value }: { label: string; value: string }) { return <div className="flex flex-col gap-1"><dt className="text-slate-500">{label}</dt><dd className="break-all font-medium text-slate-900">{value}</dd></div> }
-function formatDate(value?: string | null) { return value ? new Date(value).toLocaleString() : 'Unknown' }
+function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border bg-white p-4"><dt className="text-sm text-slate-500">{label}</dt><dd className="mt-1 break-all font-semibold">{value}</dd></div> }
+function InfoRow({ label, value }: { label: string; value: string }) { return <div><dt className="text-slate-500">{label}</dt><dd className="break-all font-medium">{value}</dd></div> }

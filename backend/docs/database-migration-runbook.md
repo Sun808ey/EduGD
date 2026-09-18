@@ -102,6 +102,22 @@ against production, the source, or a rehearsal copy of production data.
    Do not blanket-grant runtime DML on future tables. New migrations must include
    a reviewed runtime privilege update. Verify these grants through approved staging checks without destructive tests.
 
+   Inspect `pg_class.relrowsecurity` and `pg_policies` as well as SQL grants.
+   Supabase may enable RLS automatically on new tables. For the reviewed EduG
+   backend tables, the dedicated `edug_runtime` role requires a role-specific
+   `FOR ALL TO edug_runtime USING (true) WITH CHECK (true)` policy, named
+   `edug_backend_runtime`. Apply only to individually reviewed application
+   tables and the read-only Alembic version table; preserve narrower SQL grants.
+   This is a server-only role: Flask enforces administrator/device authorization.
+   Do not give this policy to PUBLIC or Data API roles, disable RLS, or grant
+   BYPASSRLS. Review existing policies before adding any policy.
+
+   An owner connection may lack permission to `SET ROLE edug_runtime`.
+   Do not grant extra membership just to test. Verify catalog ACLs as owner,
+   then verify actual TLS/password access and readiness using the runtime role
+   in the approved hosted one-shot check. Catalog checks alone do not prove
+   the sealed runtime password or connection URL works.
+
 ## 3. Read-only inventory
 
 Use a secure operator shell with `SOURCE_DATABASE_URL` and
@@ -199,29 +215,34 @@ arguments. Never run with shell tracing or print the password file.
    Leave the source unconnected until configuration and release approvals are
    complete. Keep automatic production deployments disabled. Do not attach
    production credentials to a deployment that could run unapproved migrations.
-2. Use Railpack, set `RAILPACK_PYTHON_VERSION=3.12.10` to match the verified
-   baseline (review security updates separately), and verify the build log.
-   Build only installs requirements; `flask --app run.py db upgrade` is the
-   single pre-deploy migration command. Workers never migrate.
+2. Use Railpack with Python 3.12 and verify the actual patch version in the
+   build log. The isolated PostgreSQL runner passed on Python 3.12.14; the
+   Railway runtime selection remains to be applied and verified.
+   Build only installs requirements. Leave pre-deploy migrations empty;
+   `flask --app run.py db upgrade` runs only as an explicit reviewed migration
+   operation after inventory and recovery gates pass. Workers never migrate.
+   Follow [the reviewed deployment settings](railway-deployment-settings.md),
+   including `EDUG_ENVIRONMENT` and the entry-point identity checks.
 3. Set `APP_ENV=production`, `FLASK_DEBUG=false`, runtime
-   `PRODUCTION_DATABASE_URL`, owner `MIGRATION_DATABASE_URL`, and verified CA
-   trust. Both URLs must identify the same project AND database. Provision the
+   `PRODUCTION_DATABASE_URL` and verified CA trust. Keep the owner
+   `MIGRATION_DATABASE_URL` in the private migration process rather than the
+   long-running API. Both URLs must identify the same project AND database. Provision the
    CA at a stable read-only path if the platform trust store does not contain it.
 4. Transfer valid, distinct existing `SECRET_KEY`, `JWT_SECRET_KEY`,
    `ADMIN_AUDIT_PSEUDONYM_KEY`, `POLICY_SYNC_AUDIT_KEY`, required
    `PAIRING_TOKEN_PEPPER` and its version securely. Preserve actual enrollment
    mode/admin-enabled settings. Never invent the deployed mode from examples.
-5. Configure reachable shared Redis using `REDIS_URL`; reuse the existing
-   service if secure cross-provider access is supported, otherwise provision
-   the equivalent Railway Redis service. Use private networking or verified TLS
-   for public Redis. This preserves an existing dependency; memory fallback is
+5. Configure `REDIS_URL` with the assigned Upstash Free staging or Aiven Free
+   Valkey production endpoint from the resource map. Use authenticated `rediss://`
+   with certificate and hostname verification; do not provision metered Railway
+   Redis. This preserves an existing dependency; memory fallback is
    forbidden. The application fails startup/readiness if Redis is unavailable.
 6. Set `ADMIN_FRONTEND_ORIGINS` to exact HTTPS origins, comma-separated, with
-   no trailing slash. Set pool size 3/overflow 2 and sync rate `60 per minute`
+   no trailing slash. Set pool size 1/overflow 0 and sync rate `60 per minute`
    unless verified source settings differ. Configure `SENTRY_DSN` if used.
 7. Start command is `gunicorn --config gunicorn.conf.py run:app`; Railway supplies
-   PORT. Keep one worker, four threads and one replica initially. Budget five
-   connections per instance plus deployment overlap, migrations and platform
+   PORT. Keep one worker, four threads and one replica initially. Budget one
+   pooled connection per instance plus deployment overlap, migrations and platform
    services against actual Supabase limits. Do not enable sleep/serverless mode
    for this persistent deployment.
 8. Healthcheck is `/api/v1/ready`; liveness remains `/api/v1/health`. Validate

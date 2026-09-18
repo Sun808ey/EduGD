@@ -3,6 +3,7 @@ from unittest.mock import Mock
 
 import pytest
 from flask import Flask
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app import create_app
 from app.extensions import limiter
@@ -142,6 +143,39 @@ def test_production_rejects_missing_shared_rate_limit_storage(
                 "RATELIMIT_STORAGE_URI": "memory://",
             },
         )
+
+
+def test_production_redacts_redis_dns_startup_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("PRODUCTION_DATABASE_URL", PRODUCTION_URL)
+    redis_client = Mock()
+    redis_client.ping.side_effect = RedisConnectionError(
+        "Error -2 connecting to redis.example.invalid:6380: Name or service not known "
+        "with synthetic-secret."
+    )
+    monkeypatch.setattr("app.Redis.from_url", Mock(return_value=redis_client))
+
+    with pytest.raises(RuntimeError, match="Production rate-limit storage is unavailable"):
+        create_app(
+            "production",
+            {
+                "SECRET_KEY": "f" * 32,
+                "JWT_SECRET_KEY": "j" * 32,
+                "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
+                "POLICY_SYNC_AUDIT_KEY": "p" * 32,
+                "RATELIMIT_STORAGE_URI": "rediss://redis.example.invalid:6380/0",
+                "ADMIN_FRONTEND_ORIGINS": "https://admin.example.invalid",
+            },
+        )
+
+    captured = capsys.readouterr()
+    record = json.loads(captured.err.strip().splitlines()[-1])
+    assert record["event"] == "production_rate_limit_storage_unavailable"
+    assert record["message"] == "Production rate-limit storage is unavailable: dns_failed"
+    assert "synthetic-secret" not in captured.err
+    assert "redis.example.invalid" not in captured.err
 
 
 @pytest.mark.parametrize("sync_audit_key", ["short", "a" * 32])

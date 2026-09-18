@@ -1,28 +1,71 @@
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Braces, FileText } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
-import { useState } from 'react'
-import { useQueries } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { adminService } from '@/services/admin.service'
-import { Pagination } from '@/components/ui/Pagination'
-import { ErrorState, LoadingState } from '@/components/ui/AsyncState'
-import { formatDate } from '@/lib/format'
+import type { PolicyDetail, PolicyRevisionSummary } from '@/types/api'
 
 export function PolicyDetailPage() {
   const { policyUuid = '' } = useParams()
-  const [page, setPage] = useState(1)
-  const [policy, revisions] = useQueries({ queries: [
-    { queryKey: ['policy', policyUuid], queryFn: ({ signal }) => adminService.getPolicy(policyUuid, signal), enabled: Boolean(policyUuid) },
-    { queryKey: ['policy-revisions', policyUuid, page], queryFn: ({ signal }) => adminService.listPolicyRevisions(policyUuid, { page, perPage: 25 }, signal), enabled: Boolean(policyUuid) },
-  ] })
-  if (policy.isLoading || revisions.isLoading) return <LoadingState label="Loading policy…" />
-  if (policy.isError || revisions.isError || !policy.data || !revisions.data) return <ErrorState message="This policy could not be loaded." retry={() => { void policy.refetch(); void revisions.refetch() }} />
-  const latest = policy.data.latest_revision
-  return <section className="space-y-6"><Link to="/policies" className="inline-flex items-center gap-2 font-semibold text-emerald-700"><ArrowLeft className="size-4" />Policies</Link>
-    <header><h1 className="text-3xl font-semibold">{policy.data.name}</h1><p className="mt-2 break-all text-sm text-slate-500">{policy.data.policy_uuid}</p></header>
-    <dl className="grid gap-4 sm:grid-cols-3"><Info label="Status" value={policy.data.status} /><Info label="Revisions" value={String(policy.data.revision_count ?? revisions.data.pagination.total)} /><Info label="Updated" value={formatDate(policy.data.updated_at)} /></dl>
-    <div className="overflow-hidden rounded-2xl border bg-white"><h2 className="border-b p-5 font-semibold">Immutable revision history</h2><div className="overflow-x-auto"><table className="w-full min-w-160 text-left text-sm"><thead className="bg-slate-50"><tr><th className="p-4">Version</th><th className="p-4">Created</th><th className="p-4">Content hash</th><th className="p-4">Created by</th></tr></thead><tbody className="divide-y">{revisions.data.revisions.map((revision) => <tr key={revision.revision_uuid}><td className="p-4 font-semibold">v{revision.version}</td><td className="p-4">{formatDate(revision.created_at)}</td><td className="max-w-72 truncate p-4 font-mono text-xs">{revision.content_hash}</td><td className="p-4">{revision.created_by ?? 'System'}</td></tr>)}</tbody></table></div><Pagination value={revisions.data.pagination} onPage={setPage} /></div>
-    <section className="rounded-2xl border bg-white"><h2 className="border-b p-5 font-semibold">Latest policy payload {latest ? `(v${latest.version})` : ''}</h2>{latest ? <pre className="max-h-120 overflow-auto bg-slate-950 p-5 text-xs text-emerald-100">{JSON.stringify(latest.payload, null, 2)}</pre> : <p className="p-6 text-sm text-slate-500">No revision is available.</p>}</section>
-  </section>
+  const [policy, setPolicy] = useState<PolicyDetail | null>(null)
+  const [revisions, setRevisions] = useState<PolicyRevisionSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!policyUuid) return
+    Promise.all([adminService.getPolicy(policyUuid), adminService.listPolicyRevisions(policyUuid)])
+      .then(([policyData, revisionData]) => {
+        setPolicy(policyData)
+        setRevisions(revisionData.revisions)
+      })
+      .catch(() => setError('This policy could not be loaded.'))
+      .finally(() => setLoading(false))
+  }, [policyUuid])
+
+  if (loading) return <div className="grid min-h-64 place-items-center text-sm text-slate-500">Loading policy...</div>
+  if (error || !policy) return <section className="space-y-6"><BackLink /><div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error || 'Policy not found.'}</div></section>
+
+  const latestRevision = revisions[0] ?? policy.latest_revision
+  const payload = latestRevision?.payload
+
+  return (
+    <section className="space-y-8">
+      <BackLink />
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Policy detail</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">{policy.name}</h1>
+          <p className="mt-2 break-all text-sm text-slate-600">{policy.policy_uuid}</p>
+        </div>
+        <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">{policy.status}</span>
+      </header>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <SummaryCard label="Revisions" value={String(policy.revision_count)} />
+        <SummaryCard label="Latest version" value={latestRevision ? `v${latestRevision.version}` : 'None'} />
+        <SummaryCard label="Last updated" value={policy.updated_at ? new Date(policy.updated_at).toLocaleString() : 'Unknown'} />
+      </div>
+
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center gap-3 border-b border-slate-200 p-5">
+          <FileText className="size-5 text-slate-500" />
+          <div><h2 className="font-semibold">Revision history</h2><p className="mt-1 text-sm text-slate-500">Immutable revisions available for assignment.</p></div>
+        </div>
+        {revisions.length === 0 ? <div className="p-8 text-center text-sm text-slate-500">No revisions recorded.</div> : <div className="overflow-x-auto"><table className="w-full min-w-155 text-left text-sm"><thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3 font-semibold">Version</th><th className="px-5 py-3 font-semibold">Created</th><th className="px-5 py-3 font-semibold">Content hash</th><th className="px-5 py-3 font-semibold">Created by</th></tr></thead><tbody className="divide-y divide-slate-100">{revisions.map((revision) => <tr key={revision.revision_uuid}><td className="px-5 py-4 font-semibold text-slate-900">v{revision.version}</td><td className="px-5 py-4 text-slate-600">{revision.created_at ? new Date(revision.created_at).toLocaleString() : 'Unknown'}</td><td className="max-w-64 truncate px-5 py-4 font-mono text-xs text-slate-500">{revision.content_hash ?? 'Unavailable'}</td><td className="px-5 py-4 text-slate-600">{revision.created_by ?? 'System'}</td></tr>)}</tbody></table></div>}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center gap-3 border-b border-slate-200 p-5"><Braces className="size-5 text-slate-500" /><div><h2 className="font-semibold">Latest payload</h2><p className="mt-1 text-sm text-slate-500">Read-only policy JSON for the latest revision.</p></div></div>
+        {payload ? <pre className="max-h-120 overflow-auto bg-slate-950 p-5 text-xs leading-6 text-emerald-100">{JSON.stringify(payload, null, 2)}</pre> : <div className="p-8 text-center text-sm text-slate-500">No payload is available for the latest revision.</div>}
+      </section>
+    </section>
+  )
 }
 
-function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border bg-white p-4"><dt className="text-sm text-slate-500">{label}</dt><dd className="mt-1 font-semibold">{value}</dd></div> }
+function BackLink() {
+  return <Link to="/policies" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 hover:text-emerald-900"><ArrowLeft className="size-4" />Back to policies</Link>
+}
+
+function SummaryCard({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold">{value}</p></div>
+}

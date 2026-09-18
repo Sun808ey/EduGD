@@ -196,22 +196,25 @@ def _validate_startup_configuration(app: Flask) -> None:
             for fragment in ("authentication", "invalid username-password", "noauth")
         ):
             reason = "authentication_failed"
-        elif any(
-            fragment in diagnostic
-            for fragment in ("certificate", "ssl", "tls")
-        ):
+        elif any(fragment in diagnostic for fragment in ("certificate", "ssl", "tls")):
             reason = "tls_failed"
         elif any(
             fragment in diagnostic
             for fragment in ("getaddrinfo", "name or service", "dns")
         ):
             reason = "dns_failed"
-        elif isinstance(error, (ConnectionError, TimeoutError, OSError)) or "timed out" in diagnostic:
+        elif (
+            isinstance(error, (ConnectionError, TimeoutError, OSError))
+            or "timed out" in diagnostic
+        ):
             reason = "network_or_timeout"
         app.logger.error(
             "Production rate-limit storage is unavailable: %s",
             reason,
-            extra={"event": "production_rate_limit_storage_unavailable", "reason": reason},
+            extra={
+                "event": "production_rate_limit_storage_unavailable",
+                "reason": reason,
+            },
         )
         raise RuntimeError("Production rate-limit storage is unavailable") from None
 

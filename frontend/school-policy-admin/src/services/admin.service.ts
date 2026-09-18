@@ -1,117 +1,76 @@
-import api from '@/services/api.ts'
-import type {
-  AuditEventSummary,
-  DeviceSummary,
-  PaginatedResponse,
-  PolicySummary,
-  EnrollmentTokenResponse,
-  PolicyAssignmentResponse,
-  PolicyClearResponse,
-  EnrollmentTokenSummary,
-  PolicyDetail,
-  PolicyRevisionSummary,
-  DeviceDetail,
-} from '@/types/api'
+import api from '@/services/api'
+import {
+  assignmentMutationSchema, auditEventsSchema, clearMutationSchema,
+  currentAssignmentSchema, deviceDetailSchema, devicesSchema,
+  enrollmentTokensSchema, issuedEnrollmentTokenSchema, messageSchema,
+  policiesSchema, policyDetailSchema, revisionsSchema,
+} from '@/schemas/api'
+import type { PageRequest, Policy } from '@/types/api.types'
 
-interface DeviceListResponse {
-  devices: DeviceSummary[]
-  pagination: PaginatedResponse<DeviceSummary>['pagination']
-}
-
-interface PolicyListResponse {
-  policies: PolicySummary[]
-  pagination: PaginatedResponse<PolicySummary>['pagination']
-}
-
-interface AuditEventListResponse {
-  audit_events: AuditEventSummary[]
-  pagination: PaginatedResponse<AuditEventSummary>['pagination']
-}
-
-interface EnrollmentTokenListResponse {
-  enrollment_tokens: EnrollmentTokenSummary[]
-  pagination: PaginatedResponse<EnrollmentTokenSummary>['pagination']
-}
-
-interface PolicyDetailResponse {
-  policy: PolicyDetail
-}
-
-interface PolicyRevisionListResponse {
-  revisions: PolicyRevisionSummary[]
-  pagination: PaginatedResponse<PolicyRevisionSummary>['pagination']
-}
-
-interface DeviceDetailResponse {
-  device: DeviceDetail
-}
+const path = (value: string) => encodeURIComponent(value)
+const pageParams = ({ page, perPage }: PageRequest) => ({ page, per_page: perPage })
 
 export const adminService = {
-  async listDevices() {
-    const { data } = await api.get<DeviceListResponse>('/admin/devices', {
-      params: { page: 1, per_page: 100 },
-    })
-    return data
+  async listDevices(request: PageRequest, status?: string, signal?: AbortSignal) {
+    const response = await api.get('/admin/devices', { params: { ...pageParams(request), ...(status ? { status } : {}) }, signal })
+    return devicesSchema.parse(response.data)
   },
-
-  async getDevice(deviceUuid: string) {
-    const { data } = await api.get<DeviceDetailResponse>(`/admin/devices/${deviceUuid}`)
-    return data.device
+  async getDevice(uuid: string, signal?: AbortSignal) {
+    const response = await api.get(`/admin/devices/${path(uuid)}`, { signal })
+    return deviceDetailSchema.parse(response.data).device
   },
-
-  async listPolicies() {
-    const { data } = await api.get<PolicyListResponse>('/admin/policies', {
-      params: { page: 1, per_page: 100 },
-    })
-    return data
+  async getCurrentAssignment(uuid: string, signal?: AbortSignal) {
+    const response = await api.get(`/admin/devices/${path(uuid)}/policy-assignment`, { signal })
+    return currentAssignmentSchema.parse(response.data).policy_assignment
   },
-
-  async getPolicy(policyUuid: string) {
-    const { data } = await api.get<PolicyDetailResponse>(`/admin/policies/${policyUuid}`)
-    return data.policy
+  async listPolicies(request: PageRequest, status?: string, signal?: AbortSignal) {
+    const response = await api.get('/admin/policies', { params: { ...pageParams(request), ...(status ? { status } : {}) }, signal })
+    return policiesSchema.parse(response.data)
   },
-
-  async listPolicyRevisions(policyUuid: string) {
-    const { data } = await api.get<PolicyRevisionListResponse>(`/admin/policies/${policyUuid}/revisions`, { params: { page: 1, per_page: 100 } })
-    return data
+  async listAllPolicies(signal?: AbortSignal) {
+    const policies: Policy[] = []
+    let page = 1
+    while (true) {
+      const result = await adminService.listPolicies({ page, perPage: 100 }, 'active', signal)
+      policies.push(...result.policies)
+      if (!result.pagination.has_next) return policies
+      page += 1
+    }
   },
-
-  async listAuditEvents(eventType?: string) {
-    const { data } = await api.get<AuditEventListResponse>('/admin/audit-events', {
-      params: { page: 1, per_page: 25, ...(eventType && eventType !== 'all' ? { event_type: eventType } : {}) },
-    })
-    return data
+  async getPolicy(uuid: string, signal?: AbortSignal) {
+    const response = await api.get(`/admin/policies/${path(uuid)}`, { signal })
+    return policyDetailSchema.parse(response.data).policy
   },
-
+  async listPolicyRevisions(uuid: string, request: PageRequest, signal?: AbortSignal) {
+    const response = await api.get(`/admin/policies/${path(uuid)}/revisions`, { params: pageParams(request), signal })
+    return revisionsSchema.parse(response.data)
+  },
+  async listEnrollmentTokens(request: PageRequest, status?: string, signal?: AbortSignal) {
+    const response = await api.get('/admin/enrollment-tokens', { params: { ...pageParams(request), ...(status ? { status } : {}) }, signal })
+    return enrollmentTokensSchema.parse(response.data)
+  },
   async issueEnrollmentToken(reason: string, boundDeviceUuid?: string) {
-    const { data } = await api.post<EnrollmentTokenResponse>('/admin/enrollment-tokens', {
-      reason,
-      bound_device_uuid: boundDeviceUuid || null,
-    })
-    return data
+    const response = await api.post('/admin/enrollment-tokens', { reason, bound_device_uuid: boundDeviceUuid || null })
+    return issuedEnrollmentTokenSchema.parse(response.data)
   },
-
-  async listEnrollmentTokens() {
-    const { data } = await api.get<EnrollmentTokenListResponse>('/admin/enrollment-tokens', {
-      params: { page: 1, per_page: 25 },
-    })
-    return data
+  async revokeEnrollmentToken(uuid: string, reason: string) {
+    const response = await api.post(`/admin/enrollment-tokens/${path(uuid)}/revoke`, { reason })
+    return messageSchema.parse(response.data)
   },
-
-  async revokeEnrollmentToken(tokenUuid: string, reason: string) {
-    await api.post(`/admin/enrollment-tokens/${tokenUuid}/revoke`, { reason })
+  async assignPolicy(deviceUuid: string, revisionUuid: string, reason: string) {
+    const response = await api.post(`/admin/devices/${path(deviceUuid)}/policy-assignment`, { policy_revision_uuid: revisionUuid, reason })
+    return assignmentMutationSchema.parse(response.data)
   },
-
-  async assignPolicy(deviceUuid: string, policyRevisionUuid: string, reason: string) {
-    const { data } = await api.post<PolicyAssignmentResponse>(`/admin/devices/${deviceUuid}/policy-assignment`, {
-      policy_revision_uuid: policyRevisionUuid,
-      reason,
-    })
-    return data
-  },
-
   async clearPolicy(deviceUuid: string, reason: string) {
-    const { data } = await api.post<PolicyClearResponse>(`/admin/devices/${deviceUuid}/policy-assignment/clear`, { reason })
-    return data
+    const response = await api.post(`/admin/devices/${path(deviceUuid)}/policy-assignment/clear`, { reason })
+    return clearMutationSchema.parse(response.data)
+  },
+  async revokeDeviceCredential(deviceUuid: string, reason: string) {
+    const response = await api.post(`/admin/devices/${path(deviceUuid)}/credentials/revoke`, { reason })
+    return messageSchema.parse(response.data)
+  },
+  async listAuditEvents(request: PageRequest, eventType?: string, signal?: AbortSignal) {
+    const response = await api.get('/admin/audit-events', { params: { ...pageParams(request), ...(eventType ? { event_type: eventType } : {}) }, signal })
+    return auditEventsSchema.parse(response.data)
   },
 }

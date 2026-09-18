@@ -157,7 +157,9 @@ def test_production_redacts_redis_dns_startup_diagnostics(
     )
     monkeypatch.setattr("app.Redis.from_url", Mock(return_value=redis_client))
 
-    with pytest.raises(RuntimeError, match="Production rate-limit storage is unavailable"):
+    with pytest.raises(
+        RuntimeError, match="Production rate-limit storage is unavailable"
+    ):
         create_app(
             "production",
             {
@@ -173,7 +175,9 @@ def test_production_redacts_redis_dns_startup_diagnostics(
     captured = capsys.readouterr()
     record = json.loads(captured.err.strip().splitlines()[-1])
     assert record["event"] == "production_rate_limit_storage_unavailable"
-    assert record["message"] == "Production rate-limit storage is unavailable: dns_failed"
+    assert (
+        record["message"] == "Production rate-limit storage is unavailable: dns_failed"
+    )
     assert "synthetic-secret" not in captured.err
     assert "redis.example.invalid" not in captured.err
 

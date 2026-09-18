@@ -1,0 +1,26 @@
+**
+!requirements.txt
+!requirements-dev.txt
+!pytest.ini
+!pyproject.toml
+!run.py
+!app/
+!app/**
+!migrations/
+!migrations/**
+!tests/
+!tests/**
+!test_support/
+!test_support/**
+!scripts/
+!scripts/**
+**/__pycache__/**
+**/*.pyc
+**/.env*
+**/*.pem
+**/*.key
+**/*.crt
+!gunicorn.conf.py
+# Only the individually reviewed public Supabase CA may enter a runtime image.
+!certs/
+!certs/supabase-ca.pem

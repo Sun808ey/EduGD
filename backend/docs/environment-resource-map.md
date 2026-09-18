@@ -2,6 +2,107 @@
 
 ## Status and scope
 
+**Workbook continuation:** the owner authorized completion against `inter.md`
+for the academic proof of concept, subject to current Free-only instructions.
+The [workbook reconciliation](setup-workbook-reconciliation.md) records current
+evidence and supersedes stale pending-input statements below. Fresh installation,
+saved/sealed variables and the selected enrollment settings are owner-confirmed.
+Browser access is restored: both Supabase projects now have SSL enforcement on
+and Data API disabled, dashboard-verified. Production SSL was enabled during
+this continuation. The encrypted staging owner handoff passed validation and
+TLS connection checks. Staging migrations reached `e4a1b7c9d2f6` with 18 public
+tables; restricted runtime grants and 18 role-specific RLS policies committed
+after 126 permission checks. The hosted diagnostic now passes after correcting
+public CA inclusion in the runtime image. Staging API deployment
+`7e5c7c43-2c34-4719-afc8-b132b6eb81f9` is healthy at
+`https://edug-api-staging-staging.up.railway.app`; health/readiness return 200
+and allowed/disallowed CORS checks pass. Administrator bootstrap is verified:
+one administrator, five permissions and one bootstrap audit event. Frontend
+deployment/authentication verification passed. Production owner preflight then
+confirmed the assigned database, verified TLS, effective migration privileges
+and an empty schema. Alembic reached `e4a1b7c9d2f6` with exactly 18 public
+tables. The runtime security transaction passed 126 permission checks, enabled
+RLS on all 18 tables, installed 18 `edug_backend_runtime` policies and denied
+the Data API roles. Production runtime connectivity, Railway deployment,
+public readiness, Vercel deployment and CORS verification now pass. The
+production API is `https://edug-api-production-production.up.railway.app` and
+the production frontend is `https://edug-admin.vercel.app`.
+
+**Latest progress, 17 September 2026:** the owner authorized steps 3–7 in
+sequence using zero-cost plans and confirmed EduG is strictly personal and
+non-commercial. Supabase schema/security checks, Redis TLS checks, Railway API
+deployments and Vercel frontend deployments now pass for staging and
+production. Android offline-device acceptance remains outstanding because this
+checkout has no Android implementation. Earlier pause and approval statements
+below are historical where superseded here.
+
+### Verified frontend assignments (step 3)
+
+| Setting | Staging | Production |
+| --- | --- | --- |
+| Vercel scope/plan | `sun-g`, Hobby | `sun-g`, Hobby |
+| Project | `edug-admin-staging` | `edug-admin` |
+| Project ID | `prj_8FoiuHbud8Q0nKCPxxNWfPUKT3Tu` | `prj_mOFsRmVw7Ij17if6ETWx1SebWhji` |
+| Assigned HTTPS domain | `https://edug-admin-staging.vercel.app` | `https://edug-admin.vercel.app` |
+| Git repository | `Sun808ey/EduGD` | `Sun808ey/EduGD` |
+| Project's Production branch | `feature/backend-api` | `main` |
+| Root | `frontend/school-policy-admin` | `frontend/school-policy-admin` |
+| Framework/runtime | Vite, Node 24.x | Vite, Node 24.x |
+| Install | `npm ci` | `npm ci` |
+| Build/output | Repository config: `npm run build`, `dist` | Dashboard aligned to `npm run build`, `dist` |
+| Automatic build hold | `exit 0` (Don't build anything) | `exit 0` (Don't build anything) |
+
+Created the staging project empty, renamed it, connected the existing GitHub
+repository and assigned its provider domain. Its initial generated domain
+`project-irlim.vercel.app` remains an additional alias. Domain assignment is
+verified; the staging domain has no deployed application yet. Vercel's label
+"Production" inside this separate staging project means its stable deployment
+slot, not EduG production. No paid custom environment or paid build resource
+was enabled. Staging project model-training sharing and PR comments were disabled.
+The existing production deployment was not replaced. Build holds must be lifted
+only for the reviewed staging/release deployments at their respective gates.
+
+The existing production project has `VITE_API_URL` scoped to Production and
+Preview; the prepared code reads `VITE_API_BASE_URL`. Correct this mismatch at
+step 5 with verified environment-specific endpoints. No secret values were
+read into this record. Assignment checks do not establish frontend/API routing.
+
+### Step 4 verified implementation
+
+Local edits replace the hosted-secret PostgreSQL workflow with a manual,
+isolated Docker stack and add unconditional test rejection of both approved
+Supabase references. See [disposable PostgreSQL checks](disposable-postgres-tests.md).
+44 focused safety/identity tests, Ruff, type checking and Compose parsing passed.
+Docker recovered after startup delays; all 38 migration/PostgreSQL/concurrency
+tests passed against the isolated container. Its containers, network and
+temporary certificate volume were removed afterward. Deployment identity guards bind the entry point to the
+assigned resources, and [supported Railway settings](railway-deployment-settings.md)
+are prepared. The legacy JSON no longer runs migrations automatically. GitHub
+workflow 340582975 was disabled and verified `disabled_manually`; its five most
+recent runs are completed failures, not active runs. The new manual isolated
+workflow remains local until the owner commits and pushes. No commit/push was made.
+
+### Step 5 partial configuration and manual gate
+
+Both Railway APIs contained only generated platform variables before this step.
+Applied and read back seven non-secret settings using `--skip-deploys`:
+`APP_ENV=production`, the respective `EDUG_ENVIRONMENT`, `FLASK_APP=run.py`,
+`FLASK_DEBUG=false`, each exact frontend origin, pool size 1 and overflow 0.
+The platform environment IDs matched the resource map. Both services remain
+offline. Database/Redis URLs, signing/audit keys, enrollment settings, TLS trust,
+runtime/migration roles and public API endpoints are not yet configured or verified.
+Follow [the private configuration handoff](private-environment-configuration.md).
+Source attachment, deployment settings and frontend API-variable correction
+remain pending; no hosted migration or API deployment was performed.
+
+The CLI volume inventory includes deleted records that the dashboard omitted.
+Staging volume `1ba54880-ce0f-4abb-bd94-fa89d9bdf68b` and production volume
+`80a9aba1-2879-47c0-a2ef-14ec2d5f3790` both have non-null `deletedAt`,
+`isPendingDeletion=true` and no attached service. Their displayed sizes are
+approximately 32 MB and 49 MB. This confirms deletion requests, not final provider
+purging or zero storage billing; reconcile usage before the deployment gate.
+No additional volume deletion was attempted.
+
 **Latest instruction: steps 1 and 2 must use zero-cost Redis alternatives.**
 The [zero-cost Redis implementation plan](zero-cost-redis-plan.md) supersedes
 proposals below to add Railway production Redis. Upstash Free staging and Aiven

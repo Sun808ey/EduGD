@@ -8,7 +8,12 @@ from urllib.parse import urlsplit
 
 from flask import Flask, Response, request
 from redis import Redis
-from redis.exceptions import RedisError
+from redis.exceptions import (
+    AuthenticationError,
+    ConnectionError,
+    RedisError,
+    TimeoutError,
+)
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.administrator_authorization import configure_administrator_jwt
@@ -183,7 +188,31 @@ def _validate_startup_configuration(app: Flask) -> None:
             socket_connect_timeout=3,
             socket_timeout=3,
         ).ping()
-    except (RedisError, ValueError, OSError):
+    except (RedisError, ValueError, OSError) as error:
+        diagnostic = str(error).lower()
+        reason = "connection_failed"
+        if isinstance(error, AuthenticationError) or any(
+            fragment in diagnostic
+            for fragment in ("authentication", "invalid username-password", "noauth")
+        ):
+            reason = "authentication_failed"
+        elif any(
+            fragment in diagnostic
+            for fragment in ("certificate", "ssl", "tls")
+        ):
+            reason = "tls_failed"
+        elif any(
+            fragment in diagnostic
+            for fragment in ("getaddrinfo", "name or service", "dns")
+        ):
+            reason = "dns_failed"
+        elif isinstance(error, (ConnectionError, TimeoutError, OSError)) or "timed out" in diagnostic:
+            reason = "network_or_timeout"
+        app.logger.error(
+            "Production rate-limit storage is unavailable: %s",
+            reason,
+            extra={"event": "production_rate_limit_storage_unavailable", "reason": reason},
+        )
         raise RuntimeError("Production rate-limit storage is unavailable") from None
 
     admin_frontend_origins = _admin_frontend_origins(app)

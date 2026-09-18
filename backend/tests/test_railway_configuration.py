@@ -10,14 +10,12 @@ from app import _admin_frontend_origins
 BACKEND = Path(__file__).resolve().parents[1]
 
 
-def test_railway_runs_migrations_before_workers_and_checks_dependencies(
+def test_railway_keeps_migrations_explicit_and_checks_dependencies(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     configuration = json.loads((BACKEND / "railway.json").read_text())
     assert "db upgrade" not in configuration["build"]["buildCommand"]
-    assert configuration["deploy"]["preDeployCommand"] == [
-        "flask --app run.py db upgrade"
-    ]
+    assert configuration["deploy"]["preDeployCommand"] == []
     assert (
         configuration["deploy"]["startCommand"]
         == "gunicorn --config gunicorn.conf.py run:app"

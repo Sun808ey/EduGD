@@ -25,3 +25,42 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+
+# Python
+
+venv/
+
+__pycache__/
+
+.env
+
+
+# Node
+
+node_modules/
+
+dist/
+
+
+# Android
+
+.gradle/
+
+build/
+
+
+# IDE
+
+.idea/
+
+.vscode/
+
+
+# Environment variables
+
+.env.local
+.env.*.local
+coverage/
+test-results/
+.vercel

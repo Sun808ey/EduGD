@@ -1,52 +1,82 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { normalizeApiError } from '@/services/errors'
 
 export function LoginForm() {
   const navigate = useNavigate()
-  const location = useLocation()
-  const { login, status } = useAuth()
+  const { login, error: authError } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [retrySeconds, setRetrySeconds] = useState(0)
+  const [submitting, setSubmitting] = useState(false)
+  const [localError, setLocalError] = useState('')
 
-  useEffect(() => {
-    if (retrySeconds <= 0) return
-    const timer = window.setInterval(() => setRetrySeconds((seconds) => Math.max(0, seconds - 1)), 1000)
-    return () => window.clearInterval(timer)
-  }, [retrySeconds])
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!username.trim() || !password) return setError('Username and password are required.')
-    setError('')
+
+    if (!username.trim() || !password.trim()) {
+      setLocalError('Username and password are required.')
+      return
+    }
+
+    setLocalError('')
+    setSubmitting(true)
+
     try {
       await login(username.trim(), password)
-      const requested = (location.state as { from?: string } | null)?.from
-      navigate(requested?.startsWith('/') ? requested : '/dashboard', { replace: true })
-    } catch (caught) {
-      const failure = normalizeApiError(caught)
-      if (failure.status === 429) {
-        setRetrySeconds(failure.retryAfterSeconds ?? 60)
-        setError('Too many sign-in attempts. Please wait before trying again.')
-      } else if (failure.status === 401) setError('The username or password is incorrect.')
-      else setError(failure.message)
+      navigate('/dashboard', { replace: true })
+    } catch {
+      setLocalError('The sign-in attempt failed. Please verify your credentials.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
-  const disabled = status === 'authenticating' || retrySeconds > 0
+  return (
+    <form onSubmit={handleSubmit} className="mt-8 space-y-5" noValidate>
+      <div>
+        <label htmlFor="username" className="mb-2 block text-sm font-medium text-slate-700">
+          Username
+        </label>
+        <input
+          id="username"
+          type="text"
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
+          placeholder="admin"
+          autoComplete="username"
+        />
+      </div>
 
-  return <form onSubmit={submit} className="mt-8 space-y-5" noValidate>
-    <label className="block text-sm font-medium" htmlFor="username">Username
-      <input id="username" required autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-emerald-600" />
-    </label>
-    <label className="block text-sm font-medium" htmlFor="password">Password
-      <input id="password" required type="password" autoComplete="current-password" placeholder="••••••••" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-emerald-600" />
-    </label>
-    {error && <div role="alert" aria-live="polite" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
-    <button type="submit" disabled={disabled} className="w-full rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50">{status === 'authenticating' ? 'Signing in…' : retrySeconds > 0 ? `Try again in ${retrySeconds}s` : 'Sign in'}</button>
-  </form>
+      <div>
+        <label htmlFor="password" className="mb-2 block text-sm font-medium text-slate-700">
+          Password
+        </label>
+        <input
+          id="password"
+          type="password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
+          placeholder="••••••••"
+          autoComplete="current-password"
+        />
+      </div>
+
+      {(localError || authError) && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {localError || authError}
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={submitting}
+        className="w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {submitting ? 'Signing in...' : 'Sign in'}
+      </button>
+    </form>
+  )
 }

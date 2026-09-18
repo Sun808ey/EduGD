@@ -1,17 +1,15 @@
 import { createContext } from 'react'
-import type { Administrator, AdministratorPermission } from '@/types/api.types'
-
-export type AuthStatus = 'anonymous' | 'authenticating' | 'authenticated' | 'logging_out'
+import type { AdministratorSummary } from '@/types/api'
 
 export interface AuthContextValue {
-  user: Administrator | null
-  status: AuthStatus
-  notice: string | null
+  user: AdministratorSummary | null
+  token: string | null
   isAuthenticated: boolean
+  loading: boolean
+  error: string | null
   login: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
-  hasPermission: (permission: AdministratorPermission) => boolean
-  clearNotice: () => void
+  refreshUser: () => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined)

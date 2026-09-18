@@ -1,21 +1,13 @@
 import axios, { AxiosHeaders } from 'axios'
-import { resolveApiBaseUrl, resolveApiTimeout } from '@/lib/environment'
-import { getSessionToken } from '@/auth/session'
-import { normalizeApiError } from '@/services/errors'
-
-let unauthorizedHandler: (() => void) | undefined
-
-export function setUnauthorizedHandler(handler: (() => void) | undefined) {
-  unauthorizedHandler = handler
-}
+import { resolveApiBaseUrl } from '@/lib/environment.ts'
 
 const api = axios.create({
   baseURL: resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.PROD),
-  timeout: resolveApiTimeout(import.meta.env.VITE_API_TIMEOUT),
+  timeout: Number(import.meta.env.VITE_API_TIMEOUT ?? 30000),
 })
 
 api.interceptors.request.use((config) => {
-  const token = getSessionToken()
+  const token = localStorage.getItem('edu_admin_token')
 
   if (token) {
     const headers = config.headers ?? new AxiosHeaders()
@@ -29,11 +21,16 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const normalized = normalizeApiError(error)
-    if (normalized.status === 401 && error?.config?.url !== '/admin/auth/login') unauthorizedHandler?.()
-    return Promise.reject(normalized)
+    if (error?.response?.status === 401) {
+      localStorage.removeItem('edu_admin_token')
+      localStorage.removeItem('edu_admin_user')
+      window.location.href = '/login'
+    }
+
+    return Promise.reject(error)
   },
 )
 
 export default api
+
 

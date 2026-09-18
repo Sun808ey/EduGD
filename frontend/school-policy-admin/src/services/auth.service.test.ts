@@ -1,28 +1,67 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import api from '@/services/api'
-import { authService } from '@/services/auth.service'
+import api from '@/services/api.ts'
+import { authService } from '@/services/auth.service.ts'
 
-vi.mock('@/services/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
+vi.mock('@/services/api.ts', () => ({
+  default: {
+    post: vi.fn(),
+    get: vi.fn(),
+  },
+}))
 
-const administratorUuid = '11111111-1111-4111-8111-111111111111'
-
-describe('authentication service contracts', () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it('validates login, identity and logout responses', async () => {
-    vi.mocked(api.post)
-      .mockResolvedValueOnce({ data: { access_token: 'token', token_type: 'Bearer', expires_in: 900, administrator: { administrator_uuid: administratorUuid, username: 'admin', display_name: 'Admin' } } })
-      .mockResolvedValueOnce({ data: { message: 'administrator logged out' } })
-    vi.mocked(api.get).mockResolvedValueOnce({ data: { administrator: { administrator_uuid: administratorUuid, username: 'admin', display_name: 'Admin', permissions: ['policy.assign'] } } })
-
-    await expect(authService.login('admin', 'password')).resolves.toMatchObject({ access_token: 'token' })
-    await expect(authService.getCurrentAdministrator()).resolves.toMatchObject({ permissions: ['policy.assign'] })
-    await expect(authService.logout()).resolves.toEqual({ message: 'administrator logged out' })
-    expect(api.post).toHaveBeenNthCalledWith(1, '/admin/auth/login', { username: 'admin', password: 'password' })
+describe('authService', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.clearAllMocks()
   })
 
-  it('rejects a response that violates the backend contract', async () => {
-    vi.mocked(api.post).mockResolvedValueOnce({ data: { access_token: '', token_type: 'Basic' } })
-    await expect(authService.login('admin', 'password')).rejects.toThrow()
+  it('persists the administrator session after login', async () => {
+    vi.mocked(api.post).mockResolvedValue({
+      data: {
+        access_token: 'test-token',
+        token_type: 'Bearer',
+        expires_in: 900,
+        administrator: {
+          administrator_uuid: 'admin-uuid',
+          username: 'admin',
+          display_name: 'School Admin',
+        },
+      },
+    })
+
+    await authService.login('admin', 'secret')
+
+    expect(api.post).toHaveBeenCalledWith('/admin/auth/login', {
+      username: 'admin',
+      password: 'secret',
+    })
+    expect(authService.getStoredToken()).toBe('test-token')
+    expect(authService.getStoredUser()).toEqual({
+      administrator_uuid: 'admin-uuid',
+      username: 'admin',
+      display_name: 'School Admin',
+    })
+  })
+
+  it('revokes the server session and clears local credentials on logout', async () => {
+    localStorage.setItem('edu_admin_token', 'test-token')
+    localStorage.setItem('edu_admin_user', JSON.stringify({ username: 'admin' }))
+
+    vi.mocked(api.post).mockResolvedValue({ data: { message: 'administrator logged out' } })
+
+    await authService.logout()
+
+    expect(api.post).toHaveBeenCalledWith('/admin/auth/logout')
+    expect(authService.getStoredToken()).toBeNull()
+    expect(authService.getStoredUser()).toBeNull()
+  })
+
+  it('clears local credentials when server logout fails', async () => {
+    localStorage.setItem('edu_admin_token', 'test-token')
+    vi.mocked(api.post).mockRejectedValue(new Error('network unavailable'))
+
+    await expect(authService.logout()).rejects.toThrow('network unavailable')
+
+    expect(authService.getStoredToken()).toBeNull()
   })
 })

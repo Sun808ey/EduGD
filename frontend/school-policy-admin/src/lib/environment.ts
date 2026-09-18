@@ -34,20 +34,3 @@ export function resolveApiBaseUrl(value: string | undefined, production: boolean
 
   return `${url.origin}/api/v1`
 }
-
-export function resolveApiTimeout(value: string | undefined): number {
-  if (!value) return 30_000
-  if (!/^\d+$/.test(value)) throw new Error('VITE_API_TIMEOUT must be an integer between 1000 and 60000')
-  const timeout = Number(value)
-  if (timeout < 1000 || timeout > 60_000) throw new Error('VITE_API_TIMEOUT must be an integer between 1000 and 60000')
-  return timeout
-}
-
-export function resolveSentryDsn(value: string | undefined): string | undefined {
-  if (!value) return undefined
-  const invalid = () => new Error('VITE_SENTRY_DSN must be a valid public HTTPS Sentry DSN')
-  let url: URL
-  try { url = new URL(value) } catch { throw invalid() }
-  if (value !== value.trim() || url.protocol !== 'https:' || !url.hostname || !url.username || url.password || url.search || url.hash || !/^\/\d+$/.test(url.pathname)) throw invalid()
-  return value
-}

@@ -1,40 +1,42 @@
-import { useState } from 'react'
+import { KeyRound, RotateCcw } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminService } from '@/services/admin.service'
-import { ActionDialog } from '@/components/ui/ActionDialog'
-import { Pagination } from '@/components/ui/Pagination'
-import { ErrorState, LoadingState } from '@/components/ui/AsyncState'
-import { useAuth } from '@/hooks/useAuth'
-import { errorMessage } from '@/services/errors'
-import { formatDate } from '@/lib/format'
-import type { EnrollmentToken, IssuedEnrollmentToken } from '@/types/api.types'
+import type { EnrollmentTokenSummary } from '@/types/api'
 
 export function EnrollmentTokensPanel() {
-  const [page, setPage] = useState(1)
-  const [status, setStatus] = useState('')
-  const [issueOpen, setIssueOpen] = useState(false)
-  const [revokeTarget, setRevokeTarget] = useState<EnrollmentToken | null>(null)
-  const [reason, setReason] = useState('')
-  const [boundDevice, setBoundDevice] = useState('')
-  const [issued, setIssued] = useState<IssuedEnrollmentToken | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [tokens, setTokens] = useState<EnrollmentTokenSummary[]>([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const { hasPermission } = useAuth()
-  const cache = useQueryClient()
-  const tokens = useQuery({ queryKey: ['enrollment-tokens', page, status], queryFn: ({ signal }) => adminService.listEnrollmentTokens({ page, perPage: 25 }, status || undefined, signal) })
-  const issue = useMutation({ mutationFn: () => adminService.issueEnrollmentToken(reason.trim(), boundDevice.trim() || undefined), onSuccess: async (result) => { setIssued(result); setReason(''); setBoundDevice(''); await cache.invalidateQueries({ queryKey: ['enrollment-tokens'] }) }, onError: (caught) => setError(errorMessage(caught)) })
-  const revoke = useMutation({ mutationFn: () => adminService.revokeEnrollmentToken(revokeTarget!.token_uuid, reason.trim()), onSuccess: async () => { setRevokeTarget(null); setReason(''); await cache.invalidateQueries({ queryKey: ['enrollment-tokens'] }) }, onError: (caught) => setError(errorMessage(caught)) })
-  function submitIssue(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (reason.trim()) issue.mutate() }
-  function submitRevoke(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (reason.trim() && revokeTarget) revoke.mutate() }
+  const [revokeTarget, setRevokeTarget] = useState<EnrollmentTokenSummary | null>(null)
+  const [reason, setReason] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  return <section className="space-y-4"><header className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-xl font-semibold">Enrollment tokens</h2><p className="mt-1 text-sm text-slate-600">Issue and review short-lived device pairing credentials.</p></div>{hasPermission('enrollment_token.issue') && <button type="button" onClick={() => { setIssued(null); setCopied(false); setReason(''); setBoundDevice(''); setError(''); setIssueOpen(true) }} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white">Issue token</button>}</header>
-    <label className="block max-w-xs text-sm font-medium">Status<select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1) }} className="mt-2 h-10 w-full rounded-lg border bg-white px-3"><option value="">All statuses</option><option value="active">Active</option><option value="consumed">Consumed</option><option value="revoked">Revoked</option><option value="expired">Expired</option><option value="locked">Locked</option></select></label>
-    {tokens.isLoading && <LoadingState label="Loading enrollment tokens…" />}{tokens.isError && <ErrorState message="Enrollment tokens are temporarily unavailable." retry={() => void tokens.refetch()} />}
-    {tokens.data && <div className="overflow-hidden rounded-2xl border bg-white"><div className="overflow-x-auto"><table className="w-full min-w-190 text-left text-sm"><thead className="bg-slate-50"><tr><th className="p-4">Token UUID</th><th className="p-4">Status</th><th className="p-4">Bound device</th><th className="p-4">Created</th><th className="p-4">Expires</th><th className="p-4">Action</th></tr></thead><tbody className="divide-y">{tokens.data.enrollment_tokens.map((token) => <tr key={token.token_uuid}><td className="p-4 font-mono text-xs">{token.token_uuid}</td><td className="p-4">{token.status}</td><td className="p-4 font-mono text-xs">{token.bound_device_uuid ?? 'Any device'}</td><td className="p-4">{formatDate(token.created_at)}</td><td className="p-4">{formatDate(token.expires_at)}</td><td className="p-4">{token.status === 'active' && hasPermission('enrollment_token.revoke') ? <button type="button" onClick={() => { setReason(''); setError(''); setRevokeTarget(token) }} className="font-semibold text-red-700">Revoke</button> : <span className="text-slate-400">Unavailable</span>}</td></tr>)}</tbody></table></div><Pagination value={tokens.data.pagination} onPage={setPage} /></div>}
-    <ActionDialog open={issueOpen} onOpenChange={(value) => { setIssueOpen(value); if (!value) { setIssued(null); setCopied(false) } }} title="Issue enrollment token" description="The pairing token is shown only in this dialog and is never stored by the frontend." submitLabel={issued ? undefined : 'Issue token'} closeLabel={issued ? 'Close' : 'Cancel'} busy={issue.isPending} onSubmit={submitIssue}>
-      {error && <div role="alert" className="rounded bg-red-50 p-3 text-sm text-red-800">{error}</div>}{issued ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4"><p className="text-sm font-semibold">Pairing token</p><p className="mt-2 break-all font-mono text-lg">{issued.pairing_token}</p><p className="mt-2 text-xs">Expires {formatDate(issued.expires_at)}. Copy it now, then close this dialog.</p><button type="button" onClick={() => void navigator.clipboard.writeText(issued.pairing_token).then(() => setCopied(true)).catch(() => setError('Copy failed. Select and copy the token manually.'))} className="mt-3 text-sm font-semibold underline">{copied ? 'Copied' : 'Copy token'}</button></div> : <><label className="block text-sm font-medium">Reason<input required maxLength={512} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 w-full rounded-lg border px-3 py-2" /></label><label className="block text-sm font-medium">Bind to device UUID (optional)<input value={boundDevice} onChange={(event) => setBoundDevice(event.target.value)} className="mt-2 w-full rounded-lg border px-3 py-2" /></label></>}
-    </ActionDialog>
-    <ActionDialog open={Boolean(revokeTarget)} onOpenChange={(value) => !value && setRevokeTarget(null)} title="Revoke enrollment token" description="The pairing credential will no longer be accepted." submitLabel="Revoke token" busy={revoke.isPending} destructive onSubmit={submitRevoke}>{error && <div role="alert" className="rounded bg-red-50 p-3 text-sm text-red-800">{error}</div>}<label className="block text-sm font-medium">Reason<input required maxLength={512} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 w-full rounded-lg border px-3 py-2" /></label></ActionDialog>
-  </section>
+  function loadTokens() {
+    setLoading(true)
+    adminService.listEnrollmentTokens().then((data) => setTokens(data.enrollment_tokens)).catch(() => setError('Enrollment tokens are temporarily unavailable.')).finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    adminService.listEnrollmentTokens().then((data) => setTokens(data.enrollment_tokens)).catch(() => setError('Enrollment tokens are temporarily unavailable.')).finally(() => setLoading(false))
+  }, [])
+
+  async function revoke(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!revokeTarget || !reason.trim()) return
+    setSubmitting(true)
+    setError('')
+    try {
+      await adminService.revokeEnrollmentToken(revokeTarget.token_uuid, reason.trim())
+      setTokens((current) => current.map((token) => token.token_uuid === revokeTarget.token_uuid ? { ...token, status: 'revoked', revoked_at: new Date().toISOString() } : token))
+      setRevokeTarget(null)
+      setReason('')
+    } catch {
+      setError('The enrollment token could not be revoked.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return <section className="rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-200 p-5"><div className="flex items-center gap-3"><KeyRound className="size-5 text-slate-500" /><div><h2 className="font-semibold">Enrollment tokens</h2><p className="mt-1 text-sm text-slate-500">Review active pairing credentials.</p></div></div><button type="button" aria-label="Refresh enrollment tokens" onClick={loadTokens} className="grid size-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100"><RotateCcw className="size-4" /></button></div>{error && <div role="alert" className="m-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}{loading ? <div className="p-8 text-center text-sm text-slate-500">Loading enrollment tokens...</div> : tokens.length === 0 ? <div className="p-8 text-center text-sm text-slate-500">No enrollment tokens recorded.</div> : <div className="overflow-x-auto"><table className="w-full min-w-170 text-left text-sm"><thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3 font-semibold">Token</th><th className="px-5 py-3 font-semibold">Status</th><th className="px-5 py-3 font-semibold">Created</th><th className="px-5 py-3 font-semibold">Expires</th><th className="px-5 py-3 font-semibold">Action</th></tr></thead><tbody className="divide-y divide-slate-100">{tokens.map((token) => <tr key={token.token_uuid}><td className="max-w-48 truncate px-5 py-4 font-mono text-xs text-slate-600">{token.token_uuid}</td><td className="px-5 py-4"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{token.status}</span></td><td className="px-5 py-4 text-slate-600">{token.created_at ? new Date(token.created_at).toLocaleString() : 'Unknown'}</td><td className="px-5 py-4 text-slate-600">{token.expires_at ? new Date(token.expires_at).toLocaleString() : 'Unknown'}</td><td className="px-5 py-4">{token.status === 'active' ? <button type="button" onClick={() => setRevokeTarget(token)} className="text-sm font-semibold text-red-700 hover:text-red-900">Revoke</button> : <span className="text-xs text-slate-400">Unavailable</span>}</td></tr>)}</tbody></table></div>}{revokeTarget && <div className="fixed inset-0 z-40 grid place-items-center bg-slate-950/40 p-4"><form onSubmit={revoke} role="dialog" aria-modal="true" aria-labelledby="revoke-token-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"><h2 id="revoke-token-title" className="text-lg font-semibold">Revoke enrollment token</h2><p className="mt-2 break-all text-xs text-slate-500">{revokeTarget.token_uuid}</p><label htmlFor="revoke-reason" className="mt-6 block text-sm font-medium text-slate-700">Reason<input id="revoke-reason" required value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Token no longer needed" className="mt-2 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-emerald-500" /></label><div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setRevokeTarget(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button><button type="submit" disabled={submitting} className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{submitting ? 'Revoking...' : 'Revoke token'}</button></div></form></div>}</section>
 }

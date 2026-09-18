@@ -1,7 +1,6 @@
 """Bootstrap only the guarded disposable database, then run integration tests."""
 
 import pytest
-
 from flask_migrate import upgrade
 from sqlalchemy import create_engine
 

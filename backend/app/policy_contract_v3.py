@@ -86,7 +86,25 @@ def build_policy_v3_envelope(*, policy_uuid: str, revision_uuid: str, revision_n
     from app.policy_contract import build_policy_envelope
     # Reuse UUID, timestamp and key-id canonical checks, then replace the v2 payload.
     checked = validate_policy_v3(payload)
-    base = build_policy_envelope(policy_uuid=policy_uuid, revision_uuid=revision_uuid, revision_number=revision_number, issued_at=issued_at, signing_key_id=signing_key_id, payload={**checked, "schema_version": 2, "screen_time": None, "web_filter": None} if False else {"schema_version": 2, "timezone": checked["timezone"], "refresh_after_seconds": checked["refresh_after_seconds"], "default_mode": checked["default_mode"], "emergency_packages": checked["emergency_packages"], "required_capabilities": checked["required_capabilities"], "minimum_dpc_version": checked["minimum_dpc_version"], "modes": checked["modes"], "schedules": checked["schedules"]})
+    v2_payload = {
+        "schema_version": 2,
+        "timezone": checked["timezone"],
+        "refresh_after_seconds": checked["refresh_after_seconds"],
+        "default_mode": checked["default_mode"],
+        "emergency_packages": checked["emergency_packages"],
+        "required_capabilities": checked["required_capabilities"],
+        "minimum_dpc_version": checked["minimum_dpc_version"],
+        "modes": checked["modes"],
+        "schedules": checked["schedules"],
+    }
+    base = build_policy_envelope(
+        policy_uuid=policy_uuid,
+        revision_uuid=revision_uuid,
+        revision_number=revision_number,
+        issued_at=issued_at,
+        signing_key_id=signing_key_id,
+        payload=v2_payload,
+    )
     return {**base, "protocol_version": DPC_PROTOCOL_VERSION, "payload_hash": policy_v3_hash(checked), "payload": checked}
 
 

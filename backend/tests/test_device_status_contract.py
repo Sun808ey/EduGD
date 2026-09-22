@@ -103,3 +103,58 @@ def test_contract_rejects_extra_fields() -> None:
     payload["location"] = "excluded"
     with pytest.raises(DeviceStatusContractError):
         validate_check_in(payload)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("check_in_uuid", 1),
+        ("check_in_uuid", "not-a-uuid"),
+        ("check_in_uuid", str(uuid4()).upper()),
+        ("observed_at", 1),
+        ("observed_at", "not-a-timeZ"),
+        ("observed_at", "2026-09-20T12:00:00.123Z"),
+        ("android_version", ""),
+        ("security_patch", 20260901),
+        ("capabilities", "lock_task"),
+        ("capabilities", ["lock_task", "lock_task"]),
+        ("capabilities", ["invalid capability"]),
+        ("elapsed_realtime_ms", True),
+        ("dpc_version", 0),
+    ],
+)
+def test_check_in_rejects_malformed_telemetry(field: str, value: object) -> None:
+    payload = check_in()
+    payload[field] = value
+    with pytest.raises(DeviceStatusContractError):
+        validate_check_in(payload)
+
+
+def test_check_in_rejects_policy_identity_status_disagreement() -> None:
+    payload = check_in()
+    payload["policy_status"] = "applied"
+    with pytest.raises(DeviceStatusContractError, match="disagree"):
+        validate_check_in(payload)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("protocol_version", 1),
+        ("outcome", "unknown"),
+        ("error_code", "invalid code"),
+        ("acknowledgement_uuid", str(uuid4()).upper()),
+    ],
+)
+def test_acknowledgement_rejects_malformed_outcome(field: str, value: object) -> None:
+    payload = acknowledgement()
+    payload[field] = value
+    with pytest.raises(DeviceStatusContractError):
+        validate_policy_acknowledgement(payload)
+
+
+def test_successful_acknowledgement_rejects_error_code() -> None:
+    payload = acknowledgement()
+    payload["error_code"] = "spurious_error"
+    with pytest.raises(DeviceStatusContractError, match="cannot include"):
+        validate_policy_acknowledgement(payload)

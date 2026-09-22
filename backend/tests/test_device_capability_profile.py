@@ -6,6 +6,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from app.android_integration_config import DPC_APPLICATION_ID, INITIAL_EDUCATIONAL_APPS
 from app.device_capability_profile import (
     resolve_policy_for_device,
+    resolve_policy_from_certification,
     validate_device_capability_profile,
 )
 from app.policy_contract import (
@@ -143,6 +144,14 @@ def test_resolution_is_device_specific_canonical_and_signed():
         lambda p: p["handlers"][0].update(attested=False),
         lambda p: p["handlers"][0].update(system_signed=False),
         lambda p: p["handlers"][1].update(role="action_dial"),
+        lambda p: p["handlers"][0].update(package="invalid package"),
+        lambda p: p["handlers"][0].update(role="unknown"),
+        lambda p: p["handlers"][0].pop("role"),
+        lambda p: p.update(model=""),
+        lambda p: p.update(handlers="invalid"),
+        lambda p: p.update(system_dependencies="invalid"),
+        lambda p: p.update(system_dependencies=[]),
+        lambda p: p["handlers"][0].update(package="com.unverified.dialer"),
         lambda p: p["system_dependencies"].append("com.android.systemui"),
     ],
 )
@@ -169,6 +178,23 @@ def test_unknown_and_forbidden_packages_fail_closed():
         resolve_policy_for_device(
             value, profile(), installed_packages=INSTALLED, verified_handlers=VERIFIED
         )
+
+
+def test_certification_record_resolves_policy_without_trusting_self_report():
+    from tests.test_physical_certification import _keys, _record
+
+    record, verifier, operators = _record()
+    verifier_key, operator_keys = _keys(verifier, operators)
+
+    resolved = resolve_policy_from_certification(
+        template(),
+        record,
+        installed_packages=INSTALLED,
+        verifier_key=verifier_key,
+        operator_keys=operator_keys,
+    )
+
+    assert "com.android.dialer" in resolved["emergency_packages"]
     value = template()
     value["modes"][0]["allowed_packages"].append("com.google.android.apps.classroom")
     with pytest.raises(PolicyContractError):

@@ -48,7 +48,7 @@ def main() -> int:
     except Exception as error:
         result = {"hosted_verification": "FAIL", "stage": stage}
         if stage == "database_connection":
-            expected_ca = "/app/certs/supabase-ca.crt"
+            expected_ca = "/app/certs/supabase-ca.pem"
             result["bundled_ca"] = (
                 "present" if Path(expected_ca).is_file() else "absent"
             )

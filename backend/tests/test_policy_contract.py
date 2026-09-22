@@ -122,6 +122,25 @@ def test_policy_v2_rejects_ambiguous_equal_priority_overlap() -> None:
         validate_policy_v2(value)
 
 
+@pytest.mark.parametrize("start_day, next_day", [(1, 2), (7, 1)])
+def test_overnight_schedule_rejects_next_day_overlap(start_day, next_day) -> None:
+    value = policy()
+    overnight = value["schedules"][1]
+    overnight.update(days=[start_day])
+    morning = deepcopy(value["schedules"][0])
+    morning.update(days=[next_day], start_minute=60, end_minute=120)
+    value["schedules"] = [overnight, morning]
+    with pytest.raises(PolicyContractError, match="ambiguous"):
+        validate_policy_v2(value)
+
+
+def test_overnight_schedule_allows_start_day_morning() -> None:
+    value = policy()
+    value["schedules"][0].update(days=[1], start_minute=60, end_minute=120)
+    value["schedules"][1].update(days=[1])
+    assert len(validate_policy_v2(value)["schedules"]) == 2
+
+
 def test_canonical_json_rejects_floats_and_normalizes_unicode() -> None:
     assert canonical_json_bytes({"value": "e\u0301"}) == canonical_json_bytes(
         {"value": "\u00e9"}

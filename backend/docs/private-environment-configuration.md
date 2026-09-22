@@ -1,5 +1,10 @@
 # Step 5: private configuration handoff
 
+> Historical deployment note: this sealed-variable record describes the
+> `e4a1b7c9d2f6` / 18-table deployment snapshot. The current repository head is
+> `d8f1a3c6e9b2`; do not use the historical table count as a current migration
+> expectation.
+
 The broader setup now follows [the corrected workbook execution record](setup-workbook-reconciliation.md).
 Browser control and both projects' SSL/Data API checks now pass. Staging is
 now migrated to `e4a1b7c9d2f6`, with restricted runtime grants and RLS policies

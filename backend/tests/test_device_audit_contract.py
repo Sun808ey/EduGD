@@ -144,3 +144,104 @@ def test_privacy_metadata_is_bounded_and_scalar_only() -> None:
             metadata={"payload": {"nested": "content"}},
             previous_event_hash=None,
         )
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("event_uuid", 1),
+        ("event_uuid", "not-a-uuid"),
+        ("event_uuid", str(uuid4()).upper()),
+        ("sequence", True),
+        ("sequence", 0),
+        ("occurred_at", 1),
+        ("occurred_at", "not-a-timeZ"),
+        ("occurred_at", "2026-09-20T12:00:00.100Z"),
+        ("event_code", "unknown"),
+        ("outcome", "unknown"),
+        ("rule_id", "invalid rule"),
+        ("policy_uuid", None),
+        ("previous_event_hash", "short"),
+        ("previous_event_hash", "Z" * 64),
+        ("previous_event_hash", "A" * 64),
+        ("metadata", {"invalid key": "value"}),
+        ("metadata", {"payload": 2**64}),
+        ("metadata", {"payload": "x" * 257}),
+        ("metadata", {"payload": {"nested": "value"}}),
+    ],
+)
+def test_event_rejects_invalid_identity_timing_and_metadata(
+    field: str, value: object
+) -> None:
+    valid = event(1)
+    valid.pop("event_hash")
+    valid[field] = value
+    with pytest.raises(DeviceAuditContractError):
+        build_audit_event(**valid)
+
+
+def test_event_rejects_extra_fields_and_unbounded_metadata() -> None:
+    value = event(1)
+    value["device_location"] = "private"
+    with pytest.raises(DeviceAuditContractError, match="invalid audit event"):
+        build_audit_batch(
+            batch_uuid=str(uuid4()),
+            device_uuid=str(uuid4()),
+            credential_uuid=str(uuid4()),
+            signature_algorithm="ECDSA_P256_SHA256",
+            events=[value],
+        )
+    value.pop("device_location")
+    value.pop("event_hash")
+    value["metadata"] = {f"key_{index}": index for index in range(17)}
+    with pytest.raises(DeviceAuditContractError, match="metadata"):
+        build_audit_event(**value)
+
+
+def test_batch_rejects_unsupported_algorithm_and_empty_events() -> None:
+    valid = batch()
+    valid["signature_algorithm"] = "none"
+    with pytest.raises(DeviceAuditContractError, match="algorithm"):
+        sign_audit_batch(valid, ec.generate_private_key(ec.SECP256R1()))
+    with pytest.raises(DeviceAuditContractError, match="event batch"):
+        build_audit_batch(
+            batch_uuid=str(uuid4()),
+            device_uuid=str(uuid4()),
+            credential_uuid=str(uuid4()),
+            signature_algorithm="ECDSA_P256_SHA256",
+            events=[],
+        )
+
+
+@pytest.mark.parametrize(
+    "field,value", [("protocol_version", 1), ("final_head", "0" * 64)]
+)
+def test_batch_rejects_protocol_or_chain_field_drift(field: str, value: object) -> None:
+    valid = batch()
+    valid[field] = value
+    with pytest.raises(DeviceAuditContractError):
+        sign_audit_batch(valid, ec.generate_private_key(ec.SECP256R1()))
+
+
+def test_signing_rejects_wrong_key_algorithm() -> None:
+    rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    with pytest.raises(DeviceAuditContractError, match="key"):
+        sign_audit_batch(batch(), rsa_key)
+    with pytest.raises(DeviceAuditContractError, match="key"):
+        sign_audit_batch(
+            batch("RSA_2048_SHA256"), ec.generate_private_key(ec.SECP256R1())
+        )
+
+
+@pytest.mark.parametrize("signature", [None, "not-base64!", "AA"])
+def test_verification_rejects_malformed_signatures(signature: object) -> None:
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    signed = sign_audit_batch(batch(), private_key)
+    signed["signature"] = signature
+    with pytest.raises(DeviceAuditContractError, match="signature"):
+        verify_audit_batch(
+            signed,
+            private_key.public_key(),
+            expected_previous_head=None,
+            expected_first_sequence=1,
+        )

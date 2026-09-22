@@ -57,6 +57,24 @@ def test_registers_new_device(client: FlaskClient, app: Flask) -> None:
         assert event.created_at is not None
 
 
+def test_registers_historical_device_as_suspended(
+    client: FlaskClient,
+    app: Flask,
+) -> None:
+    response = client.post(
+        REGISTRATION_URL,
+        json={**VALID_PAYLOAD, "android_version": "9", "api_level": 28},
+    )
+
+    assert response.status_code == 201
+    assert response.get_json()["device"]["status"] == "suspended"
+
+    with app.app_context():
+        device = db.session.execute(select(Device)).scalar_one()
+        assert device.api_level == 28
+        assert device.status == "suspended"
+
+
 def test_identical_registration_is_idempotent(
     client: FlaskClient,
     app: Flask,

@@ -38,7 +38,7 @@ This document freezes the backend policy contract that the Android DPC must impl
 
 A policy uses `Africa/Kampala` and contains one or more named modes. Every mode uses an application allowlist, must include every emergency package, and may contain an explicit blocked list, lock-task allowlist, Android user restrictions and boolean device controls. Allowed and blocked lists are disjoint. Lock-task packages are a subset of allowed packages.
 
-Schedules use ISO weekday numbers 1 (Monday) through 7 (Sunday) and minutes since local midnight. A start greater than an end denotes an overnight window. Overlapping schedules are resolved by priority. Two overlapping schedules with the same priority are invalid, preventing device-specific tie breaking.
+Schedules use ISO weekday numbers 1 (Monday) through 7 (Sunday) and minutes since local midnight. A start greater than an end denotes an overnight window beginning on the listed day and ending on the next day, wrapping Sunday to Monday. Overlapping schedules are resolved by priority. Two overlapping schedules with the same priority are invalid, preventing device-specific tie breaking.
 
 `refresh_after_seconds` marks a verified policy stale. It does not expire the policy. A device without connectivity continues enforcing the last verified and successfully activated policy, records a stale-policy event and retries with bounded backoff. Invalid signatures, verified rollback and local integrity failure are separate high-risk states.
 

@@ -60,7 +60,7 @@ def register_device(
             device_uuid=registration_data.device_uuid,
             android_version=registration_data.android_version,
             api_level=registration_data.api_level,
-            status="active",
+            status="active" if registration_data.api_level >= 29 else "suspended",
             legacy_enrollment_eligible=(
                 current_app.config["DEVICE_ENROLLMENT_MODE"] == "legacy"
             ),

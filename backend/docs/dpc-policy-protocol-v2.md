@@ -2,6 +2,22 @@
 
 This document freezes the backend policy contract that the Android DPC must implement. It is a wire specification, not a claim that the Android client is present in this repository.
 
+## DPC protocol v3 foundation
+
+V2 remains unchanged for legacy clients. New DPC work uses `schema_version: 3`,
+which retains the v2 modes and schedules and adds `screen_time` (a daily device
+limit, Kampala-local reset minute and exhausted mode) plus an allow-by-default
+domain web filter. URLs, paths, query strings and permitted browsing history are
+not accepted or retained.
+
+The DPC enforces daily use locally from monotonic active-use accounting and keeps
+the last verified policy while offline. It must normalize a domain with IDNA
+ASCII, lower-case it, remove one trailing dot, and never send a raw domain or
+URL as evidence. Persistent Block overrides take precedence over scheduled and
+default modes until explicitly cleared by an authorized administrator. The DPC
+must verify the policy signature and fail closed when required capabilities are
+not available.
+
 ## Compatibility boundary
 
 - Protocol version: `2`.

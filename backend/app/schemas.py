@@ -92,8 +92,8 @@ def _validate_android_version(
         return validate_android_compatibility(android_version, api_level)
     except ValueError as error:
         raise DeviceRegistrationValidationError(
-            "android_version and api_level must identify Android 5.0 through "
-            "10.0 (API 21 through 29)"
+            "android_version and api_level must identify Android 10 through "
+            "16 (API 29 through 36)"
         ) from error
 
 

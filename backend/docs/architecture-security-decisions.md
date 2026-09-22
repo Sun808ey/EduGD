@@ -13,10 +13,11 @@ disabled; no Supabase Auth, Realtime or Edge Functions are introduced.
 
 The deployment configuration is defined by `environment.md`, `railway.json`,
 and `database-migration-runbook.md`. Source data migration,
-provider setup, Android offline/endpoint evidence and final cutover remain
-operator gates. Android code is not present in this checkout. The backend defines a signed
-policy version 2 contract and an authenticated queued-event upload endpoint.
-Local tests do not prove Android interoperability or hosted migration.
+provider setup, Android runtime evidence and final cutover remain operator
+gates. Android code is not present in this checkout. The backend now defines a
+versioned DPC policy contract and an authenticated queued security-event upload
+endpoint, but local contract tests do not prove Android interoperability or a
+hosted migration.
 
 Registration/enrollment/authentication events must be preserved, but they do
 not all implement the same DB trigger/ORM immutability mechanisms as revisions
@@ -32,7 +33,9 @@ append-only evidence; never claim all audit tables have identical controls.
 - The Android DPC creates and securely persists one canonical lowercase,
   hyphenated, non-nil version-4 UUID.
 - The server rejects uppercase, braced, URN, compact, nil, and non-v4 UUIDs.
-- Supported devices run Android 5.0 through 10.0, API 21 through 29.
+- Supported live devices run Android 10 through 16, API 29 through 36. Historical
+  API 21 through 28 records are retained as suspended evidence and cannot be
+  reactivated without a supported replacement.
 - Both Android version and API level are stored; API level is authoritative.
 - Registration and synchronization accept only canonical lowercase hyphenated
   non-nil UUIDv4 text. Registration enforces exact approved Android/API pairs,

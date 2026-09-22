@@ -5,7 +5,7 @@ import pytest
 from flask import Flask, request
 from flask.ctx import RequestContext
 
-from app.device_identity import ANDROID_VERSION_BY_API_LEVEL
+from app.device_identity import SUPPORTED_ANDROID_VERSION_BY_API_LEVEL
 from app.schemas import (
     DeviceRegistrationValidationError,
     validate_device_registration_request,
@@ -43,7 +43,7 @@ def test_valid_registration_request_is_preserved(app: Flask) -> None:
 
 @pytest.mark.parametrize(
     ("api_level", "android_version"),
-    sorted(ANDROID_VERSION_BY_API_LEVEL.items()),
+    sorted(SUPPORTED_ANDROID_VERSION_BY_API_LEVEL.items()),
 )
 def test_registration_accepts_supported_android_compatibility(
     app: Flask,
@@ -173,7 +173,8 @@ def test_registration_rejects_invalid_uuid(
         ("", 29),
         (" 10 ", 29),
         ("4.4", 20),
-        ("11", 30),
+        ("11", 29),
+        ("9", 28),
         ("10", 28),
         ("9", 29),
         ("10", True),
@@ -196,8 +197,8 @@ def test_registration_rejects_invalid_android_compatibility(
             validate_device_registration_request(request)
 
     assert error.value.message == (
-        "android_version and api_level must identify Android 5.0 through "
-        "10.0 (API 21 through 29)"
+        "android_version and api_level must identify Android 10 through "
+        "16 (API 29 through 36)"
     )
 
 

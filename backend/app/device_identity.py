@@ -10,6 +10,18 @@ ANDROID_VERSION_BY_API_LEVEL = {
     27: "8.1",
     28: "9",
     29: "10",
+    30: "11",
+    31: "12",
+    32: "12L",
+    33: "13",
+    34: "14",
+    35: "15",
+    36: "16",
+}
+SUPPORTED_ANDROID_VERSION_BY_API_LEVEL = {
+    level: version
+    for level, version in ANDROID_VERSION_BY_API_LEVEL.items()
+    if 29 <= level <= 36
 }
 
 
@@ -35,7 +47,7 @@ def validate_android_compatibility(
         not isinstance(android_version, str)
         or isinstance(api_level, bool)
         or not isinstance(api_level, int)
-        or ANDROID_VERSION_BY_API_LEVEL.get(api_level) != android_version
+        or SUPPORTED_ANDROID_VERSION_BY_API_LEVEL.get(api_level) != android_version
     ):
         raise ValueError("unsupported Android version and API level")
     return android_version, api_level
@@ -43,6 +55,7 @@ def validate_android_compatibility(
 
 __all__ = [
     "ANDROID_VERSION_BY_API_LEVEL",
+    "SUPPORTED_ANDROID_VERSION_BY_API_LEVEL",
     "parse_canonical_uuid4",
     "validate_android_compatibility",
 ]

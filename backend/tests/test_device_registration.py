@@ -23,6 +23,19 @@ VALID_PAYLOAD = {
 }
 
 
+def test_physical_certification_gate_blocks_legacy_registration(
+    client: FlaskClient, app: Flask
+) -> None:
+    app.config["PHYSICAL_CERTIFICATION_REQUIRED"] = True
+
+    response = client.post(REGISTRATION_URL, json=VALID_PAYLOAD)
+
+    assert response.status_code == 409
+    assert response.get_json() == {"error": "physical-device certification is required"}
+    with app.app_context():
+        assert db.session.scalar(select(func.count()).select_from(Device)) == 0
+
+
 def test_registers_new_device(client: FlaskClient, app: Flask) -> None:
     response = client.post(REGISTRATION_URL, json=VALID_PAYLOAD)
 
@@ -93,20 +106,22 @@ def test_reported_android_downgrade_is_rejected_and_audited(
     client: FlaskClient,
     app: Flask,
 ) -> None:
-    client.post(REGISTRATION_URL, json=VALID_PAYLOAD)
+    initial_payload = {
+        **VALID_PAYLOAD,
+        "android_version": "11",
+        "api_level": 30,
+    }
+    client.post(REGISTRATION_URL, json=initial_payload)
 
-    response = client.post(
-        REGISTRATION_URL,
-        json={**VALID_PAYLOAD, "android_version": "9", "api_level": 28},
-    )
+    response = client.post(REGISTRATION_URL, json=VALID_PAYLOAD)
 
     assert response.status_code == 409
     assert response.get_json() == {"error": "reported Android downgrade rejected"}
 
     with app.app_context():
         device = db.session.execute(select(Device)).scalar_one()
-        assert device.android_version == "10"
-        assert device.api_level == 29
+        assert device.android_version == "11"
+        assert device.api_level == 30
         event_types = db.session.scalars(
             select(DeviceRegistrationEvent.event_type).order_by(
                 DeviceRegistrationEvent.id
@@ -119,14 +134,12 @@ def test_reported_android_upgrade_requires_authentication_and_is_audited(
     client: FlaskClient,
     app: Flask,
 ) -> None:
-    initial_payload = {
-        **VALID_PAYLOAD,
-        "android_version": "9",
-        "api_level": 28,
-    }
-    client.post(REGISTRATION_URL, json=initial_payload)
+    client.post(REGISTRATION_URL, json=VALID_PAYLOAD)
 
-    response = client.post(REGISTRATION_URL, json=VALID_PAYLOAD)
+    response = client.post(
+        REGISTRATION_URL,
+        json={**VALID_PAYLOAD, "android_version": "11", "api_level": 30},
+    )
 
     assert response.status_code == 409
     assert response.get_json() == {
@@ -134,8 +147,8 @@ def test_reported_android_upgrade_requires_authentication_and_is_audited(
     }
     with app.app_context():
         device = db.session.execute(select(Device)).scalar_one()
-        assert device.android_version == "9"
-        assert device.api_level == 28
+        assert device.android_version == "10"
+        assert device.api_level == 29
         event_types = db.session.scalars(
             select(DeviceRegistrationEvent.event_type).order_by(
                 DeviceRegistrationEvent.id

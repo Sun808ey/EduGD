@@ -44,6 +44,10 @@ class DeviceRegistrationDatabaseError(RuntimeError):
 def register_device(
     registration_data: DeviceRegistrationData,
 ) -> DeviceRegistrationResult:
+    if current_app.config["PHYSICAL_CERTIFICATION_REQUIRED"]:
+        raise DeviceRegistrationConflictError(
+            "physical-device certification is required"
+        )
     try:
         existing_device = _find_device(registration_data.device_uuid)
         if existing_device is not None:

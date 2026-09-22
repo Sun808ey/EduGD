@@ -17,18 +17,19 @@ import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 
-EXPECTED_HEAD = "a6d4e8f2b1c7"
+EXPECTED_HEAD = "d8f1a3c6e9b2"
 TABLES = (
     "administrator_authentication_events",
     "administrator_permissions",
     "administrator_sessions",
     "administrators",
     "alembic_version",
-    "device_audit_batches",
-    "device_audit_chain_heads",
     "device_check_ins",
     "device_compliance_states",
     "device_credentials",
+    "device_audit_batches",
+    "device_audit_chain_heads",
+    "device_capability_certifications",
     "device_enrollment_events",
     "device_policy_assignments",
     "device_policy_states",
@@ -38,39 +39,40 @@ TABLES = (
     "devices",
     "enrollment_tokens",
     "policies",
-    "policy_application_events",
     "policy_assignment_chain_heads",
     "policy_assignment_events",
+    "policy_application_events",
     "policy_revisions",
     "policy_synchronization_chain_heads",
     "policy_synchronization_events",
 )
 READ_WRITE = {
+    "administrators",
     "administrator_permissions",
     "administrator_sessions",
-    "administrators",
-    "device_audit_chain_heads",
-    "device_compliance_states",
+    "devices",
+    "policies",
+    "enrollment_tokens",
     "device_credentials",
     "device_policy_assignments",
+    "device_compliance_states",
     "device_policy_states",
-    "devices",
-    "enrollment_tokens",
-    "policies",
+    "device_audit_chain_heads",
     "policy_assignment_chain_heads",
     "policy_synchronization_chain_heads",
 }
 NONCE_TABLE = "device_request_nonces"
 APPEND_ONLY = {
+    "policy_revisions",
+    "device_registration_events",
     "administrator_authentication_events",
+    "device_enrollment_events",
     "device_audit_batches",
     "device_check_ins",
-    "device_enrollment_events",
-    "device_registration_events",
+    "device_capability_certifications",
     "device_security_events",
     "policy_application_events",
     "policy_assignment_events",
-    "policy_revisions",
     "policy_synchronization_events",
 }
 PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
@@ -207,13 +209,13 @@ try:
         ).scalar_one()
         assert rls_tables == len(TABLES)
         assert policies == len(TABLES)
-        assert permission_checks == 175
+        assert permission_checks == 182
 
     result = {
         "production_runtime_security": "PASS",
-        "permission_checks": 175,
-        "rls_tables": 25,
-        "runtime_policies": 25,
+        "permission_checks": 182,
+        "rls_tables": 26,
+        "runtime_policies": 26,
         "data_api_roles": "denied",
     }
 except Exception as error:

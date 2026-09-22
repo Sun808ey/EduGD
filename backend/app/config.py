@@ -82,6 +82,7 @@ def _normalize_database_uri(database_uri: str) -> str:
 
 
 class Config:
+    PHYSICAL_CERTIFICATION_REQUIRED = True
     DEBUG = False
     TESTING = False
     SECRET_KEY = os.getenv("SECRET_KEY")
@@ -142,6 +143,7 @@ class DevelopmentConfig(Config):
 
 class TestingConfig(Config):
     TESTING = True
+    PHYSICAL_CERTIFICATION_REQUIRED = False
     DATABASE_ENV_VAR = None
     SQLALCHEMY_DATABASE_URI = "sqlite+pysqlite:///:memory:"
     LOG_LEVEL = "WARNING"
@@ -154,6 +156,7 @@ class TestingConfig(Config):
 
 class PostgresTestingConfig(Config):
     TESTING = True
+    PHYSICAL_CERTIFICATION_REQUIRED = False
     DATABASE_ENV_VAR = "POSTGRES_TEST_DATABASE_URL"
     SQLALCHEMY_ENGINE_OPTIONS = POSTGRES_ENGINE_OPTIONS
     LOG_LEVEL = "WARNING"

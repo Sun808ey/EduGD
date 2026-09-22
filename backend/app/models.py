@@ -667,8 +667,12 @@ class Device(db.Model):
             name="ck_devices_status",
         ),
         CheckConstraint(
-            "api_level BETWEEN 21 AND 29",
+            "api_level BETWEEN 21 AND 36",
             name="ck_devices_api_level_supported",
+        ),
+        CheckConstraint(
+            "status <> 'active' OR api_level BETWEEN 29 AND 36",
+            name="ck_devices_active_api_supported",
         ),
         CheckConstraint(
             "(android_version = '5.0' AND api_level = 21) OR "
@@ -679,7 +683,14 @@ class Device(db.Model):
             "(android_version = '8.0' AND api_level = 26) OR "
             "(android_version = '8.1' AND api_level = 27) OR "
             "(android_version = '9' AND api_level = 28) OR "
-            "(android_version = '10' AND api_level = 29)",
+            "(android_version = '10' AND api_level = 29) OR "
+            "(android_version = '11' AND api_level = 30) OR "
+            "(android_version = '12' AND api_level = 31) OR "
+            "(android_version = '12L' AND api_level = 32) OR "
+            "(android_version = '13' AND api_level = 33) OR "
+            "(android_version = '14' AND api_level = 34) OR "
+            "(android_version = '15' AND api_level = 35) OR "
+            "(android_version = '16' AND api_level = 36)",
             name="ck_devices_android_api_match",
         ),
     )
@@ -958,11 +969,11 @@ class DeviceRegistrationEvent(db.Model):
             name="ck_device_registration_events_type",
         ),
         CheckConstraint(
-            "reported_api_level BETWEEN 21 AND 29",
+            "reported_api_level BETWEEN 21 AND 36",
             name="ck_device_registration_events_reported_api_level",
         ),
         CheckConstraint(
-            "stored_api_level BETWEEN 21 AND 29",
+            "stored_api_level BETWEEN 21 AND 36",
             name="ck_device_registration_events_stored_api_level",
         ),
         Index(
@@ -2097,6 +2108,41 @@ class DevicePolicyState(db.Model):
     )
 
 
+class DeviceCapabilityCertification(db.Model):
+    __tablename__ = "device_capability_certifications"
+    __table_args__ = (
+        UniqueConstraint(
+            "record_hash", name="uq_device_capability_certifications_hash"
+        ),
+        CheckConstraint(
+            "length(record_hash) = 32", name="ck_device_capability_certifications_hash"
+        ),
+        CheckConstraint(
+            "previous_record_hash IS NULL OR length(previous_record_hash) = 32",
+            name="ck_device_capability_certifications_previous_hash",
+        ),
+        Index(
+            "ix_device_capability_certifications_fingerprint",
+            "build_fingerprint",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    build_fingerprint: Mapped[str] = mapped_column(String(512), nullable=False)
+    record: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    record_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    previous_record_hash: Mapped[bytes | None] = mapped_column(
+        LargeBinary(32), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+
 class DeviceAuditImmutableError(RuntimeError):
     def __init__(self) -> None:
         super().__init__("device audit evidence is immutable")
@@ -2107,6 +2153,7 @@ def _reject_device_audit_mutation(
     session: Session, _flush_context: object, _instances: object
 ) -> None:
     immutable_types = (
+        DeviceCapabilityCertification,
         DeviceAuditBatch,
         DeviceCheckIn,
         DeviceSecurityEvent,
@@ -2156,6 +2203,7 @@ __all__ = [
     "Device",
     "DeviceAuditBatch",
     "DeviceAuditChainHead",
+    "DeviceCapabilityCertification",
     "DeviceAuditImmutableError",
     "DeviceCheckIn",
     "DeviceComplianceState",

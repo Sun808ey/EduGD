@@ -1,4 +1,4 @@
-# DPC policy protocol v2
+﻿# DPC policy protocol v2
 
 This document freezes the backend policy contract that the Android DPC must implement. It is a wire specification, not a claim that the Android client is present in this repository.
 
@@ -9,14 +9,29 @@ This document freezes the backend policy contract that the Android DPC must impl
 - Minimum Android version: Android 10 / API 29.
 - DPC builds compile and target API 36.
 - The DPC advertises capabilities during enrollment. The server must not assign a policy whose required capabilities are absent.
-- This branch implements the policy serialization and signing contract only.
-  Device capability resolution, independently verified emergency handlers,
-  physical-device certification, authenticated v2 enrollment, signing-key
-  management, and live signed-policy sync remain required before activation.
-  Self-reported capabilities or package names do not establish device trust.
-- Current enrollment and policy-sync endpoints retain their existing protocol.
-  The v2 contract does not change the database's Android compatibility range or
-  activate v2 policies through a protocol-v1 enrollment response.
+- Android identifiers are configured in `app/android_integration_config.py`: DPC
+  `io.github.sun808ey.edugd.dpc` and the initial Classroom, Moodle, Khan Academy,
+  and Wikipedia allowlist. The AOSP/Google emulator candidate names are recognition
+  hints only; a package name is never proof of its platform signature or role.
+- Before activating any device policy, the DPC must report the handlers for
+  `ACTION_DIAL`, `ACTION_CALL_EMERGENCY`, the default dialer role, and emergency
+  information. A trusted operator/device verification must independently confirm
+  each handler's actual signing identity and an emergency-call test. Persist that
+  verification with the device-model profile; self-reported `system_signed` or
+  `attested` flags must never constitute independent verification. The resolver
+  rejects an incomplete or untested profile, duplicates, uninstalled/unknown apps,
+  and attempted blocking of essential packages. It preserves the DPC, System UI,
+  verified emergency handlers, and required system dependencies in allowed and
+  lock-task package sets. `com.android.settings` is not an emergency package.
+- `app/device_capability_profile.py` is the fail-closed resolution contract.
+  Current protocol-v1 enrollment cannot securely bind a new capability report to
+  its proof, and the current device table accepts Android API 21–29 while the new
+  check-in contract targets API 29–36. Profile persistence, authenticated v2
+  enrollment, signing-key management, and live signed-policy sync therefore remain
+  required before production activation. Do not infer that a reported profile is
+  verified or activate a v2 policy from the v1 enrollment response.
+- The required physical-device procedure and its append-only dual-approval
+  evidence are in `docs/physical-device-certification-runbook.md`.
 - Existing protocol-v1 RSA credentials remain a migration compatibility path. New DPC credentials should use a hardware-backed P-256 key when enrollment adds algorithm negotiation.
 
 ## Policy behavior

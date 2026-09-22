@@ -10,10 +10,10 @@ from sqlalchemy import inspect, text
 
 from app import create_app
 from app.extensions import db
-from app.services.policy_sync import get_policy_sync_payload
+from app.services.policy_sync import DeviceBlockedError, get_policy_sync_payload
 
 LEGACY_REVISION = "f4a7c9e2b6d1"
-HEAD_REVISION = "a6d4e8f2b1c7"
+HEAD_REVISION = "d8f1a3c6e9b2"
 
 
 def _migration_app(database_path: Path) -> Flask:
@@ -122,11 +122,15 @@ def test_sqlite_migration_converts_and_safely_downgrades_legacy_data(
         }
         assert bytes(revision.content_hash) == hashlib.sha256(canonical).digest()
         assert revision.created_by.startswith("migration:")
-        assert get_policy_sync_payload(device_uuid)["policy"] == {
-            "policy_uuid": policy_uuid,
-            "policy_version": 5,
-            "blocked_apps": ["com.example.first", "com.example.second"],
-        }
+        assert (
+            db.session.scalar(
+                text("SELECT status FROM devices WHERE device_uuid = :uuid"),
+                {"uuid": device_uuid.replace("-", "")},
+            )
+            == "suspended"
+        )
+        with pytest.raises(DeviceBlockedError):
+            get_policy_sync_payload(device_uuid)
 
         db.session.remove()
         downgrade(revision=LEGACY_REVISION)

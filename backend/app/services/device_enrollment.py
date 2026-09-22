@@ -179,6 +179,8 @@ def revoke_enrollment_token(
 
 
 def enroll_device(data: DeviceEnrollmentData) -> EnrollmentResult:
+    if current_app.config["PHYSICAL_CERTIFICATION_REQUIRED"]:
+        raise EnrollmentConflict("physical-device certification is required")
     try:
         token_uuid, secret = _parse_pairing_token(data.pairing_token)
     except EnrollmentFailed:

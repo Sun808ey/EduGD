@@ -114,8 +114,8 @@ def test_device_rejects_invalid_status_in_model() -> None:
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
-        ("android_version", "11", "unsupported Android version"),
-        ("api_level", 30, "unsupported Android API level"),
+        ("android_version", "17", "unsupported Android version"),
+        ("api_level", 37, "unsupported Android API level"),
         ("api_level", True, "unsupported Android API level"),
     ],
 )

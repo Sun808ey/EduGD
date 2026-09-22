@@ -56,3 +56,29 @@ def test_connection_diagnostics_never_emit_credentials(
     assert result["reason"] == reason
     assert "synthetic" not in captured.out
     assert not captured.err
+
+
+def test_connection_diagnostics_uses_bundled_pem_path(monkeypatch, capsys):
+    def fail():
+        raise RuntimeError("root certificate file missing")
+
+    monkeypatch.setattr(verification, "validate_deployment_identity", lambda _: None)
+    monkeypatch.setattr(
+        verification,
+        "create_app",
+        lambda _: SimpleNamespace(app_context=nullcontext),
+    )
+    monkeypatch.setattr(
+        verification,
+        "db",
+        SimpleNamespace(engine=SimpleNamespace(connect=fail)),
+    )
+    monkeypatch.setenv(
+        "PRODUCTION_DATABASE_URL",
+        "postgresql://user@host/db?sslrootcert=/app/certs/supabase-ca.pem",
+    )
+
+    assert verification.main() == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["ca_path"] == "matches_bundle"
+    assert result["bundled_ca"] in {"present", "absent"}

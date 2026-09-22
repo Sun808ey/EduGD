@@ -11,6 +11,11 @@ product, Android API level, complete build fingerprint, security-patch level,
 carrier, and a SHA-256 digest for carrier configuration. API 29 through 36 are
 the only supported live range. Devices on API 21 through 28 remain suspended.
 
+Migration `c7e5a9d2f4b8` suspends every active device, including devices already
+on API 29, so none bypasses the new certification gate. Downgrading the schema
+does not reactivate those devices; reactivation requires a separately reviewed
+operational decision after certification.
+
 Capture the approved factory/OEM image baseline hash and obtain the operator's
 authorization reference for the test. Store neither credentials nor private
 keys in this repository.

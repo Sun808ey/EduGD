@@ -183,12 +183,27 @@ def test_two_distinct_signatures_and_verifier_receipt_required():
     "mutation",
     [
         lambda p: p["identity"].update(api_level=28),
+        lambda p: p.update(identity={}),
+        lambda p: p["identity"].update(model=""),
         lambda p: p["identity"].update(security_patch="not-a-date"),
+        lambda p: p["identity"].update(carrier_configuration_sha256="invalid"),
+        lambda p: p.update(factory_reset_reference=False),
+        lambda p: p.update(previous_record_hash="invalid"),
         lambda p: p["handlers"].pop(),
+        lambda p: p["handlers"][0].pop("role"),
+        lambda p: p["handlers"][1].update(role="action_dial"),
+        lambda p: p["handlers"][0].update(package="invalid package"),
+        lambda p: p["handlers"][0].update(component="invalid component"),
         lambda p: p["handlers"][0].update(signing_sha256="invalid"),
+        lambda p: p.update(system_dependencies=[]),
+        lambda p: p.update(system_dependencies=["com.android.systemui"] * 2),
+        lambda p: p["attestation"].update(security_level="Software"),
+        lambda p: p["attestation"].update(inventory_sha256="0" * 64),
+        lambda p: p.update(call_test={}),
         lambda p: p["call_test"].update(during="NOT_VERIFIED"),
         lambda p: p["attestation"].update(device_locked=False),
         lambda p: p["attestation"].update(play_device_integrity=False),
+        lambda p: p.update(certified_at="not-a-timeZ"),
     ],
 )
 def test_unsafe_profiles_cannot_be_certified(mutation):
@@ -227,3 +242,16 @@ def test_fresh_enrollment_rejects_inventory_carrier_and_challenge_drift():
         )
     with pytest.raises(CertificationError):
         verify_enrollment_match(record, **{**kwargs, "handlers": []})
+
+
+def test_certification_storage_rejects_a_stale_chain_head(app: Flask):
+    record, verifier, operators = _record()
+    verifier_key, operator_keys = _keys(verifier, operators)
+    with app.app_context():
+        store_certification(
+            record, verifier_key=verifier_key, operator_keys=operator_keys
+        )
+        with pytest.raises(CertificationError, match="chain head"):
+            store_certification(
+                record, verifier_key=verifier_key, operator_keys=operator_keys
+            )

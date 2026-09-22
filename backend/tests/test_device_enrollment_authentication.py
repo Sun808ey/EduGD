@@ -180,6 +180,26 @@ def _enroll(app: Flask) -> tuple[str, rsa.RSAPrivateKey, str]:
     return cast(str, response_payload["credential_uuid"]), private_key, access_token
 
 
+def test_physical_certification_gate_preserves_unused_pairing_token(
+    app: Flask,
+) -> None:
+    app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
+    access_token = _bootstrap_and_login(app)
+    pairing_token = _issue_token(app, access_token)
+    private_key, public_key, fingerprint = _key_material()
+    payload = _enrollment_payload(pairing_token, private_key, public_key, fingerprint)
+    app.config["PHYSICAL_CERTIFICATION_REQUIRED"] = True
+
+    response = app.test_client().post("/api/v1/devices/register", json=payload)
+
+    assert response.status_code == 409
+    assert response.get_json() == {"error": "enrollment_conflict"}
+    with app.app_context():
+        token = db.session.execute(select(EnrollmentToken)).scalar_one()
+        assert token.status == "active"
+        assert db.session.scalar(select(Device.id)) is None
+
+
 def test_enrollment_consumes_token_and_stores_only_public_credential(
     app: Flask,
 ) -> None:

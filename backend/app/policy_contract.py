@@ -226,7 +226,8 @@ def validate_policy_v2(value: object) -> dict[str, object]:
         )
         for day in days:
             for minute in minutes:
-                key = (day, minute, priority)
+                actual_day = day % 7 + 1 if start > end and minute < end else day
+                key = (actual_day, minute, priority)
                 if key in occupied:
                     raise PolicyContractError("ambiguous schedules share a priority")
                 occupied.add(key)

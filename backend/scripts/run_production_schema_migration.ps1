@@ -23,26 +23,6 @@ from sqlalchemy.pool import NullPool
 from app.extensions import db
 
 EXPECTED_HEAD = "d8f1a3c6e9b2"
-EXPECTED_TABLES = {
-    "administrator_authentication_events",
-    "administrator_permissions",
-    "administrator_sessions",
-    "administrators",
-    "alembic_version",
-    "device_credentials",
-    "device_enrollment_events",
-    "device_policy_assignments",
-    "device_registration_events",
-    "device_request_nonces",
-    "devices",
-    "enrollment_tokens",
-    "policies",
-    "policy_assignment_chain_heads",
-    "policy_assignment_events",
-    "policy_revisions",
-    "policy_synchronization_chain_heads",
-    "policy_synchronization_events",
-}
 
 result = {"production_schema_migration": "FAIL", "stage": "connection"}
 engine = None
@@ -83,6 +63,8 @@ try:
     )
     db.init_app(app)
     from app import models  # noqa: F401
+    EXPECTED_TABLES = {table.name for table in db.metadata.sorted_tables}
+    EXPECTED_TABLES.add("alembic_version")
     Migrate(app, db, compare_type=True)
     with app.app_context():
         upgrade(directory=str(Path.cwd() / "migrations"), revision="head")

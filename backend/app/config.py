@@ -128,6 +128,8 @@ class Config:
     ENROLLMENT_TOKEN_TTL_SECONDS = 600
     POLICY_SYNC_RATE_LIMIT = os.getenv("POLICY_SYNC_RATE_LIMIT") or "60 per minute"
     ADMIN_FRONTEND_ORIGINS = os.getenv("ADMIN_FRONTEND_ORIGINS", "")
+    DPC_POLICY_SIGNING_PRIVATE_KEY = os.getenv("DPC_POLICY_SIGNING_PRIVATE_KEY")
+    DPC_POLICY_SIGNING_KEY_ID = os.getenv("DPC_POLICY_SIGNING_KEY_ID", "dpc-v3-1")
 
 
 class DevelopmentConfig(Config):

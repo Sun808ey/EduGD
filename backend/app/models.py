@@ -88,6 +88,7 @@ ADMINISTRATOR_PERMISSIONS = frozenset(
         "enrollment_token.revoke",
         "device_credential.revoke",
         "policy.assign",
+        "device.control",
     }
 )
 ADMINISTRATOR_AUTHENTICATION_EVENT_CATEGORIES = frozenset(
@@ -138,6 +139,9 @@ def _validate_blocked_apps(value: object) -> list[str]:
 
 
 def validate_policy_revision_payload(value: object) -> dict[str, object]:
+    if isinstance(value, dict) and value.get("schema_version") == 3:
+        from app.policy_contract_v3 import validate_policy_v3
+        return validate_policy_v3(value)
     if not isinstance(value, dict) or set(value) != {
         "schema_version",
         "blocked_apps",
@@ -152,6 +156,9 @@ def validate_policy_revision_payload(value: object) -> dict[str, object]:
 
 
 def canonical_policy_revision_bytes(value: object) -> bytes:
+    if isinstance(value, dict) and value.get("schema_version") == 3:
+        from app.policy_contract import canonical_json_bytes
+        return canonical_json_bytes(validate_policy_revision_payload(value))
     payload = validate_policy_revision_payload(value)
     return json.dumps(
         payload,
@@ -2108,6 +2115,50 @@ class DevicePolicyState(db.Model):
     )
 
 
+class DeviceBlockOverride(db.Model):
+    """Current persistent Block state; history is retained in DeviceControlEvent."""
+    __tablename__ = "device_block_overrides"
+    __table_args__ = (
+        CheckConstraint("version >= 1", name="ck_device_block_overrides_version"),
+        CheckConstraint("status IN ('active', 'cleared')", name="ck_device_block_overrides_status"),
+        UniqueConstraint("device_id", "version", name="uq_device_block_overrides_version"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="RESTRICT"), nullable=False, unique=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason: Mapped[str] = mapped_column(String(512), nullable=False)
+    issued_by_administrator_id: Mapped[int] = mapped_column(ForeignKey("administrators.id", ondelete="RESTRICT"), nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now())
+    cleared_by_administrator_id: Mapped[int | None] = mapped_column(ForeignKey("administrators.id", ondelete="RESTRICT"), nullable=True)
+    cleared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DeviceControlEvent(db.Model):
+    __tablename__ = "device_control_events"
+    __table_args__ = (CheckConstraint("operation IN ('block', 'clear')", name="ck_device_control_events_operation"), CheckConstraint("length(content_hash) = 32", name="ck_device_control_events_hash"), Index("ix_device_control_events_device_created", "device_id", "created_at"))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="RESTRICT"), nullable=False)
+    override_id: Mapped[int] = mapped_column(ForeignKey("device_block_overrides.id", ondelete="RESTRICT"), nullable=False)
+    administrator_id: Mapped[int] = mapped_column(ForeignKey("administrators.id", ondelete="RESTRICT"), nullable=False)
+    operation: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason: Mapped[str] = mapped_column(String(512), nullable=False)
+    content_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now())
+
+
+class DeviceUsageDaily(db.Model):
+    __tablename__ = "device_usage_daily"
+    __table_args__ = (UniqueConstraint("device_id", "usage_date", name="uq_device_usage_daily_date"), CheckConstraint("active_minutes BETWEEN 0 AND 1440", name="ck_device_usage_daily_minutes"))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="RESTRICT"), nullable=False)
+    usage_date: Mapped[date] = mapped_column(Date, nullable=False)
+    active_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    policy_uuid: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    revision_uuid: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    reported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now())
+
+
 class DeviceCapabilityCertification(db.Model):
     __tablename__ = "device_capability_certifications"
     __table_args__ = (
@@ -2201,6 +2252,9 @@ __all__ = [
     "DEVICE_STATUSES",
     "ENROLLMENT_TOKEN_STATUSES",
     "Device",
+    "DeviceBlockOverride",
+    "DeviceControlEvent",
+    "DeviceUsageDaily",
     "DeviceAuditBatch",
     "DeviceAuditChainHead",
     "DeviceCapabilityCertification",

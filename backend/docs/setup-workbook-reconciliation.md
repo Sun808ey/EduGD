@@ -276,13 +276,15 @@ the same Windows account that owns the encrypted handoff:
 ```
 
 The helper repeats the empty-target gate immediately before Alembic, upgrades
-to `e4a1b7c9d2f6`, and verifies the exact set of 18 public tables. Runtime grants,
+to the current repository head `d8f1a3c6e9b2`, and verifies the metadata-derived
+public table inventory. Runtime grants,
 RLS policies, API deployment and frontend rollout remain blocked until this
 step reports `"production_schema_migration":"PASS"`.
 
-**Production schema migration passed.** Alembic applied all revisions through
-`e4a1b7c9d2f6` using transactional PostgreSQL DDL, and post-migration inspection
-found exactly the 18 expected public tables. Apply and verify the reviewed
+**Historical production schema migration passed.** The recorded deployment
+applied revisions through `e4a1b7c9d2f6` using transactional PostgreSQL DDL and
+found the then-current 18 public tables. For a current deployment, apply and
+verify the reviewed
 runtime security transaction next:
 
 ```powershell

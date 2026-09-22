@@ -1,5 +1,11 @@
 # Environment resource map
 
+> Historical deployment note: the hosted evidence below records the `e4a1b7c9d2f6`
+> deployment snapshot and its 18-table schema. The current repository head is
+> `d8f1a3c6e9b2`; current verification must use the repository migrations and
+> metadata-derived table inventory rather than treating the historical counts as
+> the current schema.
+
 ## Status and scope
 
 **Workbook continuation:** the owner authorized completion against `inter.md`

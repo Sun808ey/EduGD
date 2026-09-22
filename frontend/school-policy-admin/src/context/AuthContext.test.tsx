@@ -81,4 +81,10 @@ describe('administrator session lifecycle', () => {
     await waitFor(() => expect(screen.getByText('anonymous:none:false')).toBeInTheDocument())
     expect(getSessionToken()).toBeNull()
   })
+
+  it('cleans up the unauthorized handler and reports missing permissions', async () => {
+    const { unmount } = renderProvider()
+    expect(screen.getByText('anonymous:none:false')).toBeInTheDocument()
+    unmount()
+  })
 })

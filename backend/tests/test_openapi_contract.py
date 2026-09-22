@@ -29,6 +29,9 @@ def test_openapi_documents_frontend_ready_routes(app: Flask) -> None:
         "/admin/audit-events",
         "/devices/register",
         "/devices/{device_uuid}/credentials/rotate",
+        "/devices/{device_uuid}/audit-batches",
+        "/devices/{device_uuid}/check-ins",
+        "/devices/{device_uuid}/policy-acknowledgements",
         "/sync/policies/{device_uuid}",
     }
 

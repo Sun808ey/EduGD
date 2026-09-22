@@ -163,7 +163,9 @@ Latest continuation supersedes the earlier browser interruption below:
   Remote `feature/backend-api` matches it. Remote `main` is
   `0a5a33f6fb0cabdd81d9c172169bece4da368f26`; Phase 1's main/deployed-revision
   equality is therefore not yet satisfied. No commit, push or merge was made.
-- Repository Alembic head: `e4a1b7c9d2f6`, read without a database connection.
+- Repository Alembic head: `d8f1a3c6e9b2`, read without a database connection. The
+  separately recorded hosted head remains unchanged until the new migrations receive
+  explicit approval.
 - Prior local checks: 38 isolated PostgreSQL tests, 495 backend default tests,
   and subsequent 33 enrollment/authentication tests passed. Those runs are local
   evidence, not hosted grant or TLS verification.

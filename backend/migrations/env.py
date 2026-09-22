@@ -104,14 +104,26 @@ def run_migrations_online():
 
     try:
         with connectable.connect() as connection:
+            sqlite_migration = connection.dialect.name == "sqlite"
+            if sqlite_migration:
+                # SQLite batch table recreation needs foreign keys disabled
+                # outside a transaction; restore enforcement after migration.
+                connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+                connection.commit()
             context.configure(
                 connection=connection,
                 target_metadata=get_metadata(),
                 **conf_args
             )
 
-            with context.begin_transaction():
-                context.run_migrations()
+            try:
+                with context.begin_transaction():
+                    context.run_migrations()
+            finally:
+                if sqlite_migration:
+                    connection.rollback()
+                    connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+                    connection.commit()
     finally:
         if owns_engine:
             connectable.dispose()

@@ -34,10 +34,10 @@ cutover approval. No production database was contacted.
 | --- | --- |
 | Factory/entry | `app.create_app` is exported through `run.py`; Gunicorn can use `run:app` without restructuring. |
 | Database | Flask-SQLAlchemy with psycopg2; runtime and migration URLs are separate and restricted to approved Supabase direct/session connections. |
-| Migrations | Sixteen linear revisions, current head `e4a1b7c9d2f6`; retained verbatim. SQLite tests do not prove PostgreSQL trigger/concurrency behavior. |
+| Migrations | Twenty linear revisions, current repository head `d8f1a3c6e9b2`. Hosted databases remain at their separately verified deployed head until the new migrations are explicitly approved. SQLite tests do not prove PostgreSQL trigger/concurrency behavior. |
 | Authentication | Existing 15-minute JWT Bearer sessions, database-authoritative administrator permissions/RBAC, enrollment controls and device signature/nonce checks remain. |
-| Policy/sync | Existing immutable policy revisions, assignments and synchronization contracts retained. No queued event-upload endpoint was found. |
-| Forensics | Revision hashes, assignment/synchronization hash chains, chain heads and database triggers exist. Other audit tables do not all provide identical immutability guarantees. No evidence was rewritten. |
+| Policy/sync | Existing immutable policy revisions, assignments and synchronization contracts are retained. Protocol v2 adds canonical Ed25519-signed policy envelopes, authenticated device check-ins, and policy-application acknowledgements for the future DPC. |
+| Forensics | Revision hashes, assignment/synchronization hash chains and database triggers remain. Authenticated, signed, hash-chained offline device event batches are now ingested idempotently, while append-only check-ins and policy-application events maintain current-state projections. Hosted rollout remains gated on explicit migration and runtime-security approval. |
 | Rate limits | Existing Redis-backed production limiting is required and fails closed; login/registration limits and configured policy-sync limits remain. Redis is an existing required dependency, not new infrastructure added for this migration. |
 | Logging | Existing Flask logging, error handling and Sentry remain. Gunicorn access logs omit request targets/headers/addresses; optional frontend Sentry drops request/user context and exception text. |
 | Security | Strong secret validation, body limits, replay defenses and one trusted proxy hop already exist. Production CORS now requires exact HTTPS origins. Historical-secret remediation remains externally unverified. |
@@ -171,7 +171,7 @@ an approved disposable database; exclusion is not a pass.
 | `python -m bandit -r app test_support scripts -c pyproject.toml -ll` | **Exit 0, zero medium/high issues; one low finding** (existing testing pepper literal). No suppression or lowered threshold added. |
 | `python -m pip check` | **No broken requirements found.** |
 | `python -m pip_audit -r requirements.txt --strict` | **No known vulnerabilities found.** |
-| Alembic `ScriptDirectory` graph inspection | **16 revisions; single head `e4a1b7c9d2f6`.** Local test fixtures exercise the SQLite migration path. Actual PostgreSQL schema/migration verification remains blocked. |
+| Alembic `ScriptDirectory` graph inspection | **20 revisions; single repository head `d8f1a3c6e9b2`.** Local test fixtures exercise the SQLite migration path. The new PostgreSQL migrations and runtime grants remain an explicit hosted-environment gate. |
 | `create_app('testing')` and test-client `GET /api/v1/health` | **HTTP 200**, `{"service":"school-policy-api","status":"running"}`. This is testing-factory startup, not a real production Gunicorn process. |
 | `npm run test:coverage` | **26 passed**; 98.63% statements, 92.98% branches, 98.11% functions and 99.46% lines. |
 | `npm run test:e2e` | **10 passed** across desktop and emulated mobile Chromium, including accessibility, storage, rate-limit, revoked-session and read-only-RBAC checks. |

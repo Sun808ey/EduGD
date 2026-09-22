@@ -15,31 +15,63 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT"
+      },
+      "deviceCredential": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "DeviceCredential followed by the enrolled credential UUID. Requests also carry X-Device-Timestamp, X-Device-Nonce, X-Device-Body-SHA256 and X-Device-Signature."
       }
     },
     "schemas": {
       "Error": {
         "type": "object",
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "properties": {
           "error": {
             "type": "object",
-            "required": ["code", "message"],
+            "required": [
+              "code",
+              "message"
+            ],
             "properties": {
-              "code": { "type": "string" },
-              "message": { "type": "string" }
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
             }
           }
         }
       },
       "Pagination": {
         "type": "object",
-        "required": ["page", "per_page", "total", "has_next"],
+        "required": [
+          "page",
+          "per_page",
+          "total",
+          "has_next"
+        ],
         "properties": {
-          "page": { "type": "integer", "minimum": 1 },
-          "per_page": { "type": "integer", "minimum": 1, "maximum": 100 },
-          "total": { "type": "integer", "minimum": 0 },
-          "has_next": { "type": "boolean" }
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "per_page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "has_next": {
+            "type": "boolean"
+          }
         }
       }
     }
@@ -54,126 +86,697 @@
       "post": {
         "security": [],
         "responses": {
-          "200": { "description": "Administrator login succeeded" },
-          "400": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "401": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "429": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+          "200": {
+            "description": "Administrator login succeeded"
+          },
+          "400": {
+            "description": "API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/admin/auth/logout": {
       "post": {
         "responses": {
-          "200": { "description": "Administrator session revoked" },
-          "401": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+          "200": {
+            "description": "Administrator session revoked"
+          },
+          "401": {
+            "description": "API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/admin/auth/me": {
       "get": {
         "responses": {
-          "200": { "description": "Current administrator identity and permissions" },
-          "401": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+          "200": {
+            "description": "Current administrator identity and permissions"
+          },
+          "401": {
+            "description": "API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/admin/devices": {
       "get": {
         "parameters": [
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
-          { "name": "per_page", "in": "query", "schema": { "type": "integer", "default": 25, "maximum": 100 } },
-          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["active", "suspended", "retired"] } }
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "suspended",
+                "retired"
+              ]
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Paginated devices" },
-          "400": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "401": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+          "200": {
+            "description": "Paginated devices"
+          },
+          "400": {
+            "description": "API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/admin/devices/{device_uuid}": {
-      "parameters": [{"name": "device_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
       "get": {
         "responses": {
-          "200": { "description": "Device detail" },
-          "400": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "401": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-          "404": { "description": "API error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+          "200": {
+            "description": "Device detail"
+          },
+          "400": {
+            "description": "API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/admin/devices/{device_uuid}/policy-assignment": {
-      "parameters": [{"name": "device_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
-      "get": { "responses": { "200": { "description": "Current policy assignment" } } },
-      "post": { "responses": { "200": { "description": "Policy assigned" } } }
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Current policy assignment"
+          }
+        }
+      },
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Policy assigned"
+          }
+        }
+      }
     },
     "/admin/devices/{device_uuid}/policy-assignment/clear": {
-      "parameters": [{"name": "device_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
-      "post": { "responses": { "200": { "description": "Policy assignment cleared" } } }
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Policy assignment cleared"
+          }
+        }
+      }
     },
     "/admin/policies": {
       "get": {
         "parameters": [
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
-          { "name": "per_page", "in": "query", "schema": { "type": "integer", "default": 25, "maximum": 100 } },
-          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["draft", "active", "inactive", "revoked"] } }
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "active",
+                "inactive",
+                "revoked"
+              ]
+            }
+          }
         ],
-        "responses": { "200": { "description": "Paginated policies" } }
+        "responses": {
+          "200": {
+            "description": "Paginated policies"
+          }
+        }
       }
     },
     "/admin/policies/{policy_uuid}": {
-      "parameters": [{"name": "policy_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
-      "get": { "responses": { "200": { "description": "Policy detail" } } }
+      "parameters": [
+        {
+          "name": "policy_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Policy detail"
+          }
+        }
+      }
     },
     "/admin/policies/{policy_uuid}/revisions": {
-      "parameters": [{"name": "policy_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
-      "get": { "responses": { "200": { "description": "Policy revisions" } } }
+      "parameters": [
+        {
+          "name": "policy_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Policy revisions"
+          }
+        }
+      }
     },
     "/admin/enrollment-tokens": {
-      "get": { "responses": { "200": { "description": "Paginated enrollment tokens" } } },
-      "post": { "responses": { "201": { "description": "Enrollment token issued" } } }
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Paginated enrollment tokens"
+          }
+        }
+      },
+      "post": {
+        "responses": {
+          "201": {
+            "description": "Enrollment token issued"
+          }
+        }
+      }
     },
     "/admin/enrollment-tokens/{token_uuid}/revoke": {
-      "parameters": [{"name": "token_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
-      "post": { "responses": { "200": { "description": "Enrollment token revoked" } } }
+      "parameters": [
+        {
+          "name": "token_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Enrollment token revoked"
+          }
+        }
+      }
     },
     "/admin/devices/{device_uuid}/credentials/revoke": {
-      "parameters": [{"name": "device_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
       "post": {
         "description": "Requires device_credential.revoke permission; revokes the active credential.",
-        "parameters": [{ "name": "device_uuid", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["reason"], "additionalProperties": false, "properties": { "reason": { "type": "string", "minLength": 1, "maxLength": 512 } } } } } },
+        "parameters": [
+          {
+            "name": "device_uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reason"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
-          "200": { "description": "Device credential revoked" },
-          "400": { "description": "Invalid request" },
-          "401": { "description": "Authentication failed" },
-          "403": { "description": "Permission denied" },
-          "404": { "description": "No active credential" },
-          "500": { "description": "Persistence failed" }
+          "200": {
+            "description": "Device credential revoked"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "404": {
+            "description": "No active credential"
+          },
+          "500": {
+            "description": "Persistence failed"
+          }
         }
       }
     },
     "/admin/audit-events": {
       "get": {
         "parameters": [
-          { "name": "event_type", "in": "query", "schema": { "type": "string", "enum": ["administrator_authentication", "device_enrollment", "policy_assignment", "policy_synchronization"] } }
+          {
+            "name": "event_type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "administrator_authentication",
+                "device_enrollment",
+                "policy_assignment",
+                "policy_synchronization"
+              ]
+            }
+          }
         ],
-        "responses": { "200": { "description": "Paginated audit events" } }
+        "responses": {
+          "200": {
+            "description": "Paginated audit events"
+          }
+        }
       }
     },
     "/devices/register": {
       "post": {
         "security": [],
-        "responses": { "201": { "description": "Device registered or enrolled" } }
+        "responses": {
+          "201": {
+            "description": "Device registered or enrolled"
+          }
+        }
       }
     },
     "/devices/{device_uuid}/credentials/rotate": {
-      "parameters": [{"name": "device_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
-      "post": { "security": [], "responses": { "201": { "description": "Credential rotated" } } }
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "security": [],
+        "responses": {
+          "201": {
+            "description": "Credential rotated"
+          }
+        }
+      }
     },
     "/sync/policies/{device_uuid}": {
-      "parameters": [{"name": "device_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
-      "get": { "security": [], "responses": { "200": { "description": "Policy sync response" } } }
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Policy sync response"
+          }
+        }
+      }
+    },
+    "/devices/{device_uuid}/audit-batches": {
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Upload a signed contiguous batch of offline device security events",
+        "security": [
+          {
+            "deviceCredential": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "protocol_version",
+                  "batch_uuid",
+                  "device_uuid",
+                  "credential_uuid",
+                  "first_sequence",
+                  "last_sequence",
+                  "previous_head",
+                  "final_head",
+                  "signature_algorithm",
+                  "events",
+                  "signature"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch accepted or exact replay acknowledged"
+          },
+          "400": {
+            "description": "Malformed, altered, discontinuous, or invalidly signed batch"
+          },
+          "401": {
+            "description": "Device request authentication failed"
+          },
+          "409": {
+            "description": "Batch identity conflicts with stored evidence"
+          },
+          "413": {
+            "description": "Batch exceeds the configured request limit"
+          },
+          "429": {
+            "description": "Device upload rate limit exceeded"
+          },
+          "503": {
+            "description": "Audit persistence unavailable"
+          }
+        }
+      }
+    },
+    "/devices/{device_uuid}/check-ins": {
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Record an authenticated device health and policy status check-in",
+        "security": [
+          {
+            "deviceCredential": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "protocol_version",
+                  "check_in_uuid",
+                  "observed_at",
+                  "elapsed_realtime_ms",
+                  "boot_count",
+                  "dpc_version",
+                  "android_version",
+                  "api_level",
+                  "security_patch",
+                  "capabilities",
+                  "current_policy_uuid",
+                  "current_revision_uuid",
+                  "policy_status",
+                  "enforcement_healthy",
+                  "queued_event_count"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Check-in accepted or exact replay acknowledged"
+          },
+          "400": {
+            "description": "Malformed check-in"
+          },
+          "401": {
+            "description": "Device request authentication failed"
+          },
+          "409": {
+            "description": "Check-in identity, device identity, or ordering conflict"
+          },
+          "429": {
+            "description": "Device status rate limit exceeded"
+          },
+          "503": {
+            "description": "Status persistence unavailable"
+          }
+        }
+      }
+    },
+    "/devices/{device_uuid}/policy-acknowledgements": {
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Record an authenticated policy verification or application outcome",
+        "security": [
+          {
+            "deviceCredential": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "protocol_version",
+                  "acknowledgement_uuid",
+                  "observed_at",
+                  "elapsed_realtime_ms",
+                  "boot_count",
+                  "policy_uuid",
+                  "revision_uuid",
+                  "outcome",
+                  "error_code"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Acknowledgement accepted or exact replay acknowledged"
+          },
+          "400": {
+            "description": "Malformed acknowledgement"
+          },
+          "401": {
+            "description": "Device request authentication failed"
+          },
+          "409": {
+            "description": "Acknowledgement identity, revision, or ordering conflict"
+          },
+          "429": {
+            "description": "Device status rate limit exceeded"
+          },
+          "503": {
+            "description": "Status persistence unavailable"
+          }
+        }
+      }
     }
   }
 }

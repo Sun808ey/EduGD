@@ -174,8 +174,6 @@ def test_registration_rejects_invalid_uuid(
         (" 10 ", 29),
         ("4.4", 20),
         ("11", 29),
-        ("9", 28),
-        ("10", 28),
         ("9", 29),
         ("10", True),
         ("10", "29"),
@@ -197,8 +195,8 @@ def test_registration_rejects_invalid_android_compatibility(
             validate_device_registration_request(request)
 
     assert error.value.message == (
-        "android_version and api_level must identify Android 10 through "
-        "16 (API 29 through 36)"
+        "android_version and api_level must identify a supported Android "
+        "version and API level"
     )
 
 

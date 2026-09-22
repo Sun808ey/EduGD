@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "warning": "PUBLIC TEST KEY ONLY - NEVER USE IN PRODUCTION",
+  "public_key_spki_base64url": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmSrhEwuWbEnkLUbieQaWUJhQUzLaXmB62T4wRuv8tZ7R5flG_C3-3WDuDpeTBAVRdGtXTvdAmp1y91ni_fqmjIQxF_1z1avTpNCnOhONHTPBa2KEzgLmq1p9wtPia9cWEEix9VA0YZ4iYys-UDAUsVmpiUX49_kfaje-ZP1NUTaScaIFZUTlTVDWqv9YbkfiZ51X6Dp5VfrfuOWvKNHI4pPQ0jd4sWk8-nMCzgogobrkxeWoSPE9iAnYHOkaAewZmbh0KmGAxgUJ2blZ6wkVA33BoKvAXAjtNToNRMb3MyubewYZsAZ9mIen_OYS2uTSYO3tpAtnDKEkf7RyqnckJQIDAQAB",
+  "public_key_modulus_base64url": "mSrhEwuWbEnkLUbieQaWUJhQUzLaXmB62T4wRuv8tZ7R5flG_C3-3WDuDpeTBAVRdGtXTvdAmp1y91ni_fqmjIQxF_1z1avTpNCnOhONHTPBa2KEzgLmq1p9wtPia9cWEEix9VA0YZ4iYys-UDAUsVmpiUX49_kfaje-ZP1NUTaScaIFZUTlTVDWqv9YbkfiZ51X6Dp5VfrfuOWvKNHI4pPQ0jd4sWk8-nMCzgogobrkxeWoSPE9iAnYHOkaAewZmbh0KmGAxgUJ2blZ6wkVA33BoKvAXAjtNToNRMb3MyubewYZsAZ9mIen_OYS2uTSYO3tpAtnDKEkf7RyqnckJQ",
+  "public_key_exponent_base64url": "AQAB",
+  "public_key_fingerprint_sha256": "93734bdd3a821b2180d7a5b4b06e7130a58b872ea9ac1d1de831dd1ca36d49cc",
+  "pairing": {
+    "token_uuid": "11111111-2222-4333-8444-555555555555",
+    "pepper_hex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+    "secret_base64url": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+    "verifier_hex": "f465a2749b449a35cdbdc16efd99b26e013aa61107c9aeb87fbb473afd90f97c"
+  },
+  "enrollment": {
+    "device_uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "credential_algorithm": "RSA_2048_SHA256",
+    "android_version": "10",
+    "api_level": 29,
+    "nonce_base64url": "AAECAwQFBgcICQoLDA0ODw",
+    "canonical_message": "DEVICE-ENROLL-V1\n550e8400-e29b-41d4-a716-446655440000\n11111111-2222-4333-8444-555555555555\nRSA_2048_SHA256\n93734bdd3a821b2180d7a5b4b06e7130a58b872ea9ac1d1de831dd1ca36d49cc\n10\n29\nAAECAwQFBgcICQoLDA0ODw",
+    "canonical_message_sha256": "1c6e3992acaa2d6e422adf09ff070de1477304af38e1b20c379ce2bed4894772",
+    "proof_base64url": "Z-CuZz83t0p_VDfofUT-vIJRGCO3-Q3xFqSqmFS6VPWIy0Rfhc1Jk888vdCbiU3ky2Rc0lIlgafLf4zddcETglsovnZPc661OypQlgfJC-ppEbGdOmsvuNxl2DiHQLS3MYEYtTZCzWMvKwm1gnvABwCsu5UXztXtU0McnbJ0LpvFEgVaXwdDTfpcyPFShcI8JvPxBtapc3XGH-8LkHOKJY2aeQhSaLrByErWsXpF0aF6Z0HcMqZE5QMQkvsBZdPR8-gUBlVlI_rVDrkefLdPkB3WEXN39y8MOw8yK9e2hFZW_7jqQbMukbgHpCY8GyKkJmZ0Yd4zUncqddYi0JTjiQ"
+  },
+  "request": {
+    "method": "GET",
+    "canonical_path": "/api/v1/sync/policies/550e8400-e29b-41d4-a716-446655440000",
+    "canonical_query": "current_version=4",
+    "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "timestamp": "1787133600",
+    "nonce_base64url": "EBESExQVFhcYGRobHB0eHw",
+    "credential_uuid": "663b7fc2-1027-4ad6-8321-128c34331bc1",
+    "device_uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "canonical_message": "DEVICE-AUTH-V1\nGET\n/api/v1/sync/policies/550e8400-e29b-41d4-a716-446655440000\ncurrent_version=4\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n1787133600\nEBESExQVFhcYGRobHB0eHw\n663b7fc2-1027-4ad6-8321-128c34331bc1\n550e8400-e29b-41d4-a716-446655440000",
+    "canonical_message_sha256": "1bf63400bd94c1665aa2da3d2f09ce01b798b60e5d211f0aa6051b4eb59d67a0",
+    "signature_base64url": "ZuUMBD9ChlwyGSmiZdAVjk4K-fe_psCqD4Oq5y-uySao90-MzQ9QlgtgtIW2f6Il07Zfp0j2V6sQn2kzPV3x4Gc0OQ2qgak-pCBq0nNooe3R-rkcDKUBvGv_pwY30MIQ1pesojk7LNU7-EMcOcgBKOSo97qfVr07uv3xlQYUkzibc2vAet4aCaQ2siTl9jFQLonUF97zU9PU5T_kyUgB1994VE6SK1w9Y7vgRKYwLJ9mb6NtuNeiBXnOw7KXrYw0MPski2N7Y8MMDU6CWEDNzz6JD39-9c4f67ArJpWktXNtLgkkKnm5CH1QxSNp0QWHSvbVx3q_zS-u_MiK7AktCg"
+  },
+  "query_canonicalization": {
+    "raw": "b=%7e&a=hello%20world&plus=%2b",
+    "canonical": "a=hello%20world&b=~&plus=%2B"
+  },
+  "path_canonicalization": {
+    "raw": "/api/v1/sync/policies/550e8400%2De29b%2D41d4%2Da716%2D446655440000",
+    "canonical": "/api/v1/sync/policies/550e8400-e29b-41d4-a716-446655440000"
+  }
+}

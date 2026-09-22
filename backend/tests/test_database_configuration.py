@@ -1,0 +1,307 @@
+from unittest.mock import Mock
+
+import pytest
+
+from app import create_app
+from app.config import (
+    DevelopmentConfig,
+    PostgresTestingConfig,
+    ProductionConfig,
+    TestingConfig,
+    resolve_database_uri,
+    resolve_migration_database_uri,
+    resolve_production_engine_options,
+    validate_database_separation,
+)
+
+DEVELOPMENT_PROJECT = "abcdefghijklmnopqrst"
+TEST_PROJECT = "bcdefghijklmnopqrstu"
+PRODUCTION_PROJECT = "cdefghijklmnopqrstuv"
+DEVELOPMENT_URL = (
+    f"postgresql://runtime.{DEVELOPMENT_PROJECT}:placeholder@"
+    "aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full"
+)
+TEST_URL = (
+    f"postgresql://runtime:placeholder@db.{TEST_PROJECT}.supabase.co:5432/"
+    "postgres?sslmode=verify-full"
+)
+PRODUCTION_URL = (
+    f"postgresql://runtime.{PRODUCTION_PROJECT}:placeholder@"
+    "aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=verify-full"
+)
+MIGRATION_URL = (
+    f"postgresql://migration:placeholder@db.{DEVELOPMENT_PROJECT}.supabase.co:5432/"
+    "postgres?sslmode=verify-full"
+)
+DATABASE_VARIABLES = (
+    "DATABASE_URL",
+    "DEVELOPMENT_DATABASE_URL",
+    "POSTGRES_TEST_DATABASE_URL",
+    "PRODUCTION_DATABASE_URL",
+    "MIGRATION_DATABASE_URL",
+)
+
+
+@pytest.fixture(autouse=True)
+def clear_database_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    for variable_name in DATABASE_VARIABLES:
+        monkeypatch.delenv(variable_name, raising=False)
+
+
+@pytest.mark.parametrize(
+    ("configuration", "variable_name", "database_url"),
+    [
+        (DevelopmentConfig, "DEVELOPMENT_DATABASE_URL", DEVELOPMENT_URL),
+        (PostgresTestingConfig, "POSTGRES_TEST_DATABASE_URL", TEST_URL),
+        (ProductionConfig, "PRODUCTION_DATABASE_URL", PRODUCTION_URL),
+    ],
+)
+def test_environment_uses_its_own_database_variable(
+    monkeypatch: pytest.MonkeyPatch,
+    configuration: type[DevelopmentConfig],
+    variable_name: str,
+    database_url: str,
+) -> None:
+    monkeypatch.setenv(variable_name, database_url)
+
+    assert resolve_database_uri(configuration) == database_url
+
+
+def test_development_normalizes_legacy_postgres_scheme(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_url = DEVELOPMENT_URL.replace("postgresql://", "postgres://")
+    monkeypatch.setenv("DEVELOPMENT_DATABASE_URL", database_url)
+
+    resolved_url = resolve_database_uri(DevelopmentConfig)
+
+    assert resolved_url is not None
+    assert resolved_url.startswith("postgresql+psycopg2://")
+
+
+def test_legacy_database_url_is_not_used(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", DEVELOPMENT_URL)
+
+    with pytest.raises(RuntimeError, match="DEVELOPMENT_DATABASE_URL"):
+        create_app("development")
+
+
+@pytest.mark.parametrize(
+    ("config_name", "variable_name"),
+    [
+        ("development", "DEVELOPMENT_DATABASE_URL"),
+        ("postgres-testing", "POSTGRES_TEST_DATABASE_URL"),
+        ("production", "PRODUCTION_DATABASE_URL"),
+    ],
+)
+def test_missing_environment_database_fails_closed(
+    config_name: str,
+    variable_name: str,
+) -> None:
+    with pytest.raises(RuntimeError, match=variable_name):
+        create_app(config_name)
+
+
+@pytest.mark.parametrize(
+    "database_url",
+    [
+        "sqlite:///development.db",
+        "postgresql://runtime:placeholder@db.example.invalid/postgres?sslmode=verify-full",
+        DEVELOPMENT_URL.replace("verify-full", "require"),
+        DEVELOPMENT_URL.replace(":5432", ":6543"),
+    ],
+)
+def test_development_rejects_unsafe_or_unsupported_database_url(
+    monkeypatch: pytest.MonkeyPatch,
+    database_url: str,
+) -> None:
+    monkeypatch.setenv("DEVELOPMENT_DATABASE_URL", database_url)
+
+    with pytest.raises(RuntimeError) as error:
+        resolve_database_uri(DevelopmentConfig)
+
+    assert "DEVELOPMENT_DATABASE_URL" in str(error.value)
+    assert database_url not in str(error.value)
+
+
+def test_postgres_testing_accepts_direct_supabase_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("POSTGRES_TEST_DATABASE_URL", TEST_URL)
+
+    assert resolve_database_uri(PostgresTestingConfig) == TEST_URL
+
+
+def test_migrations_accept_persistent_supabase_urls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", MIGRATION_URL)
+    assert resolve_migration_database_uri("development", None) == MIGRATION_URL
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", DEVELOPMENT_URL)
+    assert resolve_migration_database_uri("development", None) == DEVELOPMENT_URL
+
+
+def test_sqlite_unit_tests_reuse_the_application_database_for_migrations() -> None:
+    application_url = TestingConfig.SQLALCHEMY_DATABASE_URI
+
+    assert resolve_migration_database_uri("testing", application_url) == application_url
+
+
+def test_configured_application_databases_must_use_separate_projects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DEVELOPMENT_DATABASE_URL", DEVELOPMENT_URL)
+    same_project_direct_url = (
+        f"postgresql://runtime:placeholder@db.{DEVELOPMENT_PROJECT}.supabase.co:5432/"
+        "postgres?sslmode=verify-full"
+    )
+    monkeypatch.setenv("POSTGRES_TEST_DATABASE_URL", same_project_direct_url)
+
+    with pytest.raises(RuntimeError, match="separate Supabase projects"):
+        validate_database_separation()
+
+
+def test_separate_supabase_projects_are_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DEVELOPMENT_DATABASE_URL", DEVELOPMENT_URL)
+    monkeypatch.setenv("POSTGRES_TEST_DATABASE_URL", TEST_URL)
+    monkeypatch.setenv("PRODUCTION_DATABASE_URL", PRODUCTION_URL)
+
+    validate_database_separation()
+
+
+def test_postgres_environments_use_bounded_resilient_connections() -> None:
+    bounded_postgres_options = {
+        "connect_args": {"connect_timeout": 3},
+        "pool_pre_ping": True,
+        "pool_timeout": 3,
+    }
+    assert DevelopmentConfig.SQLALCHEMY_ENGINE_OPTIONS == bounded_postgres_options
+    assert PostgresTestingConfig.SQLALCHEMY_ENGINE_OPTIONS == bounded_postgres_options
+    assert ProductionConfig.SQLALCHEMY_ENGINE_OPTIONS == {}
+    assert resolve_production_engine_options() == {
+        **bounded_postgres_options,
+        "pool_size": 3,
+        "max_overflow": 2,
+    }
+    assert TestingConfig.SQLALCHEMY_ENGINE_OPTIONS == {}
+    assert DevelopmentConfig.READINESS_STATEMENT_TIMEOUT_MS == 2_000
+    assert PostgresTestingConfig.READINESS_STATEMENT_TIMEOUT_MS == 2_000
+    assert ProductionConfig.READINESS_STATEMENT_TIMEOUT_MS == 2_000
+
+
+def test_production_pool_overrides_are_resolved_at_application_creation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQLALCHEMY_POOL_SIZE", "4")
+    monkeypatch.setenv("SQLALCHEMY_MAX_OVERFLOW", "1")
+    monkeypatch.setenv("PRODUCTION_DATABASE_URL", PRODUCTION_URL)
+    redis_client = Mock()
+    monkeypatch.setattr("app.Redis.from_url", Mock(return_value=redis_client))
+
+    application = create_app(
+        "production",
+        {
+            "SECRET_KEY": "f" * 32,
+            "JWT_SECRET_KEY": "j" * 32,
+            "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
+            "POLICY_SYNC_AUDIT_KEY": "p" * 32,
+            "RATELIMIT_STORAGE_URI": "rediss://redis.example.invalid:6379/0",
+            "ADMIN_FRONTEND_ORIGINS": "https://admin.example.invalid",
+        },
+    )
+
+    assert application.config["SQLALCHEMY_ENGINE_OPTIONS"]["pool_size"] == 4
+    assert application.config["SQLALCHEMY_ENGINE_OPTIONS"]["max_overflow"] == 1
+
+
+@pytest.mark.parametrize(
+    ("variable_name", "value", "expected_message"),
+    [
+        ("SQLALCHEMY_POOL_SIZE", "", "base-10 integer"),
+        ("SQLALCHEMY_POOL_SIZE", "1.5", "base-10 integer"),
+        ("SQLALCHEMY_POOL_SIZE", "0", "between 1 and 10"),
+        ("SQLALCHEMY_MAX_OVERFLOW", "-1", "base-10 integer"),
+        ("SQLALCHEMY_MAX_OVERFLOW", "11", "between 0 and 10"),
+    ],
+)
+def test_production_rejects_invalid_pool_settings(
+    monkeypatch: pytest.MonkeyPatch,
+    variable_name: str,
+    value: str,
+    expected_message: str,
+) -> None:
+    monkeypatch.setenv(variable_name, value)
+
+    with pytest.raises(RuntimeError, match=expected_message):
+        resolve_production_engine_options()
+
+
+def test_production_rejects_excessive_per_worker_connection_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQLALCHEMY_POOL_SIZE", "6")
+    monkeypatch.setenv("SQLALCHEMY_MAX_OVERFLOW", "5")
+
+    with pytest.raises(RuntimeError, match="must not exceed 10"):
+        resolve_production_engine_options()
+
+
+def test_production_fails_closed_without_required_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PRODUCTION_DATABASE_URL", PRODUCTION_URL)
+
+    with pytest.raises(RuntimeError, match="production secrets"):
+        create_app("production")
+
+
+def test_production_starts_with_database_and_required_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PRODUCTION_DATABASE_URL", PRODUCTION_URL)
+    redis_client = Mock()
+    monkeypatch.setattr("app.Redis.from_url", Mock(return_value=redis_client))
+
+    application = create_app(
+        "production",
+        {
+            "SECRET_KEY": "f" * 32,
+            "JWT_SECRET_KEY": "j" * 32,
+            "ADMIN_AUDIT_PSEUDONYM_KEY": "a" * 32,
+            "POLICY_SYNC_AUDIT_KEY": "p" * 32,
+            "RATELIMIT_STORAGE_URI": "rediss://redis.example.invalid:6379/0",
+            "ADMIN_FRONTEND_ORIGINS": "https://admin.example.invalid",
+        },
+    )
+
+    assert application.config["SQLALCHEMY_DATABASE_URI"] == PRODUCTION_URL
+    assert application.config["MIGRATION_DATABASE_URI"] is None
+
+
+def test_application_keeps_direct_migration_url_separate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DEVELOPMENT_DATABASE_URL", DEVELOPMENT_URL)
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", MIGRATION_URL)
+
+    application = create_app("development")
+
+    assert application.config["SQLALCHEMY_DATABASE_URI"] == DEVELOPMENT_URL
+    assert application.config["MIGRATION_DATABASE_URI"] == MIGRATION_URL
+
+
+def test_migration_url_must_target_the_active_application_project(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DEVELOPMENT_DATABASE_URL", DEVELOPMENT_URL)
+    monkeypatch.setenv(
+        "MIGRATION_DATABASE_URL",
+        TEST_URL,
+    )
+
+    with pytest.raises(RuntimeError, match="active Supabase project"):
+        create_app("development")

@@ -1,0 +1,361 @@
+from __future__ import annotations
+
+import os
+import re
+from datetime import timedelta
+from pathlib import Path
+from typing import cast
+
+from sqlalchemy.engine import URL, make_url
+from sqlalchemy.exc import ArgumentError
+
+BACKEND_DIRECTORY = Path(__file__).resolve().parent.parent
+
+APPLICATION_DATABASE_ENVIRONMENTS = (
+    "DEVELOPMENT_DATABASE_URL",
+    "POSTGRES_TEST_DATABASE_URL",
+    "PRODUCTION_DATABASE_URL",
+)
+POSTGRES_CONNECTION_TIMEOUT_SECONDS = 3
+DEFAULT_PRODUCTION_POOL_SIZE = 3
+DEFAULT_PRODUCTION_MAX_OVERFLOW = 2
+MAX_PRODUCTION_POOL_COMPONENT = 10
+MAX_PRODUCTION_CONNECTIONS_PER_WORKER = 10
+POSTGRES_ENGINE_OPTIONS: dict[str, object] = {
+    "connect_args": {"connect_timeout": POSTGRES_CONNECTION_TIMEOUT_SECONDS},
+    "pool_pre_ping": True,
+    "pool_timeout": POSTGRES_CONNECTION_TIMEOUT_SECONDS,
+}
+
+
+def resolve_production_engine_options() -> dict[str, object]:
+    """Return bounded production pool settings resolved at application creation."""
+    pool_size = _bounded_pool_setting(
+        "SQLALCHEMY_POOL_SIZE",
+        DEFAULT_PRODUCTION_POOL_SIZE,
+        minimum=1,
+    )
+    max_overflow = _bounded_pool_setting(
+        "SQLALCHEMY_MAX_OVERFLOW",
+        DEFAULT_PRODUCTION_MAX_OVERFLOW,
+        minimum=0,
+    )
+    if pool_size + max_overflow > MAX_PRODUCTION_CONNECTIONS_PER_WORKER:
+        raise RuntimeError(
+            "Production SQLAlchemy pool capacity must not exceed 10 connections "
+            "per worker"
+        )
+    return {
+        **POSTGRES_ENGINE_OPTIONS,
+        "pool_size": pool_size,
+        "max_overflow": max_overflow,
+    }
+
+
+def _bounded_pool_setting(name: str, default: int, *, minimum: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    if not raw_value or not raw_value.isascii() or not raw_value.isdecimal():
+        raise RuntimeError(f"{name} must be a base-10 integer")
+    value = int(raw_value, 10)
+    if not minimum <= value <= MAX_PRODUCTION_POOL_COMPONENT:
+        raise RuntimeError(f"{name} must be between {minimum} and 10")
+    return value
+
+
+def _environment_flag(name: str, default: bool = False) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _normalize_database_uri(database_uri: str) -> str:
+    if database_uri.startswith("postgres://"):
+        return database_uri.replace(
+            "postgres://",
+            "postgresql+psycopg2://",
+            1,
+        )
+    return database_uri
+
+
+class Config:
+    DEBUG = False
+    TESTING = False
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    ADMIN_AUDIT_PSEUDONYM_KEY = os.getenv("ADMIN_AUDIT_PSEUDONYM_KEY")
+    POLICY_SYNC_AUDIT_KEY = os.getenv("POLICY_SYNC_AUDIT_KEY")
+    PAIRING_TOKEN_PEPPER = os.getenv("PAIRING_TOKEN_PEPPER")
+    PAIRING_TOKEN_PEPPER_VERSION = int(os.getenv("PAIRING_TOKEN_PEPPER_VERSION", "1"))
+    PAIRING_TOKEN_PEPPERS: dict[int, str] | None = None
+    DEVICE_ENROLLMENT_MODE = os.getenv("DEVICE_ENROLLMENT_MODE", "legacy").lower()
+    ENROLLMENT_ADMIN_ENABLED = _environment_flag("ENROLLMENT_ADMIN_ENABLED")
+    JWT_ALGORITHM = "HS256"
+    JWT_DECODE_ALGORITHMS = ["HS256"]
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
+    JWT_TOKEN_LOCATION = ("headers",)
+    JWT_HEADER_TYPE = "Bearer"
+    JWT_ENCODE_ISSUER = "edug-school-policy-api"
+    JWT_DECODE_ISSUER = "edug-school-policy-api"
+    JWT_ENCODE_AUDIENCE = "edug-school-administration"
+    JWT_DECODE_AUDIENCE = "edug-school-administration"
+    SQLALCHEMY_DATABASE_URI: str | None = None
+    SQLALCHEMY_ENGINE_OPTIONS: dict[str, object] = {}
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    DATABASE_ENV_VAR: str | None = None
+    LOG_LEVEL = "INFO"
+    RATELIMIT_DEFAULT: list[str] = []
+    RATELIMIT_ENABLED = True
+    RATELIMIT_STORAGE_URI: str | None = "memory://"
+    REDIS_URL = os.getenv("REDIS_URL")
+    TRUSTED_PROXY_HOPS = 0
+    SENTRY_DSN = os.getenv("SENTRY_DSN")
+    SENTRY_ERROR_SAMPLE_RATE = 0.25
+    SENTRY_TRACES_SAMPLE_RATE = 0.01
+    READINESS_STATEMENT_TIMEOUT_MS = 2_000
+    MAX_CONTENT_LENGTH = 1 * 1_024 * 1_024
+    REGISTRATION_MAX_CONTENT_LENGTH = 16 * 1_024
+    DEVICE_AUDIT_MAX_CONTENT_LENGTH = 256 * 1_024
+    ADMIN_AUTH_MAX_CONTENT_LENGTH = 16 * 1_024
+    ADMIN_POLICY_MUTATION_MAX_CONTENT_LENGTH = 16 * 1_024
+    DEVICE_AUTH_MAX_HEADER_LENGTH = 512
+    DEVICE_AUTH_CLOCK_SKEW_SECONDS = 300
+    DEVICE_AUTH_NONCE_TTL_SECONDS = 600
+    ENROLLMENT_TOKEN_TTL_SECONDS = 600
+    POLICY_SYNC_RATE_LIMIT = os.getenv("POLICY_SYNC_RATE_LIMIT") or "60 per minute"
+    ADMIN_FRONTEND_ORIGINS = os.getenv("ADMIN_FRONTEND_ORIGINS", "")
+
+
+class DevelopmentConfig(Config):
+    DEBUG = _environment_flag("FLASK_DEBUG")
+    DATABASE_ENV_VAR = "DEVELOPMENT_DATABASE_URL"
+    SQLALCHEMY_ENGINE_OPTIONS = POSTGRES_ENGINE_OPTIONS
+    LOG_LEVEL = "DEBUG" if DEBUG else "INFO"
+    ADMIN_FRONTEND_ORIGINS = os.getenv(
+        "ADMIN_FRONTEND_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    )
+
+
+class TestingConfig(Config):
+    TESTING = True
+    DATABASE_ENV_VAR = None
+    SQLALCHEMY_DATABASE_URI = "sqlite+pysqlite:///:memory:"
+    LOG_LEVEL = "WARNING"
+    RATELIMIT_ENABLED = False
+    PAIRING_TOKEN_PEPPER = "testing-pairing-token-pepper-value"
+    POLICY_SYNC_AUDIT_KEY = "testing-policy-sync-audit-key-value"
+    ENROLLMENT_ADMIN_ENABLED = True
+    ADMIN_FRONTEND_ORIGINS = "http://localhost:5173"
+
+
+class PostgresTestingConfig(Config):
+    TESTING = True
+    DATABASE_ENV_VAR = "POSTGRES_TEST_DATABASE_URL"
+    SQLALCHEMY_ENGINE_OPTIONS = POSTGRES_ENGINE_OPTIONS
+    LOG_LEVEL = "WARNING"
+    RATELIMIT_ENABLED = False
+
+
+class ProductionConfig(Config):
+    DATABASE_ENV_VAR = "PRODUCTION_DATABASE_URL"
+    SQLALCHEMY_ENGINE_OPTIONS: dict[str, object] = {}
+    RATELIMIT_STORAGE_URI = os.getenv("REDIS_URL")
+    TRUSTED_PROXY_HOPS = 1
+
+
+CONFIGURATIONS: dict[str, type[Config]] = {
+    "development": DevelopmentConfig,
+    "testing": TestingConfig,
+    "postgres-testing": PostgresTestingConfig,
+    "production": ProductionConfig,
+}
+
+
+def get_configuration(
+    config_name: str | None = None,
+) -> tuple[str, type[Config]]:
+    environment_name = cast(str, os.getenv("APP_ENV", "development"))
+    selected_name = (config_name or environment_name).lower()
+    try:
+        return selected_name, CONFIGURATIONS[selected_name]
+    except KeyError as error:
+        valid_names = ", ".join(sorted(CONFIGURATIONS))
+        raise ValueError(
+            f"Unknown application environment '{selected_name}'. "
+            f"Expected one of: {valid_names}"
+        ) from error
+
+
+def resolve_database_uri(configuration: type[Config]) -> str | None:
+    if configuration.DATABASE_ENV_VAR is None:
+        return configuration.SQLALCHEMY_DATABASE_URI
+
+    database_uri = os.getenv(configuration.DATABASE_ENV_VAR)
+    if not database_uri:
+        return None
+    normalized_uri = _normalize_database_uri(database_uri)
+    validate_postgres_database_uri(
+        configuration.DATABASE_ENV_VAR,
+        normalized_uri,
+    )
+    return normalized_uri
+
+
+def resolve_migration_database_uri(
+    app_environment: str,
+    application_database_uri: str | None,
+) -> str | None:
+    if app_environment == "testing":
+        return application_database_uri
+
+    database_uri = os.getenv("MIGRATION_DATABASE_URL")
+    if not database_uri:
+        return None
+
+    normalized_uri = _normalize_database_uri(database_uri)
+    validate_postgres_database_uri(
+        "MIGRATION_DATABASE_URL",
+        normalized_uri,
+    )
+    return normalized_uri
+
+
+def validate_database_separation() -> None:
+    project_variables: dict[str, str] = {}
+
+    for variable_name in APPLICATION_DATABASE_ENVIRONMENTS:
+        database_uri = os.getenv(variable_name)
+        if not database_uri:
+            continue
+
+        normalized_uri = _normalize_database_uri(database_uri)
+        parsed_url = validate_postgres_database_uri(
+            variable_name,
+            normalized_uri,
+        )
+        project_identity = database_project_identity(parsed_url)
+        existing_variable = project_variables.get(project_identity)
+        if existing_variable is not None:
+            raise RuntimeError(
+                "Configured application databases must use separate Supabase projects"
+            )
+        project_variables[project_identity] = variable_name
+
+
+def validate_migration_target(
+    application_database_uri: str,
+    migration_database_uri: str,
+) -> None:
+    application_url = validate_postgres_database_uri(
+        "active application database URL",
+        application_database_uri,
+    )
+    migration_url = validate_postgres_database_uri(
+        "MIGRATION_DATABASE_URL",
+        migration_database_uri,
+    )
+    if (
+        database_project_identity(application_url)
+        != database_project_identity(migration_url)
+        or application_url.database != migration_url.database
+    ):
+        raise RuntimeError(
+            "MIGRATION_DATABASE_URL must target the active Supabase project and database"
+        )
+
+
+def validate_postgres_database_uri(
+    variable_name: str,
+    database_uri: str,
+) -> URL:
+    try:
+        parsed_url = make_url(_normalize_database_uri(database_uri))
+        port = parsed_url.port
+    except (ArgumentError, ValueError, TypeError):
+        raise RuntimeError(
+            f"{variable_name} must contain a valid PostgreSQL URL"
+        ) from None
+
+    if parsed_url.drivername not in {
+        "postgresql",
+        "postgresql+psycopg2",
+    }:
+        raise RuntimeError(f"{variable_name} must contain a PostgreSQL URL")
+
+    # libpq query parameters can override the URL authority. Only allow
+    # transport/tuning parameters that cannot select a different database.
+    allowed_query = {
+        "sslmode",
+        "sslrootcert",
+        "sslcert",
+        "sslkey",
+        "sslcrl",
+        "connect_timeout",
+        "application_name",
+        "channel_binding",
+        "keepalives",
+        "keepalives_idle",
+        "keepalives_interval",
+        "keepalives_count",
+    }
+    if any(
+        key not in allowed_query or not isinstance(value, str)
+        for key, value in parsed_url.query.items()
+    ):
+        raise RuntimeError(
+            f"{variable_name} contains unsupported connection parameters"
+        )
+    hostname = (parsed_url.host or "").lower()
+    if not parsed_url.database or not hostname:
+        raise RuntimeError(f"{variable_name} must identify a host and database")
+
+    ssl_mode = parsed_url.query.get("sslmode")
+    if port not in {None, 5432}:
+        raise RuntimeError(f"{variable_name} requires direct or session port 5432")
+    try:
+        database_project_identity(parsed_url)
+    except ValueError:
+        raise RuntimeError(
+            f"{variable_name} must identify a Supabase project"
+        ) from None
+    if not parsed_url.username:
+        raise RuntimeError(f"{variable_name} requires a database role")
+    if ssl_mode != "verify-full":
+        raise RuntimeError(f"{variable_name} must use verify-full PostgreSQL TLS")
+
+    return parsed_url
+
+
+def database_project_identity(database_url: URL) -> str:
+    """Identify the Supabase project, including shared-pooler tenant routing."""
+    hostname = (database_url.host or "").lower()
+    direct = re.fullmatch(r"db\.([a-z0-9]{20})\.supabase\.co", hostname)
+    if direct:
+        return direct[1]
+    if re.fullmatch(r"aws-[a-z0-9-]+\.pooler\.supabase\.com", hostname):
+        tenant = re.fullmatch(r"[^.\s]+\.([a-z0-9]{20})", database_url.username or "")
+        if tenant:
+            return tenant[1]
+        raise ValueError("Supabase session connection requires a tenant-qualified role")
+    raise ValueError("Unsupported Supabase project identity")
+
+
+__all__ = [
+    "Config",
+    "DevelopmentConfig",
+    "PostgresTestingConfig",
+    "ProductionConfig",
+    "TestingConfig",
+    "get_configuration",
+    "resolve_database_uri",
+    "resolve_migration_database_uri",
+    "resolve_production_engine_options",
+    "validate_database_separation",
+    "validate_migration_target",
+    "validate_postgres_database_uri",
+    "database_project_identity",
+]

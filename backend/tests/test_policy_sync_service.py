@@ -1,0 +1,249 @@
+import json
+from typing import Any
+from uuid import UUID
+
+import pytest
+from flask import Flask
+from sqlalchemy import event
+
+from app.extensions import db
+from app.models import (
+    Device,
+    DevicePolicyAssignment,
+    Policy,
+    PolicyRevision,
+    policy_revision_content_hash,
+    utc_now,
+)
+from app.services.policy_sync import (
+    DeviceBlockedError,
+    DeviceNotFoundError,
+    InvalidDeviceUUIDError,
+    PolicyInactiveError,
+    PolicyRevokedError,
+    get_policy_sync_payload,
+)
+
+DEVICE_UUID = "550e8400-e29b-41d4-a716-446655440000"
+POLICY_UUID = "8e65f112-f7c4-4776-b113-e0eef34ec881"
+BLOCKED_APPS = [
+    "com.facebook.katana",
+    "com.instagram.android",
+]
+
+
+def create_device(*, status: str = "active") -> Device:
+    device = Device(
+        device_uuid=UUID(DEVICE_UUID),
+        android_version="10",
+        api_level=29,
+        status=status,
+    )
+    db.session.add(device)
+    db.session.commit()
+    return device
+
+
+def assign_policy(
+    device: Device,
+    *,
+    policy_status: str = "active",
+    policy_version: int = 5,
+    assignment_version: int = 5,
+    assignment_status: str = "active",
+) -> tuple[Policy, DevicePolicyAssignment]:
+    policy = Policy(
+        policy_uuid=UUID(POLICY_UUID),
+        name="Classroom policy",
+        status=policy_status,
+    )
+    db.session.add(policy)
+    db.session.flush()
+    assigned_payload = {
+        "schema_version": 1,
+        "blocked_apps": BLOCKED_APPS,
+    }
+    assigned_revision = PolicyRevision(
+        policy_id=policy.id,
+        version=assignment_version,
+        payload=assigned_payload,
+        content_hash=policy_revision_content_hash(assigned_payload),
+        created_by=str(UUID(POLICY_UUID)),
+    )
+    db.session.add(assigned_revision)
+    db.session.flush()
+    if policy_version != assignment_version:
+        latest_payload = {
+            "schema_version": 1,
+            "blocked_apps": ["org.example.latest"],
+        }
+        db.session.add(
+            PolicyRevision(
+                policy_id=policy.id,
+                version=policy_version,
+                payload=latest_payload,
+                content_hash=policy_revision_content_hash(latest_payload),
+                created_by=str(UUID(POLICY_UUID)),
+            )
+        )
+
+    assignment = DevicePolicyAssignment(
+        device_id=device.id,
+        policy_revision_id=assigned_revision.id,
+        status=assignment_status,
+        superseded_at=(utc_now() if assignment_status == "superseded" else None),
+        trusted_operator_subject="test:sync-fixture",
+        reason="policy synchronization fixture",
+    )
+    db.session.add(assignment)
+    db.session.commit()
+    return policy, assignment
+
+
+@pytest.mark.parametrize("device_uuid", [None, 10, "", "not-a-uuid"])
+def test_policy_sync_rejects_invalid_device_uuid(
+    app: Flask,
+    device_uuid: Any,
+) -> None:
+    with app.app_context():
+        with pytest.raises(InvalidDeviceUUIDError, match="invalid device UUID"):
+            get_policy_sync_payload(device_uuid)
+
+
+def test_policy_sync_rejects_unknown_device(app: Flask) -> None:
+    with app.app_context():
+        with pytest.raises(DeviceNotFoundError, match="device not found"):
+            get_policy_sync_payload(DEVICE_UUID)
+
+
+@pytest.mark.parametrize("status", ["suspended", "retired"])
+def test_policy_sync_blocks_inactive_device_without_changing_policy(
+    app: Flask,
+    status: str,
+) -> None:
+    with app.app_context():
+        device = create_device(status=status)
+        _policy, assignment = assign_policy(device)
+
+        with pytest.raises(DeviceBlockedError, match="device is not active"):
+            get_policy_sync_payload(DEVICE_UUID)
+
+        db.session.expire_all()
+        stored_device = db.session.get(Device, device.id)
+        stored_assignment = db.session.get(DevicePolicyAssignment, assignment.id)
+
+    assert stored_device is not None
+    assert stored_device.status == status
+    assert stored_assignment is not None
+    assert stored_assignment.status == "active"
+
+
+def test_policy_sync_returns_no_policy_payload(app: Flask) -> None:
+    with app.app_context():
+        create_device()
+
+        payload = get_policy_sync_payload(DEVICE_UUID)
+
+    assert payload == {
+        "device_uuid": DEVICE_UUID,
+        "policy": None,
+        "policy_version": 0,
+        "message": "no policy assigned",
+    }
+
+
+def test_policy_sync_returns_active_policy(app: Flask) -> None:
+    with app.app_context():
+        device = create_device()
+        assign_policy(device)
+
+        first_payload = get_policy_sync_payload(DEVICE_UUID)
+        second_payload = get_policy_sync_payload(DEVICE_UUID)
+
+    expected_payload = {
+        "device_uuid": DEVICE_UUID,
+        "policy": {
+            "policy_uuid": POLICY_UUID,
+            "policy_version": 5,
+            "blocked_apps": BLOCKED_APPS,
+        },
+    }
+    assert first_payload == expected_payload
+    assert second_payload == expected_payload
+    assert json.loads(json.dumps(first_payload, sort_keys=True)) == first_payload
+
+
+def test_policy_sync_treats_superseded_history_as_no_assignment(app: Flask) -> None:
+    with app.app_context():
+        device = create_device()
+        assign_policy(device, assignment_status="superseded")
+
+        payload = get_policy_sync_payload(DEVICE_UUID)
+
+    assert payload["policy"] is None
+    assert payload["policy_version"] == 0
+
+
+@pytest.mark.parametrize("policy_status", ["draft", "inactive"])
+def test_policy_sync_classifies_inactive_policy(
+    app: Flask,
+    policy_status: str,
+) -> None:
+    with app.app_context():
+        device = create_device()
+        assign_policy(device, policy_status=policy_status)
+        with pytest.raises(PolicyInactiveError):
+            get_policy_sync_payload(DEVICE_UUID)
+
+
+def test_policy_sync_classifies_revoked_policy(app: Flask) -> None:
+    with app.app_context():
+        device = create_device()
+        assign_policy(device, policy_status="revoked")
+        with pytest.raises(PolicyRevokedError):
+            get_policy_sync_payload(DEVICE_UUID)
+
+
+def test_policy_sync_uses_exact_assigned_historical_revision(app: Flask) -> None:
+    with app.app_context():
+        device = create_device()
+        assign_policy(device, policy_version=6, assignment_version=5)
+
+        payload = get_policy_sync_payload(DEVICE_UUID)
+
+    assert payload["policy"] == {
+        "policy_uuid": POLICY_UUID,
+        "policy_version": 5,
+        "blocked_apps": BLOCKED_APPS,
+    }
+
+
+def test_policy_sync_is_database_read_only(app: Flask) -> None:
+    with app.app_context():
+        device = create_device()
+        assign_policy(device)
+        executed_operations: list[str] = []
+
+        def record_operation(
+            _connection: Any,
+            _cursor: Any,
+            statement: str,
+            _parameters: Any,
+            _context: Any,
+            _executemany: bool,
+        ) -> None:
+            executed_operations.append(statement.lstrip().split(maxsplit=1)[0].upper())
+
+        event.listen(db.engine, "before_cursor_execute", record_operation)
+        try:
+            get_policy_sync_payload(DEVICE_UUID)
+        finally:
+            event.remove(db.engine, "before_cursor_execute", record_operation)
+
+        db.session.expire_all()
+        stored_device = db.session.get(Device, device.id)
+
+    assert executed_operations
+    assert set(executed_operations) == {"SELECT"}
+    assert stored_device is not None
+    assert stored_device.last_sync_at is None

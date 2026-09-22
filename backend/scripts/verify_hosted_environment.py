@@ -38,7 +38,7 @@ def main() -> int:
                 connection.execute(
                     text("SELECT version_num FROM public.alembic_version")
                 ).scalar_one()
-                == "e4a1b7c9d2f6"
+                == "a6d4e8f2b1c7"
             )
             stage = "database_read_permissions"
             for table in db.metadata.sorted_tables:

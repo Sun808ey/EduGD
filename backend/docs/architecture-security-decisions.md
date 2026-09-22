@@ -1,0 +1,143 @@
+# Approved architecture and security decisions
+
+This document records approved decisions for the backend remediation backlog.
+It does not mean later remediation increments have been implemented.
+
+## Current deployment decision
+
+The backend accepts Supabase direct/session PostgreSQL connections. Railway uses the existing Flask
+factory and `run:app`; SQLAlchemy, models, migration history, RBAC, device
+protocol and forensic formats are preserved. Shared Redis remains mandatory
+because the existing production limiter requires it. Supabase Data API must be
+disabled; no Supabase Auth, Realtime or Edge Functions are introduced.
+
+The deployment configuration is defined by `environment.md`, `railway.json`,
+and `database-migration-runbook.md`. Source data migration,
+provider setup, Android offline/endpoint evidence and final cutover remain
+operator gates. Android code is not present in this checkout. The backend defines a signed
+policy version 2 contract and an authenticated queued-event upload endpoint.
+Local tests do not prove Android interoperability or hosted migration.
+
+Registration/enrollment/authentication events must be preserved, but they do
+not all implement the same DB trigger/ORM immutability mechanisms as revisions
+and assignment/synchronization events. Restricted runtime grants protect
+append-only evidence; never claim all audit tables have identical controls.
+
+## Device lifecycle and identity
+
+- Device statuses are `active`, `suspended`, and `retired`.
+- Device status values are enforced by both ORM validation and the
+  `ck_devices_status` database constraint. SQLite test connections enable
+  foreign-key enforcement.
+- The Android DPC creates and securely persists one canonical lowercase,
+  hyphenated, non-nil version-4 UUID.
+- The server rejects uppercase, braced, URN, compact, nil, and non-v4 UUIDs.
+- Supported devices run Android 5.0 through 10.0, API 21 through 29.
+- Both Android version and API level are stored; API level is authoritative.
+- Registration and synchronization accept only canonical lowercase hyphenated
+  non-nil UUIDv4 text. Registration enforces exact approved Android/API pairs,
+  and database constraints preserve the same compatibility boundary.
+- An authenticated OS upgrade updates device metadata and appends an immutable
+  audit event. A reported downgrade is rejected and flagged for review.
+- Until device authentication exists, unauthenticated re-registration cannot
+  change stored Android metadata. Identical requests are idempotent, upgrades
+  return an authentication-required conflict, and downgrades are rejected.
+- Every valid registration lifecycle attempt for a known or newly created
+  device appends an immutable `DeviceRegistrationEvent` in the same database
+  transaction. Operational logs record only a fixed outcome category and do
+  not include device UUIDs or submitted metadata.
+- Suspended and retired devices receive HTTP 403 with operation `blocked` and
+  retain their last locally enforced policy.
+
+## Health and enrollment
+
+- `/api/v1/health` remains process liveness.
+- `/api/v1/ready` is approved for bounded database and essential-configuration
+  checks that do not expose internals.
+- Readiness is implemented as a fail-closed check of essential runtime
+  configuration, bounded database connectivity, and exact Alembic migration
+  head compatibility. Failures return a generic HTTP 503 response.
+- Future enrollment uses a short-lived, single-use, school-issued pairing token
+  stored as a server-side hash.
+- Successful enrollment issues a separate revocable device credential and
+  includes replay protection.
+- The approved detailed design uses a ten-minute, single-use 256-bit pairing
+  token stored as a keyed verifier and a device-generated non-exportable
+  RSA-2048 Android Keystore key. The server stores only the public key.
+- Protected requests use a signed canonical request, five-minute timestamp
+  window, and unique nonce. UUID-only fallback ends after an explicitly
+  approved legacy migration cutoff.
+- Enrollment and protected requests use the byte-exact `DEVICE-ENROLL-V1` and
+  `DEVICE-AUTH-V1` formats, strict RFC 4648 base64url and RFC 3986
+  canonicalization rules, and shared machine-readable interoperability vectors.
+- Rollout advances fail-closed through `legacy`, `new_devices_required`, and
+  `all_required`; table deployment alone never silently changes enforcement.
+- The complete protocol, persistence proposal, API contracts, threat model,
+  revocation model, and legacy migration plan are recorded in
+  `docs/device-enrollment-authentication-design.md`.
+- Remediation 11 server implementation is approved and present. Production
+  rollout remains gated on an approved PostgreSQL migration/concurrency run and
+  Android interoperability validation against the shared wire vectors.
+- Enrollment persistence tables are introduced without changing existing
+  device rows. Credential absence derives `legacy_pending`; one active device
+  credential derives `enrolled`, avoiding a duplicated enrollment-state column.
+- Local administrator authentication uses CLI-bootstrapped PostgreSQL accounts,
+  15-minute header-only JWT access tokens, and database-authoritative sessions,
+  account status, and permissions. JWT claims do not grant permissions.
+- Administrator login, logout, and identity routes use `/api/v1/admin/auth`,
+  return `Cache-Control: no-store`, and use one generic authentication failure.
+  Login is limited to 10 attempts per minute per source address, and five
+  consecutive account failures produce a 15-minute database lock.
+- Authentication audit events retain only keyed source-address pseudonyms and
+  JTI digests. Passwords, JWTs, submitted unknown usernames, raw source
+  addresses, and request bodies are not persisted or logged.
+
+## Policies, assignments, and synchronization
+
+- Policy statuses are `draft`, `active`, `inactive`, and `revoked`.
+- `Policy` is stable identity and lifecycle; immutable `PolicyRevision` rows
+  contain versioned content.
+- The normalized model, canonical hash, legacy conversion, immutability
+  controls, compatibility boundary, and non-destructive downgrade guard are
+  specified in
+  [`immutable-policy-revision-design.md`](immutable-policy-revision-design.md).
+  Runtime and schema implementation remain separately gated as Remediation 15.
+- Assignments reference an exact revision and record administrator, reason,
+  event UUID, assignment time, and supersession time.
+- Removing a policy produces operation `clear`.
+- Intentionally assigning an older revision produces operation `rollback`.
+- Numeric greater-than comparison alone must not determine synchronization.
+- Synchronization may append a separate immutable audit event while policy and
+  assignment state remain read-only.
+
+## Request limits, rate limits, and monitoring
+
+- Global maximum request size is 1 MiB.
+- Registration and normal control-plane requests are limited to 16 KiB.
+- Forensic-log batches are limited to 256 KiB and 200 events.
+- Registration begins at 10 requests per minute per source IP.
+- Policy pull begins at 60 requests per minute per authenticated device.
+- An untrusted request `device_uuid` must not become the authenticated rate key.
+- Sentry stays inactive without `SENTRY_DSN`, distinguishes environments,
+  excludes secrets, credentials, and request bodies, and uses conservative
+  sampling.
+- Startup hardening implements structured JSON application logs with secret,
+  bearer-token, and URL-credential redaction.
+- Production startup requires distinct Flask and JWT secrets of at least 32
+  characters and rejects debug or testing mode.
+- Development and testing use process-local random secret defaults when
+  explicit values are absent.
+- Flask-Limiter is initialized without applying route policies; registration
+  and authenticated-device limits remain separate approved work.
+
+## Quality and database isolation
+
+- Approved tools are Ruff, mypy, pytest-cov, pip-audit, and Bandit.
+- Black is not approved because Ruff is the selected formatter.
+- Development, PostgreSQL integration testing, and production use separate
+  Supabase projects.
+- Application traffic uses direct or session-pooler Supabase URLs through
+  `DEVELOPMENT_DATABASE_URL` or `PRODUCTION_DATABASE_URL`.
+- PostgreSQL tests use `POSTGRES_TEST_DATABASE_URL`.
+- Flask-Migrate and Alembic use the separately credentialed
+  `MIGRATION_DATABASE_URL` for the same Supabase project and database.

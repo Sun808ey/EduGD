@@ -22,21 +22,28 @@ from sqlalchemy.pool import NullPool
 
 from app.extensions import db
 
-EXPECTED_HEAD = "e4a1b7c9d2f6"
+EXPECTED_HEAD = "a6d4e8f2b1c7"
 EXPECTED_TABLES = {
     "administrator_authentication_events",
     "administrator_permissions",
     "administrator_sessions",
     "administrators",
     "alembic_version",
+    "device_audit_batches",
+    "device_audit_chain_heads",
+    "device_check_ins",
+    "device_compliance_states",
     "device_credentials",
     "device_enrollment_events",
     "device_policy_assignments",
+    "device_policy_states",
     "device_registration_events",
     "device_request_nonces",
+    "device_security_events",
     "devices",
     "enrollment_tokens",
     "policies",
+    "policy_application_events",
     "policy_assignment_chain_heads",
     "policy_assignment_events",
     "policy_revisions",

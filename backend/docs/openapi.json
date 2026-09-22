@@ -15,6 +15,12 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT"
+      },
+      "deviceCredential": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "DeviceCredential followed by the enrolled credential UUID. Requests also carry X-Device-Timestamp, X-Device-Nonce, X-Device-Body-SHA256 and X-Device-Signature."
       }
     },
     "schemas": {
@@ -174,6 +180,206 @@
     "/sync/policies/{device_uuid}": {
       "parameters": [{"name": "device_uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
       "get": { "security": [], "responses": { "200": { "description": "Policy sync response" } } }
+    },
+    "/devices/{device_uuid}/audit-batches": {
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Upload a signed contiguous batch of offline device security events",
+        "security": [
+          {
+            "deviceCredential": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "protocol_version",
+                  "batch_uuid",
+                  "device_uuid",
+                  "credential_uuid",
+                  "first_sequence",
+                  "last_sequence",
+                  "previous_head",
+                  "final_head",
+                  "signature_algorithm",
+                  "events",
+                  "signature"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch accepted or exact replay acknowledged"
+          },
+          "400": {
+            "description": "Malformed, altered, discontinuous, or invalidly signed batch"
+          },
+          "401": {
+            "description": "Device request authentication failed"
+          },
+          "409": {
+            "description": "Batch identity conflicts with stored evidence"
+          },
+          "413": {
+            "description": "Batch exceeds the configured request limit"
+          },
+          "429": {
+            "description": "Device upload rate limit exceeded"
+          },
+          "503": {
+            "description": "Audit persistence unavailable"
+          }
+        }
+      }
+    },
+    "/devices/{device_uuid}/check-ins": {
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Record an authenticated device health and policy status check-in",
+        "security": [
+          {
+            "deviceCredential": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "protocol_version",
+                  "check_in_uuid",
+                  "observed_at",
+                  "elapsed_realtime_ms",
+                  "boot_count",
+                  "dpc_version",
+                  "android_version",
+                  "api_level",
+                  "security_patch",
+                  "capabilities",
+                  "current_policy_uuid",
+                  "current_revision_uuid",
+                  "policy_status",
+                  "enforcement_healthy",
+                  "queued_event_count"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Check-in accepted or exact replay acknowledged"
+          },
+          "400": {
+            "description": "Malformed check-in"
+          },
+          "401": {
+            "description": "Device request authentication failed"
+          },
+          "409": {
+            "description": "Check-in identity, device identity, or ordering conflict"
+          },
+          "429": {
+            "description": "Device status rate limit exceeded"
+          },
+          "503": {
+            "description": "Status persistence unavailable"
+          }
+        }
+      }
+    },
+    "/devices/{device_uuid}/policy-acknowledgements": {
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Record an authenticated policy verification or application outcome",
+        "security": [
+          {
+            "deviceCredential": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "protocol_version",
+                  "acknowledgement_uuid",
+                  "observed_at",
+                  "elapsed_realtime_ms",
+                  "boot_count",
+                  "policy_uuid",
+                  "revision_uuid",
+                  "outcome",
+                  "error_code"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Acknowledgement accepted or exact replay acknowledged"
+          },
+          "400": {
+            "description": "Malformed acknowledgement"
+          },
+          "401": {
+            "description": "Device request authentication failed"
+          },
+          "409": {
+            "description": "Acknowledgement identity, revision, or ordering conflict"
+          },
+          "429": {
+            "description": "Device status rate limit exceeded"
+          },
+          "503": {
+            "description": "Status persistence unavailable"
+          }
+        }
+      }
     }
   }
 }

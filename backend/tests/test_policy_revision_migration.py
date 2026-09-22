@@ -13,7 +13,7 @@ from app.extensions import db
 from app.services.policy_sync import get_policy_sync_payload
 
 LEGACY_REVISION = "f4a7c9e2b6d1"
-HEAD_REVISION = "e4a1b7c9d2f6"
+HEAD_REVISION = "a6d4e8f2b1c7"
 
 
 def _migration_app(database_path: Path) -> Flask:

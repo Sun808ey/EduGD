@@ -14,8 +14,9 @@ disabled; no Supabase Auth, Realtime or Edge Functions are introduced.
 The deployment configuration is defined by `environment.md`, `railway.json`,
 and `database-migration-runbook.md`. Source data migration,
 provider setup, Android offline/endpoint evidence and final cutover remain
-operator gates. Android code and a queued-event upload endpoint are not present
-in this checkout. Existing policy-sync contracts do not prove those features.
+operator gates. Android code is not present in this checkout. The backend defines a signed
+policy version 2 contract and an authenticated queued-event upload endpoint.
+Local tests do not prove Android interoperability or hosted migration.
 
 Registration/enrollment/authentication events must be preserved, but they do
 not all implement the same DB trigger/ORM immutability mechanisms as revisions
@@ -113,7 +114,7 @@ append-only evidence; never claim all audit tables have identical controls.
 
 - Global maximum request size is 1 MiB.
 - Registration and normal control-plane requests are limited to 16 KiB.
-- Future forensic-log batches receive a separate explicit bound.
+- Forensic-log batches are limited to 256 KiB and 200 events.
 - Registration begins at 10 requests per minute per source IP.
 - Policy pull begins at 60 requests per minute per authenticated device.
 - An untrusted request `device_uuid` must not become the authenticated rate key.

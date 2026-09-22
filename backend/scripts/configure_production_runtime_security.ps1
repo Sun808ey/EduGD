@@ -17,21 +17,28 @@ import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 
-EXPECTED_HEAD = "e4a1b7c9d2f6"
+EXPECTED_HEAD = "a6d4e8f2b1c7"
 TABLES = (
     "administrator_authentication_events",
     "administrator_permissions",
     "administrator_sessions",
     "administrators",
     "alembic_version",
+    "device_audit_batches",
+    "device_audit_chain_heads",
+    "device_check_ins",
+    "device_compliance_states",
     "device_credentials",
     "device_enrollment_events",
     "device_policy_assignments",
+    "device_policy_states",
     "device_registration_events",
     "device_request_nonces",
+    "device_security_events",
     "devices",
     "enrollment_tokens",
     "policies",
+    "policy_application_events",
     "policy_assignment_chain_heads",
     "policy_assignment_events",
     "policy_revisions",
@@ -39,24 +46,31 @@ TABLES = (
     "policy_synchronization_events",
 )
 READ_WRITE = {
-    "administrators",
     "administrator_permissions",
     "administrator_sessions",
-    "devices",
-    "policies",
-    "enrollment_tokens",
+    "administrators",
+    "device_audit_chain_heads",
+    "device_compliance_states",
     "device_credentials",
     "device_policy_assignments",
+    "device_policy_states",
+    "devices",
+    "enrollment_tokens",
+    "policies",
     "policy_assignment_chain_heads",
     "policy_synchronization_chain_heads",
 }
 NONCE_TABLE = "device_request_nonces"
 APPEND_ONLY = {
-    "policy_revisions",
-    "device_registration_events",
     "administrator_authentication_events",
+    "device_audit_batches",
+    "device_check_ins",
     "device_enrollment_events",
+    "device_registration_events",
+    "device_security_events",
+    "policy_application_events",
     "policy_assignment_events",
+    "policy_revisions",
     "policy_synchronization_events",
 }
 PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
@@ -193,13 +207,13 @@ try:
         ).scalar_one()
         assert rls_tables == len(TABLES)
         assert policies == len(TABLES)
-        assert permission_checks == 126
+        assert permission_checks == 175
 
     result = {
         "production_runtime_security": "PASS",
-        "permission_checks": 126,
-        "rls_tables": 18,
-        "runtime_policies": 18,
+        "permission_checks": 175,
+        "rls_tables": 25,
+        "runtime_policies": 25,
         "data_api_roles": "denied",
     }
 except Exception as error:

@@ -1,13 +1,15 @@
 import json
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from hashlib import sha256
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -1753,6 +1755,373 @@ class PolicySynchronizationEventImmutableError(RuntimeError):
         super().__init__("policy synchronization events are immutable")
 
 
+class DeviceAuditChainHead(db.Model):
+    __tablename__ = "device_audit_chain_heads"
+    __table_args__ = (
+        CheckConstraint(
+            "last_sequence >= 1", name="ck_device_audit_chain_heads_sequence"
+        ),
+        CheckConstraint(
+            "length(head_event_hash) = 32", name="ck_device_audit_chain_heads_hash"
+        ),
+    )
+
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"), primary_key=True
+    )
+    last_sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    head_event_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+
+class DeviceAuditBatch(db.Model):
+    __tablename__ = "device_audit_batches"
+    __table_args__ = (
+        UniqueConstraint("batch_uuid", name="uq_device_audit_batches_uuid"),
+        UniqueConstraint(
+            "device_id",
+            "first_sequence",
+            "last_sequence",
+            name="uq_device_audit_batches_device_sequence_range",
+        ),
+        CheckConstraint(
+            "first_sequence >= 1", name="ck_device_audit_batches_first_sequence"
+        ),
+        CheckConstraint(
+            "last_sequence >= first_sequence",
+            name="ck_device_audit_batches_sequence_range",
+        ),
+        CheckConstraint(
+            "previous_head IS NULL OR length(previous_head) = 32",
+            name="ck_device_audit_batches_previous_head",
+        ),
+        CheckConstraint(
+            "length(final_head) = 32", name="ck_device_audit_batches_final_head"
+        ),
+        CheckConstraint(
+            "length(content_hash) = 32", name="ck_device_audit_batches_content_hash"
+        ),
+        CheckConstraint(
+            "signature_algorithm IN ('ECDSA_P256_SHA256', 'RSA_2048_SHA256')",
+            name="ck_device_audit_batches_signature_algorithm",
+        ),
+        CheckConstraint(
+            "length(signature) BETWEEN 64 AND 512",
+            name="ck_device_audit_batches_signature_length",
+        ),
+        Index("ix_device_audit_batches_device_received", "device_id", "received_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    batch_uuid: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"), nullable=False
+    )
+    credential_id: Mapped[int] = mapped_column(
+        ForeignKey("device_credentials.id", ondelete="RESTRICT"), nullable=False
+    )
+    first_sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    last_sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    previous_head: Mapped[bytes | None] = mapped_column(LargeBinary(32), nullable=True)
+    final_head: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    signature_algorithm: Mapped[str] = mapped_column(String(32), nullable=False)
+    signature: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    content_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+
+class DeviceSecurityEvent(db.Model):
+    __tablename__ = "device_security_events"
+    __table_args__ = (
+        UniqueConstraint("event_uuid", name="uq_device_security_events_uuid"),
+        UniqueConstraint(
+            "device_id", "sequence", name="uq_device_security_events_device_sequence"
+        ),
+        UniqueConstraint("event_hash", name="uq_device_security_events_hash"),
+        CheckConstraint("sequence >= 1", name="ck_device_security_events_sequence"),
+        CheckConstraint(
+            "elapsed_realtime_ms >= 0", name="ck_device_security_events_elapsed"
+        ),
+        CheckConstraint("boot_count >= 0", name="ck_device_security_events_boot_count"),
+        CheckConstraint(
+            "previous_event_hash IS NULL OR length(previous_event_hash) = 32",
+            name="ck_device_security_events_previous_hash",
+        ),
+        CheckConstraint(
+            "length(event_hash) = 32", name="ck_device_security_events_hash"
+        ),
+        Index("ix_device_security_events_device_occurred", "device_id", "occurred_at"),
+        Index("ix_device_security_events_code_occurred", "event_code", "occurred_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_uuid: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("device_audit_batches.id", ondelete="RESTRICT"), nullable=False
+    )
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"), nullable=False
+    )
+    sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    elapsed_realtime_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    boot_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+    policy_uuid: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    revision_uuid: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
+    rule_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    event_metadata: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    previous_event_hash: Mapped[bytes | None] = mapped_column(
+        LargeBinary(32), nullable=True
+    )
+    event_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+
+class DeviceCheckIn(db.Model):
+    __tablename__ = "device_check_ins"
+    __table_args__ = (
+        UniqueConstraint("check_in_uuid", name="uq_device_check_ins_uuid"),
+        CheckConstraint("elapsed_realtime_ms >= 0", name="ck_device_check_ins_elapsed"),
+        CheckConstraint("boot_count >= 0", name="ck_device_check_ins_boot_count"),
+        CheckConstraint("dpc_version >= 1", name="ck_device_check_ins_dpc_version"),
+        CheckConstraint(
+            "api_level BETWEEN 29 AND 36", name="ck_device_check_ins_api_level"
+        ),
+        CheckConstraint(
+            "queued_event_count >= 0", name="ck_device_check_ins_queued_events"
+        ),
+        CheckConstraint(
+            "length(content_hash) = 32", name="ck_device_check_ins_content_hash"
+        ),
+        CheckConstraint(
+            "policy_status IN ('none', 'verified', 'applied', 'stale', 'recovery')",
+            name="ck_device_check_ins_policy_status",
+        ),
+        CheckConstraint(
+            "(current_policy_uuid IS NULL) = (current_revision_uuid IS NULL)",
+            name="ck_device_check_ins_policy_identity",
+        ),
+        Index("ix_device_check_ins_device_received", "device_id", "received_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    check_in_uuid: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"), nullable=False
+    )
+    credential_id: Mapped[int] = mapped_column(
+        ForeignKey("device_credentials.id", ondelete="RESTRICT"), nullable=False
+    )
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    elapsed_realtime_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    boot_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    dpc_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    android_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    api_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    security_patch: Mapped[date] = mapped_column(Date, nullable=False)
+    capabilities: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    current_policy_uuid: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
+    current_revision_uuid: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
+    policy_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    enforcement_healthy: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    queued_event_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+
+
+class DeviceComplianceState(db.Model):
+    __tablename__ = "device_compliance_states"
+    __table_args__ = (
+        CheckConstraint(
+            "last_boot_count >= 0", name="ck_device_compliance_states_boot_count"
+        ),
+        CheckConstraint(
+            "dpc_version >= 1", name="ck_device_compliance_states_dpc_version"
+        ),
+        CheckConstraint(
+            "api_level BETWEEN 29 AND 36", name="ck_device_compliance_states_api_level"
+        ),
+        CheckConstraint(
+            "queued_event_count >= 0", name="ck_device_compliance_states_queued_events"
+        ),
+        CheckConstraint(
+            "policy_status IN ('none', 'verified', 'applied', 'stale', 'recovery')",
+            name="ck_device_compliance_states_policy_status",
+        ),
+    )
+
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"), primary_key=True
+    )
+    last_check_in_id: Mapped[int] = mapped_column(
+        ForeignKey("device_check_ins.id", ondelete="RESTRICT"),
+        nullable=False,
+        unique=True,
+    )
+    last_observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    last_received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    last_boot_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    dpc_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    android_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    api_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    security_patch: Mapped[date] = mapped_column(Date, nullable=False)
+    capabilities: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    current_policy_uuid: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
+    current_revision_uuid: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
+    policy_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    enforcement_healthy: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    queued_event_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class PolicyApplicationEvent(db.Model):
+    __tablename__ = "policy_application_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "acknowledgement_uuid", name="uq_policy_application_events_uuid"
+        ),
+        CheckConstraint(
+            "elapsed_realtime_ms >= 0", name="ck_policy_application_events_elapsed"
+        ),
+        CheckConstraint(
+            "boot_count >= 0", name="ck_policy_application_events_boot_count"
+        ),
+        CheckConstraint(
+            "length(content_hash) = 32",
+            name="ck_policy_application_events_content_hash",
+        ),
+        CheckConstraint(
+            "outcome IN ('verified', 'applied', 'failed', 'rejected', 'rolled_back', 'cleared')",
+            name="ck_policy_application_events_outcome",
+        ),
+        CheckConstraint(
+            "(policy_uuid IS NULL) = (revision_uuid IS NULL)",
+            name="ck_policy_application_events_identity",
+        ),
+        Index(
+            "ix_policy_application_events_device_received", "device_id", "received_at"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    acknowledgement_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False
+    )
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"), nullable=False
+    )
+    credential_id: Mapped[int] = mapped_column(
+        ForeignKey("device_credentials.id", ondelete="RESTRICT"), nullable=False
+    )
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    elapsed_realtime_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    boot_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    policy_uuid: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    revision_uuid: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    content_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+
+
+class DevicePolicyState(db.Model):
+    __tablename__ = "device_policy_states"
+
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"), primary_key=True
+    )
+    last_event_id: Mapped[int] = mapped_column(
+        ForeignKey("policy_application_events.id", ondelete="RESTRICT"),
+        nullable=False,
+        unique=True,
+    )
+    policy_uuid: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    revision_uuid: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
+class DeviceAuditImmutableError(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__("device audit evidence is immutable")
+
+
+@event.listens_for(Session, "before_flush")
+def _reject_device_audit_mutation(
+    session: Session, _flush_context: object, _instances: object
+) -> None:
+    immutable_types = (
+        DeviceAuditBatch,
+        DeviceCheckIn,
+        DeviceSecurityEvent,
+        PolicyApplicationEvent,
+    )
+    if any(isinstance(value, immutable_types) for value in session.deleted):
+        raise DeviceAuditImmutableError()
+    if any(
+        isinstance(value, immutable_types)
+        and session.is_modified(value, include_collections=False)
+        for value in session.dirty
+    ):
+        raise DeviceAuditImmutableError()
+
+
 @event.listens_for(Session, "before_flush")
 def _reject_policy_synchronization_event_mutation(
     session: Session,
@@ -1785,13 +2154,21 @@ __all__ = [
     "DEVICE_STATUSES",
     "ENROLLMENT_TOKEN_STATUSES",
     "Device",
+    "DeviceAuditBatch",
+    "DeviceAuditChainHead",
+    "DeviceAuditImmutableError",
+    "DeviceCheckIn",
+    "DeviceComplianceState",
     "DeviceCredential",
     "DeviceEnrollmentEvent",
     "DevicePolicyAssignment",
     "DeviceRegistrationEvent",
     "DeviceRequestNonce",
+    "DeviceSecurityEvent",
     "EnrollmentToken",
     "Policy",
+    "PolicyApplicationEvent",
+    "DevicePolicyState",
     "PolicyRevision",
     "PolicyRevisionImmutableError",
     "PolicyAssignmentChainHead",

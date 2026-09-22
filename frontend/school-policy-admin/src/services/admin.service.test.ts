@@ -72,4 +72,11 @@ describe('administrator API service', () => {
     await adminService.getDevice('../value')
     expect(api.get).toHaveBeenCalledWith('/admin/devices/..%2Fvalue', expect.anything())
   })
+
+  it('supports omitted filters and cancellation signals', async () => {
+    const signal = new AbortController().signal
+    vi.mocked(api.get).mockResolvedValueOnce({ data: { devices: [device], pagination } })
+    await expect(adminService.listDevices({ page: 1, perPage: 25 }, undefined, signal)).resolves.toMatchObject({ devices: [device] })
+    expect(api.get).toHaveBeenCalledWith('/admin/devices', { params: { page: 1, per_page: 25 }, signal })
+  })
 })

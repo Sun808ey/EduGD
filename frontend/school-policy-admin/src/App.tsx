@@ -10,6 +10,7 @@ const DashboardPage = lazy(() => import('@/pages/dashboard').then((module) => ({
 const DevicesPage = lazy(() => import('@/pages/devices').then((module) => ({ default: module.DevicesPage })))
 const PoliciesPage = lazy(() => import('@/pages/policies').then((module) => ({ default: module.PoliciesPage })))
 const PolicyDetailPage = lazy(() => import('@/pages/PolicyDetailPage').then((module) => ({ default: module.PolicyDetailPage })))
+const PolicyCreatePage = lazy(() => import('@/pages/PolicyCreatePage').then((module) => ({ default: module.PolicyCreatePage })))
 const LogsPage = lazy(() => import('@/pages/logs').then((module) => ({ default: module.LogsPage })))
 const DeviceDetailPage = lazy(() => import('@/pages/DeviceDetailPage').then((module) => ({ default: module.DeviceDetailPage })))
 
@@ -23,6 +24,7 @@ function App() {
           <Route path="/devices" element={<DevicesPage />} />
           <Route path="/devices/:deviceUuid" element={<DeviceDetailPage />} />
           <Route path="/policies" element={<PoliciesPage />} />
+          <Route path="/policies/new" element={<PolicyCreatePage />} />
           <Route path="/policies/:policyUuid" element={<PolicyDetailPage />} />
           <Route path="/logs" element={<LogsPage />} />
         </Route>

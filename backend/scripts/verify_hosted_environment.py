@@ -11,7 +11,7 @@ from app import create_app
 from app.deployment_identity import validate_deployment_identity
 from app.extensions import db
 
-EXPECTED_MIGRATION_HEAD = "ab4e6f2c9d71"
+EXPECTED_MIGRATION_HEAD = "c2f8a1b4d630"
 
 
 def require(condition: bool, message: str) -> None:

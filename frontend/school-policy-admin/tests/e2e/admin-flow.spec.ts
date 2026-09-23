@@ -10,13 +10,14 @@ const eventUuid = '55555555-5555-4555-8555-555555555555'
 const json = (route: Route, body: unknown, status = 200, headers: Record<string, string> = {}) => route.fulfill({ status, contentType: 'application/json', headers, body: JSON.stringify(body) })
 const pagination = (total: number) => ({ page: 1, per_page: 25, total, has_next: false })
 
-async function mockApi(page: Page, permissions = ['enrollment_token.issue', 'enrollment_token.revoke', 'device_credential.revoke', 'policy.assign']) {
+async function mockApi(page: Page, permissions = ['enrollment_token.issue', 'enrollment_token.revoke', 'device_credential.revoke', 'policy.assign', 'device.control', 'policy.manage']) {
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request()
     const pathname = new URL(request.url()).pathname
     if (pathname.endsWith('/admin/auth/login')) return json(route, { access_token: 'browser-memory-token', token_type: 'Bearer', expires_in: 900, administrator: { administrator_uuid: administratorUuid, username: 'admin', display_name: 'School Administrator' } })
     if (pathname.endsWith('/admin/auth/me')) return json(route, { administrator: { administrator_uuid: administratorUuid, username: 'admin', display_name: 'School Administrator', permissions } })
     if (pathname.endsWith('/admin/auth/logout')) return json(route, { message: 'administrator logged out' })
+    if (pathname.endsWith('/admin/dashboard/dpc-summary')) return json(route, { summary: { managed_devices: 1, active_block_overrides: 0, active_v3_assignments: 1, enforcement_failures: 0 } })
     if (pathname.endsWith('/admin/devices') && request.method() === 'GET') return json(route, { devices: [{ device_uuid: deviceUuid, android_version: '14', api_level: 34, status: 'active', enrollment_state: 'enrolled', legacy_enrollment_eligible: false, registered_at: '2026-09-10T10:00:00Z', last_sync_at: '2026-09-11T07:00:00Z', active_policy_assignment: null }], pagination: pagination(1) })
     if (pathname.endsWith('/admin/policies') && request.method() === 'GET') return json(route, { policies: [{ policy_uuid: policyUuid, name: 'School day policy', status: 'active', created_at: '2026-09-10T10:00:00Z', updated_at: '2026-09-11T07:00:00Z', latest_revision: { revision_uuid: revisionUuid, version: 1, payload: { camera_disabled: true }, content_hash: 'abc123', created_at: '2026-09-11T07:00:00Z', created_by: 'admin' } }], pagination: pagination(1) })
     if (pathname.endsWith('/admin/audit-events')) return json(route, { audit_events: [{ event_type: 'device_enrollment', event_uuid: eventUuid, category: 'enrollment_succeeded', occurred_at: '2026-09-11T07:00:00Z', failure_class: null }], pagination: pagination(1) })
@@ -31,7 +32,7 @@ async function signIn(page: Page) {
   await page.getByLabel('Password').fill('correct horse battery staple')
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page).toHaveURL(/\/dashboard$/)
-  await expect(page.getByRole('heading', { name: 'System overview' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Device policy at a glance' })).toBeVisible()
 }
 
 test('authenticates in memory and renders the API-backed administration flow', async ({ page }) => {
@@ -73,7 +74,7 @@ test('honors the login Retry-After response', async ({ page }) => {
 
 test('clears a revoked session when a protected API call returns 401', async ({ page }) => {
   await mockApi(page)
-  await page.route('**/api/v1/admin/devices**', (route) => json(route, { error: { code: 'authentication_failed', message: 'authentication failed' } }, 401))
+  await page.route('**/api/v1/admin/dashboard/dpc-summary', (route) => json(route, { error: { code: 'authentication_failed', message: 'authentication failed' } }, 401))
   await page.goto('/login')
   await page.getByLabel('Username').fill('admin')
   await page.getByLabel('Password').fill('password')

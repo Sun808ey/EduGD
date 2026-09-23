@@ -6,13 +6,15 @@ import { adminService } from '@/services/admin.service'
 import { Pagination } from '@/components/ui/Pagination'
 import { ErrorState, LoadingState } from '@/components/ui/AsyncState'
 import { formatDate } from '@/lib/format'
+import { useAuth } from '@/hooks/useAuth'
 
 export function PoliciesPage() {
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState('')
+  const { hasPermission } = useAuth()
   const query = useQuery({ queryKey: ['policies', page, status], queryFn: ({ signal }) => adminService.listPolicies({ page, perPage: 25 }, status || undefined, signal) })
   return <section className="space-y-6">
-    <header><h1 className="text-3xl font-semibold">Policies</h1><p className="mt-2 text-sm text-slate-600">Review policy definitions and their immutable revision history.</p></header>
+    <header className="flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-3xl font-semibold">Policies</h1><p className="mt-2 text-sm text-slate-600">Review policy definitions and their immutable revision history.</p></div>{hasPermission('policy.manage') && <Link to="/policies/new" className="rounded-full bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white">Create v3 policy</Link>}</header>
     <label className="block max-w-xs text-sm font-medium">Status
       <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1) }} className="mt-2 h-10 w-full rounded-lg border bg-white px-3"><option value="">All statuses</option><option value="draft">Draft</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="revoked">Revoked</option></select>
     </label>

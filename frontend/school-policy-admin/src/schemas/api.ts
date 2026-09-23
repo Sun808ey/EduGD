@@ -19,6 +19,8 @@ export const administratorSchema = z.object({
     'enrollment_token.revoke',
     'device_credential.revoke',
     'policy.assign',
+    'device.control',
+    'policy.manage',
   ])),
 })
 
@@ -131,3 +133,10 @@ export const auditEventSchema = z.object({
 })
 export const auditEventsSchema = z.object({ audit_events: z.array(auditEventSchema), pagination })
 export const messageSchema = z.object({ message: z.string() })
+
+export const blockOverrideSchema = z.object({ version: z.number().int().positive(), status: z.enum(['active', 'cleared']), reason: z.string(), issued_at: z.string(), cleared_at: nullableDate })
+export const blockOverrideResponseSchema = z.object({ override: blockOverrideSchema.nullable() })
+export const dpcEvidenceSchema = z.object({ kind: z.enum(['usage', 'override', 'web_filter', 'policy_application']), occurred_at: nullableDate, usage_date: z.string().optional(), active_minutes: z.number().int().optional(), operation: z.string().optional(), reason: z.string().optional(), domain_hash: z.string().optional(), rule_id: z.string().optional(), outcome: z.string().optional(), error_code: z.string().nullable().optional(), policy_uuid: uuid.nullable().optional(), revision_uuid: uuid.nullable().optional() })
+export const dpcEvidenceResponseSchema = z.object({ evidence: z.array(dpcEvidenceSchema), pagination })
+export const dpcSummarySchema = z.object({ summary: z.object({ managed_devices: z.number().int().nonnegative(), active_block_overrides: z.number().int().nonnegative(), active_v3_assignments: z.number().int().nonnegative(), enforcement_failures: z.number().int().nonnegative() }) })
+export const policyCreateSchema = z.object({ policy_uuid: uuid, status: z.enum(['draft', 'active', 'inactive', 'revoked']) })

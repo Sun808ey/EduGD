@@ -89,6 +89,7 @@ ADMINISTRATOR_PERMISSIONS = frozenset(
         "device_credential.revoke",
         "policy.assign",
         "device.control",
+        "policy.manage",
     }
 )
 ADMINISTRATOR_AUTHENTICATION_EVENT_CATEGORIES = frozenset(
@@ -328,7 +329,7 @@ class AdministratorPermission(db.Model):
         CheckConstraint(
             "permission IN ('administrator.manage', "
             "'enrollment_token.issue', 'enrollment_token.revoke', "
-            "'device_credential.revoke', 'policy.assign')",
+            "'device_credential.revoke', 'policy.assign', 'device.control', 'policy.manage')",
             name="ck_administrator_permissions_permission",
         ),
         CheckConstraint(
@@ -2159,6 +2160,28 @@ class DeviceUsageDaily(db.Model):
     reported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now())
 
 
+class DeviceWebFilterEvent(db.Model):
+    """Privacy-limited immutable evidence for a blocked domain decision."""
+
+    __tablename__ = "device_web_filter_events"
+    __table_args__ = (
+        UniqueConstraint("event_uuid", name="uq_device_web_filter_events_uuid"),
+        CheckConstraint("length(domain_hash) = 32", name="ck_device_web_filter_events_domain_hash"),
+        CheckConstraint("outcome = 'blocked'", name="ck_device_web_filter_events_outcome"),
+        Index("ix_device_web_filter_events_device_observed", "device_id", "observed_at"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_uuid: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False, default=uuid4)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="RESTRICT"), nullable=False)
+    domain_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    rule_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False, default="blocked")
+    policy_uuid: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    revision_uuid: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now())
+
+
 class DeviceCapabilityCertification(db.Model):
     __tablename__ = "device_capability_certifications"
     __table_args__ = (
@@ -2209,6 +2232,8 @@ def _reject_device_audit_mutation(
         DeviceCheckIn,
         DeviceSecurityEvent,
         PolicyApplicationEvent,
+        DeviceWebFilterEvent,
+        DeviceControlEvent,
     )
     if any(isinstance(value, immutable_types) for value in session.deleted):
         raise DeviceAuditImmutableError()
@@ -2255,6 +2280,7 @@ __all__ = [
     "DeviceBlockOverride",
     "DeviceControlEvent",
     "DeviceUsageDaily",
+    "DeviceWebFilterEvent",
     "DeviceAuditBatch",
     "DeviceAuditChainHead",
     "DeviceCapabilityCertification",

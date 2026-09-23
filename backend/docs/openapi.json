@@ -356,6 +356,31 @@
             "description": "Paginated policies"
           }
         }
+      },
+      "post": {
+        "security": {
+          "administratorBearer": []
+        },
+        "responses": {
+          "200": {
+            "description": "Create a policy and immutable first revision"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Authorization failed"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "503": {
+            "description": "Persistence unavailable"
+          }
+        }
       }
     },
     "/admin/policies/{policy_uuid}": {
@@ -394,6 +419,31 @@
         "responses": {
           "200": {
             "description": "Policy revisions"
+          }
+        }
+      },
+      "post": {
+        "security": {
+          "administratorBearer": []
+        },
+        "responses": {
+          "200": {
+            "description": "Create an immutable policy revision"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Authorization failed"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "503": {
+            "description": "Persistence unavailable"
           }
         }
       }
@@ -777,6 +827,324 @@
           }
         }
       }
+    },
+    "/admin/dashboard/dpc-summary": {
+      "get": {
+        "security": {
+          "administratorBearer": []
+        },
+        "responses": {
+          "200": {
+            "description": "Privacy-safe DPC fleet summary"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Authorization failed"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "503": {
+            "description": "Persistence unavailable"
+          }
+        }
+      }
+    },
+    "/admin/devices/{device_uuid}/block-overrides": {
+      "get": {
+        "security": {
+          "administratorBearer": []
+        },
+        "responses": {
+          "200": {
+            "description": "Current persistent Block override"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Authorization failed"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "503": {
+            "description": "Persistence unavailable"
+          }
+        }
+      },
+      "post": {
+        "security": {
+          "administratorBearer": []
+        },
+        "responses": {
+          "200": {
+            "description": "Create or replace a persistent Block override"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Authorization failed"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "503": {
+            "description": "Persistence unavailable"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/admin/devices/{device_uuid}/block-overrides/clear": {
+      "post": {
+        "security": {
+          "administratorBearer": []
+        },
+        "responses": {
+          "200": {
+            "description": "Clear a persistent Block override"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Authorization failed"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "503": {
+            "description": "Persistence unavailable"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/admin/devices/{device_uuid}/control-evidence": {
+      "get": {
+        "security": {
+          "administratorBearer": []
+        },
+        "responses": {
+          "200": {
+            "description": "Paginated privacy-safe device control evidence"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Authorization failed"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "503": {
+            "description": "Persistence unavailable"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/admin/policies/{policy_uuid}/lifecycle": {
+      "post": {
+        "security": {
+          "administratorBearer": []
+        },
+        "responses": {
+          "200": {
+            "description": "Change policy lifecycle"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Authorization failed"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "503": {
+            "description": "Persistence unavailable"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "policy_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/devices/{device_uuid}/usage-reports": {
+      "post": {
+        "security": {
+          "deviceCredential": []
+        },
+        "responses": {
+          "200": {
+            "description": "Submit idempotent daily device usage"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Authorization failed"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "503": {
+            "description": "Persistence unavailable"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/devices/{device_uuid}/web-filter-events": {
+      "post": {
+        "security": {
+          "deviceCredential": []
+        },
+        "responses": {
+          "200": {
+            "description": "Submit blocked-domain evidence without a raw domain"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Authorization failed"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "503": {
+            "description": "Persistence unavailable"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/sync/v3/devices/{device_uuid}/state": {
+      "get": {
+        "security": {
+          "deviceCredential": []
+        },
+        "responses": {
+          "200": {
+            "description": "Get signed protocol v3 policy and override state"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "403": {
+            "description": "Authorization failed"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "503": {
+            "description": "Persistence unavailable"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "device_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
     }
   }
 }

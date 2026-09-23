@@ -4,6 +4,8 @@ export type AdministratorPermission =
   | 'enrollment_token.revoke'
   | 'device_credential.revoke'
   | 'policy.assign'
+  | 'device.control'
+  | 'policy.manage'
 
 export interface Administrator {
   administrator_uuid: string
@@ -108,3 +110,7 @@ export interface PageRequest {
 export interface ApiFailure {
   error: { code: string; message: string }
 }
+
+export interface BlockOverride { version: number; status: 'active' | 'cleared'; reason: string; issued_at: string; cleared_at: string | null }
+export interface DpcEvidence { kind: 'usage' | 'override' | 'web_filter' | 'policy_application'; occurred_at: string | null; usage_date?: string; active_minutes?: number; operation?: string; reason?: string; domain_hash?: string; rule_id?: string; outcome?: string; error_code?: string | null; policy_uuid?: string | null; revision_uuid?: string | null }
+export interface DpcSummary { managed_devices: number; active_block_overrides: number; active_v3_assignments: number; enforcement_failures: number }

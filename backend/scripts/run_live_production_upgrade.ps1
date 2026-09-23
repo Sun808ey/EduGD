@@ -54,7 +54,7 @@ from app.extensions import db
 
 PROJECT_REF = "hszskxrgkptbytuquyfu"
 EXPECTED_START = "d8f1a3c6e9b2"
-EXPECTED_HEAD = "ab4e6f2c9d71"
+EXPECTED_HEAD = "c2f8a1b4d630"
 EXPECTED_HOST = "aws-1-eu-west-1.pooler.supabase.com"
 EXPECTED_USER = "postgres.hszskxrgkptbytuquyfu"
 NEW_V3_TABLES = {

@@ -3,7 +3,8 @@ import {
   assignmentMutationSchema, auditEventsSchema, clearMutationSchema,
   currentAssignmentSchema, deviceDetailSchema, devicesSchema,
   enrollmentTokensSchema, issuedEnrollmentTokenSchema, messageSchema,
-  policiesSchema, policyDetailSchema, revisionsSchema,
+  policiesSchema, policyDetailSchema, revisionsSchema, blockOverrideResponseSchema,
+  dpcEvidenceResponseSchema, dpcSummarySchema, policyCreateSchema,
 } from '@/schemas/api'
 import type { PageRequest, Policy } from '@/types/api.types'
 
@@ -72,5 +73,35 @@ export const adminService = {
   async listAuditEvents(request: PageRequest, eventType?: string, signal?: AbortSignal) {
     const response = await api.get('/admin/audit-events', { params: { ...pageParams(request), ...(eventType ? { event_type: eventType } : {}) }, signal })
     return auditEventsSchema.parse(response.data)
+  },
+  async getDpcSummary(signal?: AbortSignal) {
+    const response = await api.get('/admin/dashboard/dpc-summary', { signal })
+    return dpcSummarySchema.parse(response.data).summary
+  },
+  async getBlockOverride(deviceUuid: string, signal?: AbortSignal) {
+    const response = await api.get(`/admin/devices/${path(deviceUuid)}/block-overrides`, { signal })
+    return blockOverrideResponseSchema.parse(response.data).override
+  },
+  async setBlockOverride(deviceUuid: string, reason: string) {
+    const response = await api.post(`/admin/devices/${path(deviceUuid)}/block-overrides`, { reason })
+    return blockOverrideResponseSchema.parse(response.data).override
+  },
+  async clearBlockOverride(deviceUuid: string, reason: string) {
+    const response = await api.post(`/admin/devices/${path(deviceUuid)}/block-overrides/clear`, { reason })
+    return blockOverrideResponseSchema.parse(response.data).override
+  },
+  async listDpcEvidence(deviceUuid: string, request: PageRequest, signal?: AbortSignal) {
+    const response = await api.get(`/admin/devices/${path(deviceUuid)}/control-evidence`, { params: pageParams(request), signal })
+    return dpcEvidenceResponseSchema.parse(response.data)
+  },
+  async createPolicy(name: string, payload: Record<string, unknown>) {
+    const response = await api.post('/admin/policies', { name, payload })
+    return policyCreateSchema.parse(response.data)
+  },
+  async createPolicyRevision(policyUuid: string, payload: Record<string, unknown>) {
+    return api.post(`/admin/policies/${path(policyUuid)}/revisions`, { payload })
+  },
+  async setPolicyLifecycle(policyUuid: string, status: 'active' | 'inactive' | 'revoked', reason: string) {
+    return api.post(`/admin/policies/${path(policyUuid)}/lifecycle`, { status, reason })
   },
 }

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+from typing import Any
+from uuid import UUID
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from flask import Blueprint, Response, current_app, g, request
@@ -35,14 +37,14 @@ dpc_controls_bp = Blueprint("dpc_controls", __name__)
 
 
 def _admin_context_id() -> int:
-    return g.administrator_request_context.administrator.id
+    return int(g.administrator_request_context.administrator.id)
 
 
-def _uuid(value: str):
+def _uuid(value: str) -> UUID:
     return parse_canonical_uuid4(value)
 
 
-def _override(value):
+def _override(value: DeviceBlockOverride) -> dict[str, Any]:
     return {
         "version": value.version,
         "status": value.status,

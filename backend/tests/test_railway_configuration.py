@@ -15,7 +15,9 @@ def test_railway_keeps_migrations_explicit_and_checks_dependencies(
 ) -> None:
     configuration = json.loads((BACKEND / "railway.json").read_text())
     assert "db upgrade" not in configuration["build"]["buildCommand"]
-    assert configuration["deploy"]["preDeployCommand"] == []
+    assert configuration["deploy"]["preDeployCommand"] == [
+        "python -m scripts.verify_hosted_environment"
+    ]
     assert (
         configuration["deploy"]["startCommand"]
         == "gunicorn --config gunicorn.conf.py run:app"

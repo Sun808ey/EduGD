@@ -6,6 +6,7 @@ import base64
 import hashlib
 import re
 from copy import deepcopy
+from typing import cast
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -86,8 +87,9 @@ def validate_policy_v3(value: object) -> dict[str, object]:
         raise PolicyContractError("invalid daily_limit_minutes")
     if isinstance(reset, bool) or not isinstance(reset, int) or not 0 <= reset <= 1439:
         raise PolicyContractError("invalid reset_minute")
+    modes = cast(list[dict[str, object]], common["modes"])
     if not isinstance(exhausted, str) or exhausted not in {
-        m["mode_id"] for m in common["modes"]
+        m["mode_id"] for m in modes
     }:
         raise PolicyContractError("invalid exhausted_mode_id")
     web = value["web_filter"]

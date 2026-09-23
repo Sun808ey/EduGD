@@ -49,13 +49,19 @@ def upgrade() -> None:
                 IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN REVOKE ALL PRIVILEGES ON TABLE {table} FROM edug_runtime; END IF;
                 END $$"""
             )
-            op.execute(f"GRANT SELECT ON TABLE {table} TO edug_runtime")
             if table == "device_block_overrides":
-                op.execute(f"GRANT INSERT, UPDATE ON TABLE {table} TO edug_runtime")
+                privileges = "SELECT, INSERT, UPDATE"
             elif table == "device_usage_daily":
-                op.execute(f"GRANT INSERT, UPDATE ON TABLE {table} TO edug_runtime")
+                privileges = "SELECT, INSERT, UPDATE"
             else:
-                op.execute(f"GRANT INSERT ON TABLE {table} TO edug_runtime")
+                privileges = "SELECT, INSERT"
+            op.execute(
+                f"""DO $$ BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
+                    GRANT {privileges} ON TABLE {table} TO edug_runtime;
+                END IF;
+                END $$"""
+            )
             op.execute(
                 f"""DO $$ BEGIN
                 IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
@@ -64,7 +70,13 @@ def upgrade() -> None:
                 END IF;
                 END $$"""
             )
-        op.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO edug_runtime")
+        op.execute(
+            """DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
+                GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO edug_runtime;
+            END IF;
+            END $$"""
+        )
         op.execute("""CREATE FUNCTION edug_reject_device_control_event_mutation() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'device control evidence is immutable'; END; $$ LANGUAGE plpgsql""")
         op.execute("CREATE TRIGGER trg_device_control_events_immutable BEFORE UPDATE OR DELETE ON device_control_events FOR EACH ROW EXECUTE FUNCTION edug_reject_device_control_event_mutation()")
 

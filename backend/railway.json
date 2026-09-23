@@ -5,7 +5,7 @@
     "buildCommand": "pip install --requirement requirements.txt"
   },
   "deploy": {
-    "preDeployCommand": [],
+    "preDeployCommand": ["python -m scripts.verify_hosted_environment"],
     "startCommand": "gunicorn --config gunicorn.conf.py run:app",
     "healthcheckPath": "/api/v1/ready",
     "healthcheckTimeout": 120,

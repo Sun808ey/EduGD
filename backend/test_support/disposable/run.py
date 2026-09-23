@@ -2,7 +2,7 @@
 
 import pytest
 from flask_migrate import upgrade
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 from app import create_app
 from test_support.postgres_safety import (
@@ -21,6 +21,18 @@ def main() -> int:
             validate_connected_postgres_test_environment(
                 connection, approved, require_destructive=True
             )
+            connection.execute(
+                text(
+                    """DO $$ DECLARE role_name text; BEGIN
+                    FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated', 'service_role', 'edug_runtime'] LOOP
+                        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
+                            EXECUTE format('CREATE ROLE %I NOLOGIN', role_name);
+                        END IF;
+                    END LOOP;
+                    END $$"""
+                )
+            )
+            connection.commit()
     finally:
         engine.dispose()
     application = create_app("postgres-testing")

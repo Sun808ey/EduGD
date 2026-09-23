@@ -11,6 +11,13 @@ from app import create_app
 from app.deployment_identity import validate_deployment_identity
 from app.extensions import db
 
+EXPECTED_MIGRATION_HEAD = "ab4e6f2c9d71"
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise RuntimeError(message)
+
 
 def main() -> int:
     stage = "deployment_identity"
@@ -22,29 +29,35 @@ def main() -> int:
         with app.app_context(), db.engine.connect() as connection:
             stage = "database_runtime_role"
             connection.exec_driver_sql("SET TRANSACTION READ ONLY")
-            assert (
+            require(
                 connection.execute(text("SELECT current_user")).scalar()
-                == "edug_runtime"
+                == "edug_runtime",
+                "unexpected database runtime role",
             )
             stage = "database_tls"
-            assert (
+            require(
                 connection.execute(
                     text("SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()")
                 ).scalar()
-                is True
+                is True,
+                "database TLS is not enabled",
             )
             stage = "database_revision"
-            assert (
+            require(
                 connection.execute(
                     text("SELECT version_num FROM public.alembic_version")
                 ).scalar_one()
-                == "fa3d7e1b9c42"
+                == EXPECTED_MIGRATION_HEAD,
+                "unexpected Alembic revision",
             )
             stage = "database_read_permissions"
             for table in db.metadata.sorted_tables:
                 connection.execute(table.select().limit(0))
         stage = "readiness"
-        assert app.test_client().get("/api/v1/ready").status_code == 200
+        require(
+            app.test_client().get("/api/v1/ready").status_code == 200,
+            "readiness check failed",
+        )
     except Exception as error:
         result = {"hosted_verification": "FAIL", "stage": stage}
         if stage == "database_connection":

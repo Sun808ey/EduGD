@@ -24,6 +24,18 @@ from app.models import (
 
 pytestmark = pytest.mark.postgres
 
+HARDENED_FUNCTIONS = {
+    "edug_reject_certification_mutation",
+    "edug_reject_device_audit_mutation",
+    "edug_reject_device_control_event_mutation",
+    "edug_reject_device_status_evidence_mutation",
+    "edug_reject_policy_assignment_event_mutation",
+    "edug_reject_policy_revision_mutation",
+    "edug_reject_policy_sync_event_mutation",
+    "edug_valid_blocked_apps",
+    "edug_valid_policy_revision_payload",
+}
+
 
 def _device() -> Device:
     return Device(device_uuid=uuid4(), android_version="10", api_level=29)
@@ -228,6 +240,7 @@ def test_existing_schema_metadata_and_constraints(
         constraint["name"] for constraint in inspector.get_check_constraints("devices")
     }
     assert device_checks == {
+        "ck_devices_active_api_supported",
         "ck_devices_android_api_match",
         "ck_devices_api_level_supported",
         "ck_devices_status",
@@ -651,7 +664,7 @@ def test_existing_check_constraints(postgres_session: Session) -> None:
                     status="invalid",
                 )
             )
-    for android_version, api_level in (("10", 28), ("11", 30)):
+    for android_version, api_level in (("10", 30), ("11", 29)):
         with pytest.raises(IntegrityError):
             with postgres_session.begin_nested():
                 postgres_session.execute(
@@ -662,6 +675,25 @@ def test_existing_check_constraints(postgres_session: Session) -> None:
                         status="active",
                     )
                 )
+    with pytest.raises(IntegrityError):
+        with postgres_session.begin_nested():
+            postgres_session.execute(
+                insert(Device).values(
+                    device_uuid=uuid4(),
+                    android_version="9",
+                    api_level=28,
+                    status="active",
+                )
+            )
+    with postgres_session.begin_nested():
+        postgres_session.execute(
+            insert(Device).values(
+                device_uuid=uuid4(),
+                android_version="9",
+                api_level=28,
+                status="suspended",
+            )
+        )
     policy = _policy()
     postgres_session.add(policy)
     postgres_session.flush()
@@ -922,3 +954,29 @@ def test_partial_unique_index_allows_only_one_active_assignment(
         )
         is replacement
     )
+
+
+def test_security_functions_have_fixed_resolution_and_runtime_only_execution(
+    postgres_session: Session,
+) -> None:
+    rows = postgres_session.execute(
+        text(
+            """SELECT p.proname,
+            COALESCE(p.proconfig, ARRAY[]::text[]) AS configuration,
+            has_function_privilege('edug_runtime', p.oid, 'EXECUTE') AS runtime_execute,
+            has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_execute,
+            has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated_execute,
+            has_function_privilege('service_role', p.oid, 'EXECUTE') AS service_execute
+            FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.proname = ANY(:names)"""
+        ),
+        {"names": list(HARDENED_FUNCTIONS)},
+    ).mappings()
+    observed = {row["proname"]: row for row in rows}
+    assert set(observed) == HARDENED_FUNCTIONS
+    for row in observed.values():
+        assert 'search_path=""' in row["configuration"]
+        assert row["runtime_execute"] is True
+        assert row["anon_execute"] is False
+        assert row["authenticated_execute"] is False
+        assert row["service_execute"] is False

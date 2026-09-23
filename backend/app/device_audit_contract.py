@@ -208,7 +208,11 @@ def build_audit_event(
     event["event_hash"] = hashlib.sha256(canonical_json_bytes(event)).hexdigest()
     if event_code == "web_filter_blocked":
         # Raw domains and URLs are intentionally not accepted into forensic evidence.
-        if set(event["metadata"]) != {"domain_hash"} or not _hash(event["metadata"]["domain_hash"], "domain_hash"):
+        metadata = event["metadata"]
+        assert isinstance(metadata, dict)
+        if set(metadata) != {"domain_hash"} or not _hash(
+            metadata["domain_hash"], "domain_hash"
+        ):
             raise DeviceAuditContractError("web filter evidence must contain only domain_hash")
     return event
 

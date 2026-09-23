@@ -38,15 +38,18 @@ credential is quickly deleted in a later commit.
 
 The step-by-step [database migration runbook](database-migration-runbook.md)
 is authoritative for the Supabase/Railway transition. `backend/railway.json`
-uses Railpack, a separate pre-deploy migration, Gunicorn and dependency-aware
-readiness. `gunicorn.conf.py` uses one worker/four threads, binding Railway PORT,
-with a five-connection default pool ceiling per instance. Include deployment
-overlap and provider services when checking the real database connection limit.
+uses Railpack, a read-only hosted verifier in pre-deploy, Gunicorn and
+dependency-aware readiness. Database DDL runs only through the reviewed
+migration-owner procedure before deployment. `gunicorn.conf.py` uses one
+worker/four threads, binding Railway PORT, with a five-connection default pool
+ceiling per instance. Include deployment overlap and provider services when
+checking the real database connection limit.
 
 Before production migration, verify an independent backup through a restore
-rehearsal. Railway runs `flask --app run.py db upgrade` once in pre-deploy only
-after operator approval and restored migration-state reconciliation.
-Gunicorn workers must never run migrations. A deployment is acceptable only
+rehearsal. Railway runs `python -m scripts.verify_hosted_environment` in
+pre-deploy only after the separate migration-owner procedure reaches the
+expected head. Gunicorn workers and Railway pre-deploy must never run
+migrations. A deployment is acceptable only
 when `/api/v1/health` returns 200, `/api/v1/ready` returns 200, shared limits
 work across workers, logs contain no credentials, and the assignment/sync
 audit-chain verifiers pass.

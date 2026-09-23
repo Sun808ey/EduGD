@@ -1,6 +1,6 @@
 # EduGD DPC v3 frontend readiness audit — 23 September 2026
 
-## Verdict: FAIL — staging database gate blocked rollout
+## Verdict: FAIL — production rollout has not been evaluated
 
 The implementation adds API-backed DPC policy authoring, Block state, control
 evidence, dashboard summary and a revised public landing page. The browser
@@ -21,20 +21,22 @@ privileged database configuration.
   stored or rendered.
 - OpenAPI parity, backend route tests, migration tests, frontend unit tests,
   Playwright/axe checks, and the production-configured Vite build pass locally.
-- Railway staging deployment `81a90eba-7e7b-42e8-9169-7b259fd01dcf` built the
-  reviewed clean archive for commit `1c7017e6`, but its read-only hosted
-  pre-deploy verifier stopped at `database_revision`. The staging database is
-  still on the prior migration head; this candidate requires
-  `c2f8a1b4d630`. The service remained on healthy deployment
-  `3c66f931-18a7-44ee-abcf-3c5aa70d99fd`; no production migration or deploy was
-  attempted.
+- The first clean staging deployment
+  `81a90eba-7e7b-42e8-9169-7b259fd01dcf` stopped at `database_revision`, which
+  correctly prevented an application/database contract mismatch.
+- The approved additive migration advanced staging from `ab4e6f2c9d71` to
+  `c2f8a1b4d630`. Read-only verification confirmed TLS, RLS, the runtime-only
+  grant, Data API-role denial, the evidence immutability trigger and the
+  `policy.manage` permission constraint.
+- Replacement staging deployment `c491c828-f5a4-4118-a0f6-78c37386d3be` is
+  `SUCCESS`. Its hosted verifier reported `PASS`; `/api/v1/health` and
+  `/api/v1/ready` returned HTTP 200; the approved staging Vercel origin passed
+  an administrator-route CORS preflight.
 
 ## Remaining PASS gates
 
-The approved additive staging migration must first advance the staging schema
-to `c2f8a1b4d630`, followed by a fresh staging deployment and hosted
-verification. Until that migration and verification pass, do not configure or
-deploy production. Hosted evidence must confirm OpenAPI parity, RLS, Data API
-denial, CORS, public status, policy authoring, assignment, Block/clear,
-evidence rendering and the production-configured Vite build. Record only
-redacted evidence in this file.
+Before this audit can become PASS, deploy the completed frontend to the staging
+Vercel project and verify authenticated, real-data policy authoring,
+assignment, Block/clear and evidence workflows. Production migration,
+configuration and deployment remain separate gates. Record only redacted
+evidence in this file.

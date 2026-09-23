@@ -12,6 +12,24 @@ branch_labels = None
 depends_on = None
 
 def upgrade() -> None:
+    if op.get_bind().dialect.name == "postgresql":
+        # v3 payload semantics are enforced by the application contract before
+        # persistence. Keep the database constraint strict for legacy v1 rows
+        # while allowing the additive v3 schema.
+        op.execute(
+            """CREATE OR REPLACE FUNCTION edug_valid_policy_revision_payload(value json)
+            RETURNS boolean LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $function$
+                SELECT CASE
+                    WHEN json_typeof(value) <> 'object' THEN FALSE
+                    WHEN json_typeof(value->'schema_version') <> 'number' THEN FALSE
+                    WHEN (value->>'schema_version')::integer = 3 THEN TRUE
+                    WHEN (value->>'schema_version')::integer <> 1 THEN FALSE
+                    WHEN (SELECT count(*) FROM json_object_keys(value)) <> 2 THEN FALSE
+                    WHEN value->'blocked_apps' IS NULL THEN FALSE
+                    ELSE edug_valid_blocked_apps(value->'blocked_apps')
+                END
+            $function$"""
+        )
     with op.batch_alter_table("administrator_permissions") as batch:
         batch.drop_constraint("ck_administrator_permissions_permission", type_="check")
         batch.create_check_constraint("ck_administrator_permissions_permission", "permission IN ('administrator.manage','enrollment_token.issue','enrollment_token.revoke','device_credential.revoke','policy.assign','device.control')")
@@ -23,6 +41,14 @@ def upgrade() -> None:
         for table in ("device_block_overrides", "device_control_events", "device_usage_daily"):
             op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
             op.execute(f"REVOKE ALL PRIVILEGES ON TABLE {table} FROM PUBLIC")
+            op.execute(
+                f"""DO $$ BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOKE ALL PRIVILEGES ON TABLE {table} FROM anon; END IF;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN REVOKE ALL PRIVILEGES ON TABLE {table} FROM authenticated; END IF;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN REVOKE ALL PRIVILEGES ON TABLE {table} FROM service_role; END IF;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN REVOKE ALL PRIVILEGES ON TABLE {table} FROM edug_runtime; END IF;
+                END $$"""
+            )
         op.execute("""CREATE FUNCTION edug_reject_device_control_event_mutation() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'device control evidence is immutable'; END; $$ LANGUAGE plpgsql""")
         op.execute("CREATE TRIGGER trg_device_control_events_immutable BEFORE UPDATE OR DELETE ON device_control_events FOR EACH ROW EXECUTE FUNCTION edug_reject_device_control_event_mutation()")
 

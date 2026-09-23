@@ -1,11 +1,12 @@
+import base64
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
-import base64
 import pytest
-import app.routes.dpc_controls as routes
+from test_policy_contract_v3 import policy
 
+import app.routes.dpc_controls as routes
 from app.extensions import db
 from app.models import Administrator, Device
 from app.policy_contract import PolicyContractError
@@ -14,9 +15,8 @@ from app.policy_contract_v3 import (
     sign_policy_v3_envelope,
     verify_policy_v3_envelope,
 )
-from app.services.device_controls import report_usage
 from app.services.administrator_authentication import bootstrap_administrator
-from test_policy_contract_v3 import policy
+from app.services.device_controls import DeviceControlConflict, report_usage
 
 
 def test_v3_envelope_round_trip_and_tamper_detection() -> None:
@@ -67,13 +67,27 @@ def test_v3_rejects_invalid_limits_and_filter(field: str, value: object) -> None
     "payload",
     [
         {},
-        {"usage_date": "bad", "active_minutes": 1, "policy_uuid": str(uuid4()), "revision_uuid": str(uuid4())},
-        {"usage_date": "2026-09-22", "active_minutes": -1, "policy_uuid": str(uuid4()), "revision_uuid": str(uuid4())},
+        {
+            "usage_date": "bad",
+            "active_minutes": 1,
+            "policy_uuid": str(uuid4()),
+            "revision_uuid": str(uuid4()),
+        },
+        {
+            "usage_date": "2026-09-22",
+            "active_minutes": -1,
+            "policy_uuid": str(uuid4()),
+            "revision_uuid": str(uuid4()),
+        },
     ],
 )
 def test_usage_reports_reject_invalid_payloads(app, payload: object) -> None:
     with app.app_context():
-        device = Device(device_uuid=UUID("550e8400-e29b-41d4-a716-446655440000"), android_version="10", api_level=29)
+        device = Device(
+            device_uuid=UUID("550e8400-e29b-41d4-a716-446655440000"),
+            android_version="10",
+            api_level=29,
+        )
         db.session.add(device)
         db.session.commit()
         with pytest.raises(ValueError):
@@ -81,7 +95,9 @@ def test_usage_reports_reject_invalid_payloads(app, payload: object) -> None:
 
 
 def test_v3_route_requires_device_authentication(client) -> None:
-    response = client.get("/api/v1/sync/v3/devices/550e8400-e29b-41d4-a716-446655440000/state")
+    response = client.get(
+        "/api/v1/sync/v3/devices/550e8400-e29b-41d4-a716-446655440000/state"
+    )
     assert response.status_code == 401
 
 
@@ -97,26 +113,48 @@ def test_device_control_service_persists_block_clear_and_usage(app) -> None:
             reason="control coverage fixture",
         )
         administrator_id = db.session.query(Administrator.id).scalar()
-        device = Device(device_uuid=UUID("550e8400-e29b-41d4-a716-446655440000"), android_version="10", api_level=29)
+        device = Device(
+            device_uuid=UUID("550e8400-e29b-41d4-a716-446655440000"),
+            android_version="10",
+            api_level=29,
+        )
         db.session.add(device)
         db.session.commit()
         active = set_block(device.device_uuid, administrator_id, "teacher request")
         assert active.status == "active"
-        with pytest.raises(Exception):
+        with pytest.raises(DeviceControlConflict):
             set_block(device.device_uuid, administrator_id, "duplicate")
         cleared = clear_block(device.device_uuid, administrator_id, "lesson ended")
         assert cleared.status == "cleared"
-        usage = report_usage(device, {"usage_date": "2026-09-22", "active_minutes": 10, "policy_uuid": str(uuid4()), "revision_uuid": str(uuid4())})
+        usage = report_usage(
+            device,
+            {
+                "usage_date": "2026-09-22",
+                "active_minutes": 10,
+                "policy_uuid": str(uuid4()),
+                "revision_uuid": str(uuid4()),
+            },
+        )
         assert usage.active_minutes == 10
-        with pytest.raises(Exception):
-            report_usage(device, {"usage_date": "2026-09-22", "active_minutes": 9, "policy_uuid": str(uuid4()), "revision_uuid": str(uuid4())})
+        with pytest.raises(DeviceControlConflict):
+            report_usage(
+                device,
+                {
+                    "usage_date": "2026-09-22",
+                    "active_minutes": 9,
+                    "policy_uuid": str(uuid4()),
+                    "revision_uuid": str(uuid4()),
+                },
+            )
 
 
 def test_dpc_route_handlers_cover_success_and_failures(app, monkeypatch) -> None:
     import app.routes.dpc_controls as routes
 
     now = datetime.now(UTC)
-    override = SimpleNamespace(version=1, status="active", reason="ok", issued_at=now, cleared_at=None)
+    override = SimpleNamespace(
+        version=1, status="active", reason="ok", issued_at=now, cleared_at=None
+    )
     administrator = SimpleNamespace(id=1)
     context = SimpleNamespace(administrator=administrator)
     with app.test_request_context(json={"reason": "ok"}):
@@ -124,22 +162,44 @@ def test_dpc_route_handlers_cover_success_and_failures(app, monkeypatch) -> None
 
         g.administrator_request_context = context
         monkeypatch.setattr(routes, "set_block", lambda *_args: override)
-        response = routes.block.__wrapped__.__wrapped__("550e8400-e29b-41d4-a716-446655440000")
+        response = routes.block.__wrapped__.__wrapped__(
+            "550e8400-e29b-41d4-a716-446655440000"
+        )
         assert response.status_code == 201
-        monkeypatch.setattr(routes, "set_block", lambda *_args: (_ for _ in ()).throw(routes.DeviceControlConflict("already active")))
-        response = routes.block.__wrapped__.__wrapped__("550e8400-e29b-41d4-a716-446655440000")
+        monkeypatch.setattr(
+            routes,
+            "set_block",
+            lambda *_args: (_ for _ in ()).throw(
+                routes.DeviceControlConflict("already active")
+            ),
+        )
+        response = routes.block.__wrapped__.__wrapped__(
+            "550e8400-e29b-41d4-a716-446655440000"
+        )
         assert response.status_code == 409
         monkeypatch.setattr(routes, "clear_block", lambda *_args: override)
-        response = routes.unblock.__wrapped__.__wrapped__("550e8400-e29b-41d4-a716-446655440000")
+        response = routes.unblock.__wrapped__.__wrapped__(
+            "550e8400-e29b-41d4-a716-446655440000"
+        )
         assert response.status_code == 200
-        monkeypatch.setattr(routes, "clear_block", lambda *_args: (_ for _ in ()).throw(routes.DeviceControlError()))
-        response = routes.unblock.__wrapped__.__wrapped__("550e8400-e29b-41d4-a716-446655440000")
+        monkeypatch.setattr(
+            routes,
+            "clear_block",
+            lambda *_args: (_ for _ in ()).throw(routes.DeviceControlError()),
+        )
+        response = routes.unblock.__wrapped__.__wrapped__(
+            "550e8400-e29b-41d4-a716-446655440000"
+        )
         assert response.status_code == 503
     with app.test_request_context(json={}):
         from flask import g
 
-        g.device_authentication_context = SimpleNamespace(device=SimpleNamespace(device_uuid="550e8400-e29b-41d4-a716-446655440000"))
-        monkeypatch.setattr(routes, "report_usage", lambda *_args: (_ for _ in ()).throw(ValueError()))
+        g.device_authentication_context = SimpleNamespace(
+            device=SimpleNamespace(device_uuid="550e8400-e29b-41d4-a716-446655440000")
+        )
+        monkeypatch.setattr(
+            routes, "report_usage", lambda *_args: (_ for _ in ()).throw(ValueError())
+        )
         response = routes.usage.__wrapped__("550e8400-e29b-41d4-a716-446655440000")
         assert response.status_code == 400
 
@@ -156,27 +216,47 @@ def test_dpc_route_handlers_cover_success_and_failures(app, monkeypatch) -> None
     ],
 )
 def test_dpc_admin_route_errors(app, monkeypatch, operation, error, status) -> None:
-    import app.routes.dpc_controls as routes
     from flask import g
 
+    import app.routes.dpc_controls as routes
+
     with app.test_request_context(json={"reason": "ok"}):
-        g.administrator_request_context = SimpleNamespace(administrator=SimpleNamespace(id=1))
-        monkeypatch.setattr(routes, operation, lambda *_args, error=error: (_ for _ in ()).throw(error))
+        g.administrator_request_context = SimpleNamespace(
+            administrator=SimpleNamespace(id=1)
+        )
+        monkeypatch.setattr(
+            routes, operation, lambda *_args, error=error: (_ for _ in ()).throw(error)
+        )
         handler = routes.block if operation == "set_block" else routes.unblock
-        response = handler.__wrapped__.__wrapped__("550e8400-e29b-41d4-a716-446655440000")
+        response = handler.__wrapped__.__wrapped__(
+            "550e8400-e29b-41d4-a716-446655440000"
+        )
         assert response.status_code == status
 
 
-@pytest.mark.parametrize("error, status", [(routes.DeviceControlConflict("conflict"), 409), (routes.DeviceControlError(), 503)])
+@pytest.mark.parametrize(
+    "error, status",
+    [
+        (routes.DeviceControlConflict("conflict"), 409),
+        (routes.DeviceControlError(), 503),
+    ],
+)
 def test_dpc_usage_route_errors(app, monkeypatch, error, status) -> None:
-    import app.routes.dpc_controls as routes
     from flask import g
 
-    context = SimpleNamespace(device=SimpleNamespace(device_uuid="550e8400-e29b-41d4-a716-446655440000"))
+    import app.routes.dpc_controls as routes
+
+    context = SimpleNamespace(
+        device=SimpleNamespace(device_uuid="550e8400-e29b-41d4-a716-446655440000")
+    )
     with app.test_request_context(json={}):
         g.device_authentication_context = context
-        monkeypatch.setattr(routes, "get_device_authentication_context", lambda: context)
-        monkeypatch.setattr(routes, "report_usage", lambda *_args: (_ for _ in ()).throw(error))
+        monkeypatch.setattr(
+            routes, "get_device_authentication_context", lambda: context
+        )
+        monkeypatch.setattr(
+            routes, "report_usage", lambda *_args: (_ for _ in ()).throw(error)
+        )
         response = routes.usage.__wrapped__(context.device.device_uuid)
         assert response.status_code == status
 
@@ -184,7 +264,9 @@ def test_dpc_usage_route_errors(app, monkeypatch, error, status) -> None:
 def test_dpc_sync_route_reports_signing_configuration_errors(app, monkeypatch) -> None:
     import app.routes.dpc_controls as routes
 
-    context = SimpleNamespace(device=SimpleNamespace(device_uuid="550e8400-e29b-41d4-a716-446655440000", id=1))
+    context = SimpleNamespace(
+        device=SimpleNamespace(device_uuid="550e8400-e29b-41d4-a716-446655440000", id=1)
+    )
     monkeypatch.setattr(routes, "get_device_authentication_context", lambda: context)
     with app.test_request_context():
         app.config["DPC_POLICY_SIGNING_PRIVATE_KEY"] = None
@@ -196,9 +278,13 @@ def test_dpc_sync_route_reports_signing_configuration_errors(app, monkeypatch) -
 def test_dpc_sync_route_returns_signed_empty_state(app, monkeypatch) -> None:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-    context = SimpleNamespace(device=SimpleNamespace(device_uuid="550e8400-e29b-41d4-a716-446655440000", id=1))
+    context = SimpleNamespace(
+        device=SimpleNamespace(device_uuid="550e8400-e29b-41d4-a716-446655440000", id=1)
+    )
     private = Ed25519PrivateKey.generate()
-    app.config["DPC_POLICY_SIGNING_PRIVATE_KEY"] = base64.urlsafe_b64encode(private.private_bytes_raw()).rstrip(b"=").decode()
+    app.config["DPC_POLICY_SIGNING_PRIVATE_KEY"] = (
+        base64.urlsafe_b64encode(private.private_bytes_raw()).rstrip(b"=").decode()
+    )
     monkeypatch.setattr(routes, "get_device_authentication_context", lambda: context)
 
     original_session = routes.db.session
@@ -223,8 +309,30 @@ def test_dpc_sync_route_returns_signed_empty_state(app, monkeypatch) -> None:
     [
         {"schema_version": 3},
         {**policy(), "screen_time": {}},
-        {**policy(), "web_filter": {"default_action": "allow", "rules": [{"bad": True}]}},
-        {**policy(), "web_filter": {"default_action": "allow", "rules": [{"rule_id": "x", "domain": "example.com", "action": "block", "reason": "ok"}, {"rule_id": "x", "domain": "other.com", "action": "block", "reason": "ok"}]}},
+        {
+            **policy(),
+            "web_filter": {"default_action": "allow", "rules": [{"bad": True}]},
+        },
+        {
+            **policy(),
+            "web_filter": {
+                "default_action": "allow",
+                "rules": [
+                    {
+                        "rule_id": "x",
+                        "domain": "example.com",
+                        "action": "block",
+                        "reason": "ok",
+                    },
+                    {
+                        "rule_id": "x",
+                        "domain": "other.com",
+                        "action": "block",
+                        "reason": "ok",
+                    },
+                ],
+            },
+        },
     ],
 )
 def test_v3_rejects_malformed_policy_shapes(payload: object) -> None:
@@ -237,9 +345,54 @@ def test_v3_rejects_malformed_policy_shapes(payload: object) -> None:
 @pytest.mark.parametrize(
     "payload",
     [
-        {**policy(), "web_filter": {"default_action": "allow", "rules": [{"rule_id": "x", "domain": "example.com", "action": "block", "reason": ""}]}},
-        {**policy(), "web_filter": {"default_action": "allow", "rules": [{"rule_id": "x", "domain": "example.com", "action": "invalid", "reason": "ok"}]}},
-        {**policy(), "web_filter": {"default_action": "allow", "rules": [{"rule_id": "x", "domain": "example.com", "action": "block", "reason": "ok"}, {"rule_id": "y", "domain": "example.com", "action": "block", "reason": "ok"}]}},
+        {
+            **policy(),
+            "web_filter": {
+                "default_action": "allow",
+                "rules": [
+                    {
+                        "rule_id": "x",
+                        "domain": "example.com",
+                        "action": "block",
+                        "reason": "",
+                    }
+                ],
+            },
+        },
+        {
+            **policy(),
+            "web_filter": {
+                "default_action": "allow",
+                "rules": [
+                    {
+                        "rule_id": "x",
+                        "domain": "example.com",
+                        "action": "invalid",
+                        "reason": "ok",
+                    }
+                ],
+            },
+        },
+        {
+            **policy(),
+            "web_filter": {
+                "default_action": "allow",
+                "rules": [
+                    {
+                        "rule_id": "x",
+                        "domain": "example.com",
+                        "action": "block",
+                        "reason": "ok",
+                    },
+                    {
+                        "rule_id": "y",
+                        "domain": "example.com",
+                        "action": "block",
+                        "reason": "ok",
+                    },
+                ],
+            },
+        },
     ],
 )
 def test_v3_rejects_invalid_rule_details(payload: object) -> None:

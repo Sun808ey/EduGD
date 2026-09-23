@@ -26,7 +26,7 @@ $edugAttestation = Get-Content -LiteralPath $edugEvidence -Raw | ConvertFrom-Jso
 if (
     $edugAttestation.status -ne 'PASS' -or
     $edugAttestation.project_ref -ne 'hszskxrgkptbytuquyfu' -or
-    $edugAttestation.before_revision -ne 'd8f1a3c6e9b2' -or
+    $edugAttestation.before_revision -ne 'ab4e6f2c9d71' -or
     -not $edugAttestation.restore_completed_at -or
     -not $edugAttestation.artifact_sha256 -or
     -not $edugAttestation.restore_inventory_sha256 -or
@@ -53,13 +53,11 @@ from sqlalchemy.pool import NullPool
 from app.extensions import db
 
 PROJECT_REF = "hszskxrgkptbytuquyfu"
-EXPECTED_START = "d8f1a3c6e9b2"
+EXPECTED_START = "ab4e6f2c9d71"
 EXPECTED_HEAD = "c2f8a1b4d630"
 EXPECTED_HOST = "aws-1-eu-west-1.pooler.supabase.com"
 EXPECTED_USER = "postgres.hszskxrgkptbytuquyfu"
-NEW_V3_TABLES = {
-    "device_block_overrides", "device_control_events", "device_usage_daily",
-}
+NEW_RELEASE_TABLES = {"device_web_filter_events"}
 HARDENED_FUNCTIONS = {
     "edug_reject_certification_mutation", "edug_reject_device_audit_mutation",
     "edug_reject_device_control_event_mutation",
@@ -117,7 +115,7 @@ try:
     db.init_app(app)
     from app import models  # noqa: F401
     expected_final = {table.name for table in db.metadata.sorted_tables} | {"alembic_version"}
-    require(inventory == expected_final - NEW_V3_TABLES, "unexpected public schema inventory")
+    require(inventory == expected_final - NEW_RELEASE_TABLES, "unexpected public schema inventory")
 
     # Keep this session open throughout the upgrade so a second approved runner
     # cannot run concurrently. The maintenance-window gate protects application writers.
@@ -160,9 +158,19 @@ try:
             triggers = set(connection.execute(text(
                 "SELECT tgname FROM pg_trigger WHERE tgrelid IN "
                 "('public.device_audit_batches'::regclass, "
-                "'public.device_control_events'::regclass) AND NOT tgisinternal"
+                "'public.device_control_events'::regclass, "
+                "'public.device_web_filter_events'::regclass) AND NOT tgisinternal"
             )).scalars())
-            require({"trg_device_audit_batches_immutable", "trg_device_control_events_immutable"} <= triggers, "immutable trigger verification failed")
+            require({
+                "trg_device_audit_batches_immutable",
+                "trg_device_control_events_immutable",
+                "trg_device_web_filter_events_immutable",
+            } <= triggers, "immutable trigger verification failed")
+            require(connection.execute(text(
+                "SELECT pg_get_constraintdef(oid) LIKE '%policy.manage%' "
+                "FROM pg_constraint WHERE conrelid='public.administrator_permissions'::regclass "
+                "AND conname='ck_administrator_permissions_permission'"
+            )).scalar_one() is True, "policy management permission verification failed")
             configured = set(connection.execute(text(
                 "SELECT p.proname FROM pg_proc p JOIN pg_namespace n "
                 "ON n.oid=p.pronamespace WHERE n.nspname='public' "

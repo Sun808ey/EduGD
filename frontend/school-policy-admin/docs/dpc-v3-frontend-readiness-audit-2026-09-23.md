@@ -32,11 +32,17 @@ privileged database configuration.
   `SUCCESS`. Its hosted verifier reported `PASS`; `/api/v1/health` and
   `/api/v1/ready` returned HTTP 200; the approved staging Vercel origin passed
   an administrator-route CORS preflight.
+- Vercel staging deployment `dpl_GdSP5nP3dvtqcjkvL5svRDHkt6Fz` is `READY` at
+  the approved staging alias. Browser verification confirmed the landing page
+  and login route render, protected dashboard navigation redirects to login,
+  and no browser-console errors occurred. The build used only the staging
+  Flask API URL.
 
 ## Remaining PASS gates
 
-Before this audit can become PASS, deploy the completed frontend to the staging
-Vercel project and verify authenticated, real-data policy authoring,
-assignment, Block/clear and evidence workflows. Production migration,
-configuration and deployment remain separate gates. Record only redacted
+Before this audit can become PASS, verify authenticated, real-data policy
+authoring, assignment, Block/clear and evidence workflows with the existing
+staging administrator. Production requires a current backup/restore
+attestation for the observed `ab4e6f2c9d71` state, then the approved additive
+migration, backend release and frontend promotion. Record only redacted
 evidence in this file.

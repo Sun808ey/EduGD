@@ -49,9 +49,11 @@ service configuration.
 - Supabase staging is healthy and SSL enforcement is enabled.
 - The dashboard's **Download certificate** link currently serves
   `prod-ca-2021.crt`.
-- The staged `backend/certs/supabase-ca.pem` is byte-for-byte identical to that
-  dashboard download. Its file SHA-256 is
-  `700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7`.
+- The reviewed working-tree `backend/certs/supabase-ca.pem` was byte-for-byte
+  identical to that dashboard download before Git's text line-ending
+  normalization. The committed certificate's stable X.509 SHA-256 fingerprint
+  is `807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa`,
+  matching the dashboard certificate.
 - The certificate parses as `Supabase Root 2021 CA`, is valid until April 2031,
   and contains no private-key block.
 - Supabase PostgreSQL is operational and `public.alembic_version` is

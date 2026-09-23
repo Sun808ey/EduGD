@@ -1,6 +1,6 @@
 # EduGD DPC v3 frontend readiness audit — 23 September 2026
 
-## Verdict: FAIL — verification and hosted rollout pending
+## Verdict: FAIL — staging database gate blocked rollout
 
 The implementation adds API-backed DPC policy authoring, Block state, control
 evidence, dashboard summary and a revised public landing page. The browser
@@ -19,13 +19,22 @@ privileged database configuration.
 - Blocked-domain evidence contains only a 32-byte hash, rule identifier,
   outcome and policy identity. Raw domains, URLs and allowed browsing are not
   stored or rendered.
-- OpenAPI, backend route, migration, frontend unit, browser and hosted checks
-  remain required before this verdict can become PASS.
+- OpenAPI parity, backend route tests, migration tests, frontend unit tests,
+  Playwright/axe checks, and the production-configured Vite build pass locally.
+- Railway staging deployment `81a90eba-7e7b-42e8-9169-7b259fd01dcf` built the
+  reviewed clean archive for commit `1c7017e6`, but its read-only hosted
+  pre-deploy verifier stopped at `database_revision`. The staging database is
+  still on the prior migration head; this candidate requires
+  `c2f8a1b4d630`. The service remained on healthy deployment
+  `3c66f931-18a7-44ee-abcf-3c5aa70d99fd`; no production migration or deploy was
+  attempted.
 
 ## Remaining PASS gates
 
-Run backend static checks and tests, isolated PostgreSQL migration tests,
-frontend quality and Playwright/axe checks, then validate an actual staging
-deployment. Confirm OpenAPI parity, RLS, Data API denial, CORS, public status,
-policy authoring, assignment, Block/clear, evidence rendering and a
-production-configured Vite build. Record only redacted evidence in this file.
+The approved additive staging migration must first advance the staging schema
+to `c2f8a1b4d630`, followed by a fresh staging deployment and hosted
+verification. Until that migration and verification pass, do not configure or
+deploy production. Hosted evidence must confirm OpenAPI parity, RLS, Data API
+denial, CORS, public status, policy authoring, assignment, Block/clear,
+evidence rendering and the production-configured Vite build. Record only
+redacted evidence in this file.

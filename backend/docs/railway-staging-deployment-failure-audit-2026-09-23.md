@@ -97,6 +97,32 @@ HTTPS. If the attempt fails, no retry or speculative configuration change is
 permitted; the deployment ID, failing stage, logs, HTTP results, and final
 configuration must be appended here before stopping.
 
+## Recovery result
+
+Recovery commit `9e06ae94` was packaged from `git archive`, with the two tracked
+`.env.example` templates removed from the release directory. Its 262-file
+manifest contained the reviewed CA and no environment files, operator evidence,
+database dumps, private keys, local credentials, or additional certificates.
+
+The first CLI submission was rejected locally with `prefix not found` because
+the clean artifact was outside the checkout. Railway created no deployment and
+the previous deployment ID remained active. The corrected submission used
+`--path-as-root`; this created the sole hosted recovery attempt:
+
+- deployment: `e81f8a27-4152-487c-ae98-e4e9e906a1af`;
+- deployed recovery commit: `9e06ae94`;
+- Railpack: 0.39.0;
+- Python: 3.12.14;
+- hosted verifier: `PASS`;
+- Railway result: `SUCCESS`;
+- `/api/v1/health`: HTTP 200 over HTTPS;
+- `/api/v1/ready`: HTTP 200 over HTTPS.
+
+The verifier's pass covers verified PostgreSQL TLS, runtime role
+`edug_runtime`, migration head `fa3d7e1b9c42`, application-table permission
+checks, and Redis readiness. No migration ran, production was untouched, and no
+second hosted deployment was attempted.
+
 ## Separate hardening work
 
 Supabase reports nine `function_search_path_mutable` advisor warnings. They are

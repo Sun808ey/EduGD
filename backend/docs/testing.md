@@ -91,5 +91,14 @@ source/target verification uses `scripts.database_inventory`, described in the
 [migration runbook](database-migration-runbook.md). Unavailable external tests
 remain unresolved deployment gates, not passing tests.
 
-For a local Windows pytest temporary-directory permission error, rerun with
-authorized filesystem access; do not disable or remove migration tests.
+Local Windows runs use the repository-local `backend/.pytest-tmp-quality/`
+directory automatically, keeping pytest temporary files away from protected
+system temp directories. If the configured workspace directory is unavailable,
+use an equivalent writable workspace-local directory explicitly:
+
+```powershell
+python -m pytest --basetemp="$PWD/.pytest-tmp-quality"
+```
+
+Do not disable or remove migration tests, change the coverage threshold, or
+modify permissions on the system temp directory.

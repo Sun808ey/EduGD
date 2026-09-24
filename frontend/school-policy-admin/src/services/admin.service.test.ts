@@ -67,6 +67,32 @@ describe('administrator API service', () => {
     expect(api.post).toHaveBeenNthCalledWith(5, `/admin/devices/${deviceUuid}/credentials/revoke`, { reason: 'lost' })
   })
 
+  it('creates an administrator through the protected management endpoint', async () => {
+    const administrator = {
+      administrator_uuid: '66666666-6666-4666-8666-666666666666',
+      username: 'policy.admin',
+      permissions: ['administrator.manage', 'policy.manage'],
+      revoked_sessions: 0,
+    }
+    vi.mocked(api.post).mockResolvedValueOnce({ data: administrator })
+
+    await expect(adminService.createAdministrator(
+      'policy.admin',
+      'Policy Administrator',
+      'SecondAdministrator!2026',
+      'CurrentAdministrator!2026',
+      'approved provisioning',
+    )).resolves.toEqual(administrator)
+
+    expect(api.post).toHaveBeenCalledWith('/admin/administrators', {
+      username: 'policy.admin',
+      display_name: 'Policy Administrator',
+      password: 'SecondAdministrator!2026',
+      operator_password: 'CurrentAdministrator!2026',
+      reason: 'approved provisioning',
+    })
+  })
+
   it('encodes untrusted route parameters', async () => {
     vi.mocked(api.get).mockResolvedValueOnce({ data: { device } })
     await adminService.getDevice('../value')

@@ -32,6 +32,12 @@ export const loginSchema = z.object({
 })
 
 export const meSchema = z.object({ administrator: administratorSchema })
+export const administratorCreateSchema = z.object({
+  administrator_uuid: uuid,
+  username: z.string(),
+  permissions: administratorSchema.shape.permissions,
+  revoked_sessions: z.number().int().nonnegative(),
+})
 
 const assignmentSchema = z.object({
   event_uuid: uuid,

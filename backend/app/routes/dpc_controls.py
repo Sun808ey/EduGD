@@ -68,13 +68,40 @@ def _override(value: DeviceBlockOverride) -> dict[str, Any]:
 
 def _evidence_item(kind: str, row: object) -> dict[str, object]:
     if isinstance(row, DeviceUsageDaily):
-        return {"kind": kind, "occurred_at": isoformat_utc(row.reported_at), "usage_date": row.usage_date.isoformat(), "active_minutes": row.active_minutes, "policy_uuid": str(row.policy_uuid), "revision_uuid": str(row.revision_uuid)}
+        return {
+            "kind": kind,
+            "occurred_at": isoformat_utc(row.reported_at),
+            "usage_date": row.usage_date.isoformat(),
+            "active_minutes": row.active_minutes,
+            "policy_uuid": str(row.policy_uuid),
+            "revision_uuid": str(row.revision_uuid),
+        }
     if isinstance(row, DeviceControlEvent):
-        return {"kind": kind, "occurred_at": isoformat_utc(row.created_at), "operation": row.operation, "reason": row.reason}
+        return {
+            "kind": kind,
+            "occurred_at": isoformat_utc(row.created_at),
+            "operation": row.operation,
+            "reason": row.reason,
+        }
     if isinstance(row, DeviceWebFilterEvent):
-        return {"kind": kind, "occurred_at": isoformat_utc(row.observed_at), "domain_hash": row.domain_hash.hex(), "rule_id": row.rule_id, "outcome": row.outcome, "policy_uuid": str(row.policy_uuid), "revision_uuid": str(row.revision_uuid)}
+        return {
+            "kind": kind,
+            "occurred_at": isoformat_utc(row.observed_at),
+            "domain_hash": row.domain_hash.hex(),
+            "rule_id": row.rule_id,
+            "outcome": row.outcome,
+            "policy_uuid": str(row.policy_uuid),
+            "revision_uuid": str(row.revision_uuid),
+        }
     if isinstance(row, PolicyApplicationEvent):
-        return {"kind": kind, "occurred_at": isoformat_utc(row.observed_at), "outcome": row.outcome, "error_code": row.error_code, "policy_uuid": str(row.policy_uuid) if row.policy_uuid else None, "revision_uuid": str(row.revision_uuid) if row.revision_uuid else None}
+        return {
+            "kind": kind,
+            "occurred_at": isoformat_utc(row.observed_at),
+            "outcome": row.outcome,
+            "error_code": row.error_code,
+            "policy_uuid": str(row.policy_uuid) if row.policy_uuid else None,
+            "revision_uuid": str(row.revision_uuid) if row.revision_uuid else None,
+        }
     raise TypeError("unsupported evidence")
 
 
@@ -138,10 +165,17 @@ def unblock(device_uuid: str) -> Response:
 def get_block_override(device_uuid: str) -> Response:
     try:
         from app.models import Device
-        device = db.session.scalar(select(Device).where(Device.device_uuid == _uuid(device_uuid)))
+
+        device = db.session.scalar(
+            select(Device).where(Device.device_uuid == _uuid(device_uuid))
+        )
         if device is None:
             return admin_error("device_not_found", "device not found", 404)
-        override = db.session.scalar(select(DeviceBlockOverride).where(DeviceBlockOverride.device_id == device.id))
+        override = db.session.scalar(
+            select(DeviceBlockOverride).where(
+                DeviceBlockOverride.device_id == device.id
+            )
+        )
         return admin_json({"override": _override(override) if override else None})
     except ValueError:
         return admin_error("invalid_device_uuid", "device_uuid must be a UUIDv4", 400)
@@ -152,18 +186,42 @@ def get_block_override(device_uuid: str) -> Response:
 def control_evidence(device_uuid: str) -> Response:
     try:
         from app.models import Device
+
         pagination = parse_pagination()
-        device = db.session.scalar(select(Device).where(Device.device_uuid == _uuid(device_uuid)))
+        device = db.session.scalar(
+            select(Device).where(Device.device_uuid == _uuid(device_uuid))
+        )
         if device is None:
             return admin_error("device_not_found", "device not found", 404)
         limit = pagination.offset + pagination.per_page
         items: list[dict[str, object]] = []
-        for kind, model, timestamp in (("usage", DeviceUsageDaily, DeviceUsageDaily.reported_at), ("override", DeviceControlEvent, DeviceControlEvent.created_at), ("web_filter", DeviceWebFilterEvent, DeviceWebFilterEvent.observed_at), ("policy_application", PolicyApplicationEvent, PolicyApplicationEvent.observed_at)):
-            rows = db.session.scalars(select(model).where(model.device_id == device.id).order_by(timestamp.desc()).limit(limit)).all()
+        for kind, model, timestamp in (
+            ("usage", DeviceUsageDaily, DeviceUsageDaily.reported_at),
+            ("override", DeviceControlEvent, DeviceControlEvent.created_at),
+            ("web_filter", DeviceWebFilterEvent, DeviceWebFilterEvent.observed_at),
+            (
+                "policy_application",
+                PolicyApplicationEvent,
+                PolicyApplicationEvent.observed_at,
+            ),
+        ):
+            rows = db.session.scalars(
+                select(model)
+                .where(model.device_id == device.id)
+                .order_by(timestamp.desc())
+                .limit(limit)
+            ).all()
             items.extend(_evidence_item(kind, row) for row in rows)
         items.sort(key=lambda item: str(item["occurred_at"]), reverse=True)
         total = len(items)
-        return admin_json({"evidence": items[pagination.offset:pagination.offset + pagination.per_page], "pagination": pagination_payload(pagination, total=total)})
+        return admin_json(
+            {
+                "evidence": items[
+                    pagination.offset : pagination.offset + pagination.per_page
+                ],
+                "pagination": pagination_payload(pagination, total=total),
+            }
+        )
     except (ValueError, AdminRequestError):
         return admin_error("invalid_request", "invalid evidence request", 400)
 
@@ -173,14 +231,53 @@ def control_evidence(device_uuid: str) -> Response:
 def dpc_summary() -> Response:
     try:
         from app.models import Device
-        return admin_json({"summary": {
-            "managed_devices": int(db.session.scalar(select(func.count()).select_from(Device)) or 0),
-            "active_block_overrides": int(db.session.scalar(select(func.count()).select_from(DeviceBlockOverride).where(DeviceBlockOverride.status == "active")) or 0),
-            "active_v3_assignments": int(db.session.scalar(select(func.count()).select_from(DevicePolicyAssignment).join(PolicyRevision).where(DevicePolicyAssignment.status == "active", PolicyRevision._payload["schema_version"].as_integer() == 3)) or 0),
-            "enforcement_failures": int(db.session.scalar(select(func.count()).select_from(PolicyApplicationEvent).where(PolicyApplicationEvent.outcome.in_(("failed", "rejected")))) or 0),
-        }})
+
+        return admin_json(
+            {
+                "summary": {
+                    "managed_devices": int(
+                        db.session.scalar(select(func.count()).select_from(Device)) or 0
+                    ),
+                    "active_block_overrides": int(
+                        db.session.scalar(
+                            select(func.count())
+                            .select_from(DeviceBlockOverride)
+                            .where(DeviceBlockOverride.status == "active")
+                        )
+                        or 0
+                    ),
+                    "active_v3_assignments": int(
+                        db.session.scalar(
+                            select(func.count())
+                            .select_from(DevicePolicyAssignment)
+                            .join(PolicyRevision)
+                            .where(
+                                DevicePolicyAssignment.status == "active",
+                                PolicyRevision._payload["schema_version"].as_integer()
+                                == 3,
+                            )
+                        )
+                        or 0
+                    ),
+                    "enforcement_failures": int(
+                        db.session.scalar(
+                            select(func.count())
+                            .select_from(PolicyApplicationEvent)
+                            .where(
+                                PolicyApplicationEvent.outcome.in_(
+                                    ("failed", "rejected")
+                                )
+                            )
+                        )
+                        or 0
+                    ),
+                }
+            }
+        )
     except Exception:
-        return admin_error("read_unavailable", "dashboard is temporarily unavailable", 503)
+        return admin_error(
+            "read_unavailable", "dashboard is temporarily unavailable", 503
+        )
 
 
 @dpc_controls_bp.post("/devices/<device_uuid>/usage-reports")
@@ -213,18 +310,48 @@ def web_filter_event(device_uuid: str) -> Response:
         return admin_error("authentication_failed", "device authentication failed", 401)
     try:
         payload = request.get_json(silent=False)
-        if not isinstance(payload, dict) or set(payload) != {"event_uuid", "domain_hash", "rule_id", "outcome", "policy_uuid", "revision_uuid", "observed_at"} or payload["outcome"] != "blocked":
+        if (
+            not isinstance(payload, dict)
+            or set(payload)
+            != {
+                "event_uuid",
+                "domain_hash",
+                "rule_id",
+                "outcome",
+                "policy_uuid",
+                "revision_uuid",
+                "observed_at",
+            }
+            or payload["outcome"] != "blocked"
+        ):
             raise ValueError
         domain_hash = bytes.fromhex(str(payload["domain_hash"]))
-        if len(domain_hash) != 32 or not isinstance(payload["rule_id"], str) or not 1 <= len(payload["rule_id"]) <= 64:
+        if (
+            len(domain_hash) != 32
+            or not isinstance(payload["rule_id"], str)
+            or not 1 <= len(payload["rule_id"]) <= 64
+        ):
             raise ValueError
-        row = DeviceWebFilterEvent(event_uuid=_uuid(str(payload["event_uuid"])), device_id=context.device.id, domain_hash=domain_hash, rule_id=payload["rule_id"], outcome="blocked", policy_uuid=_uuid(str(payload["policy_uuid"])), revision_uuid=_uuid(str(payload["revision_uuid"])), observed_at=datetime.fromisoformat(str(payload["observed_at"]).replace("Z", "+00:00")))
+        row = DeviceWebFilterEvent(
+            event_uuid=_uuid(str(payload["event_uuid"])),
+            device_id=context.device.id,
+            domain_hash=domain_hash,
+            rule_id=payload["rule_id"],
+            outcome="blocked",
+            policy_uuid=_uuid(str(payload["policy_uuid"])),
+            revision_uuid=_uuid(str(payload["revision_uuid"])),
+            observed_at=datetime.fromisoformat(
+                str(payload["observed_at"]).replace("Z", "+00:00")
+            ),
+        )
         db.session.add(row)
         db.session.commit()
         return admin_json({"event_uuid": str(row.event_uuid)}, 201)
     except Exception:
         db.session.rollback()
-        return admin_error("invalid_web_filter_event", "invalid blocked-domain evidence", 400)
+        return admin_error(
+            "invalid_web_filter_event", "invalid blocked-domain evidence", 400
+        )
 
 
 @dpc_controls_bp.get("/sync/v3/devices/<device_uuid>/state")

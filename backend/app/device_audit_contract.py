@@ -213,7 +213,9 @@ def build_audit_event(
         if set(metadata) != {"domain_hash"} or not _hash(
             metadata["domain_hash"], "domain_hash"
         ):
-            raise DeviceAuditContractError("web filter evidence must contain only domain_hash")
+            raise DeviceAuditContractError(
+                "web filter evidence must contain only domain_hash"
+            )
     return event
 
 

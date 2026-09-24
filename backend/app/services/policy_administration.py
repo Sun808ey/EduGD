@@ -47,16 +47,22 @@ def create_policy(*, name: object, payload: object, administrator_id: int) -> Po
         raise
     except IntegrityError as error:
         db.session.rollback()
-        raise PolicyAdministrationConflict("policy conflicts with existing state") from error
+        raise PolicyAdministrationConflict(
+            "policy conflicts with existing state"
+        ) from error
     except SQLAlchemyError as error:
         db.session.rollback()
         raise PolicyAdministrationError("policy could not be persisted") from error
 
 
-def add_revision(*, policy_uuid: UUID, payload: object, administrator_id: int) -> PolicyRevision:
+def add_revision(
+    *, policy_uuid: UUID, payload: object, administrator_id: int
+) -> PolicyRevision:
     checked_payload = validate_policy_revision_payload(payload)
     try:
-        policy = db.session.scalar(select(Policy).where(Policy.policy_uuid == policy_uuid).with_for_update())
+        policy = db.session.scalar(
+            select(Policy).where(Policy.policy_uuid == policy_uuid).with_for_update()
+        )
         administrator = db.session.get(Administrator, administrator_id)
         if policy is None:
             raise PolicyAdministrationNotFound("policy not found")
@@ -70,17 +76,23 @@ def add_revision(*, policy_uuid: UUID, payload: object, administrator_id: int) -
         raise
     except IntegrityError as error:
         db.session.rollback()
-        raise PolicyAdministrationConflict("policy revision conflicts with existing state") from error
+        raise PolicyAdministrationConflict(
+            "policy revision conflicts with existing state"
+        ) from error
     except SQLAlchemyError as error:
         db.session.rollback()
-        raise PolicyAdministrationError("policy revision could not be persisted") from error
+        raise PolicyAdministrationError(
+            "policy revision could not be persisted"
+        ) from error
 
 
 def set_lifecycle(*, policy_uuid: UUID, status: object) -> Policy:
     if status not in {"active", "inactive", "revoked"}:
         raise ValueError("invalid lifecycle status")
     try:
-        policy = db.session.scalar(select(Policy).where(Policy.policy_uuid == policy_uuid).with_for_update())
+        policy = db.session.scalar(
+            select(Policy).where(Policy.policy_uuid == policy_uuid).with_for_update()
+        )
         if policy is None:
             raise PolicyAdministrationNotFound("policy not found")
         policy.status = status
@@ -91,11 +103,22 @@ def set_lifecycle(*, policy_uuid: UUID, status: object) -> Policy:
         raise
     except SQLAlchemyError as error:
         db.session.rollback()
-        raise PolicyAdministrationError("policy lifecycle could not be persisted") from error
+        raise PolicyAdministrationError(
+            "policy lifecycle could not be persisted"
+        ) from error
 
 
-def _add_revision(policy: Policy, payload: dict[str, object], administrator: Administrator) -> PolicyRevision:
-    current = db.session.scalar(select(func.max(PolicyRevision.version)).where(PolicyRevision.policy_id == policy.id)) or 0
+def _add_revision(
+    policy: Policy, payload: dict[str, object], administrator: Administrator
+) -> PolicyRevision:
+    current = (
+        db.session.scalar(
+            select(func.max(PolicyRevision.version)).where(
+                PolicyRevision.policy_id == policy.id
+            )
+        )
+        or 0
+    )
     revision = PolicyRevision(
         policy_id=policy.id,
         version=current + 1,
@@ -109,6 +132,10 @@ def _add_revision(policy: Policy, payload: dict[str, object], administrator: Adm
 
 
 def _name(value: object) -> str:
-    if not isinstance(value, str) or not 1 <= len(value.strip()) <= 255 or not value.isprintable():
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value.strip()) <= 255
+        or not value.isprintable()
+    ):
         raise ValueError("invalid policy name")
     return value.strip()

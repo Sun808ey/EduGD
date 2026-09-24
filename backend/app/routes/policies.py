@@ -107,14 +107,24 @@ def create_admin_policy() -> Response:
     try:
         payload = _object_request(fields={"name", "payload"})
         context = get_administrator_request_context()
-        policy = create_policy(name=payload["name"], payload=payload["payload"], administrator_id=context.administrator.id)
-        return admin_json({"policy_uuid": str(policy.policy_uuid), "status": policy.status}, 201)
+        policy = create_policy(
+            name=payload["name"],
+            payload=payload["payload"],
+            administrator_id=context.administrator.id,
+        )
+        return admin_json(
+            {"policy_uuid": str(policy.policy_uuid), "status": policy.status}, 201
+        )
     except (ValueError, TypeError):
         return admin_error("invalid_policy", "invalid policy creation request", 400)
     except PolicyAdministrationConflict:
-        return admin_error("policy_conflict", "policy conflicts with existing state", 409)
+        return admin_error(
+            "policy_conflict", "policy conflicts with existing state", 409
+        )
     except PolicyAdministrationError:
-        return admin_error("policy_unavailable", "policy is temporarily unavailable", 503)
+        return admin_error(
+            "policy_unavailable", "policy is temporarily unavailable", 503
+        )
 
 
 @policy_bp.post("/admin/policies/<policy_uuid>/revisions")
@@ -123,16 +133,27 @@ def create_admin_policy_revision(policy_uuid: str) -> Response:
     try:
         payload = _object_request(fields={"payload"})
         context = get_administrator_request_context()
-        revision = add_revision(policy_uuid=parse_canonical_uuid4(policy_uuid), payload=payload["payload"], administrator_id=context.administrator.id)
-        return admin_json({"revision_uuid": str(revision.revision_uuid), "version": revision.version}, 201)
+        revision = add_revision(
+            policy_uuid=parse_canonical_uuid4(policy_uuid),
+            payload=payload["payload"],
+            administrator_id=context.administrator.id,
+        )
+        return admin_json(
+            {"revision_uuid": str(revision.revision_uuid), "version": revision.version},
+            201,
+        )
     except (ValueError, TypeError):
         return admin_error("invalid_policy", "invalid policy revision request", 400)
     except PolicyAdministrationNotFound:
         return admin_error("policy_not_found", "policy not found", 404)
     except PolicyAdministrationConflict:
-        return admin_error("policy_conflict", "policy conflicts with existing state", 409)
+        return admin_error(
+            "policy_conflict", "policy conflicts with existing state", 409
+        )
     except PolicyAdministrationError:
-        return admin_error("policy_unavailable", "policy is temporarily unavailable", 503)
+        return admin_error(
+            "policy_unavailable", "policy is temporarily unavailable", 503
+        )
 
 
 @policy_bp.post("/admin/policies/<policy_uuid>/lifecycle")
@@ -141,16 +162,26 @@ def update_admin_policy_lifecycle(policy_uuid: str) -> Response:
     try:
         payload = _object_request(fields={"status", "reason"})
         reason = payload["reason"]
-        if not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 512 or not reason.isprintable():
+        if (
+            not isinstance(reason, str)
+            or not 1 <= len(reason.strip()) <= 512
+            or not reason.isprintable()
+        ):
             raise ValueError("invalid reason")
-        policy = set_lifecycle(policy_uuid=parse_canonical_uuid4(policy_uuid), status=payload["status"])
-        return admin_json({"policy_uuid": str(policy.policy_uuid), "status": policy.status})
+        policy = set_lifecycle(
+            policy_uuid=parse_canonical_uuid4(policy_uuid), status=payload["status"]
+        )
+        return admin_json(
+            {"policy_uuid": str(policy.policy_uuid), "status": policy.status}
+        )
     except ValueError:
         return admin_error("invalid_lifecycle", "invalid policy lifecycle request", 400)
     except PolicyAdministrationNotFound:
         return admin_error("policy_not_found", "policy not found", 404)
     except PolicyAdministrationError:
-        return admin_error("policy_unavailable", "policy is temporarily unavailable", 503)
+        return admin_error(
+            "policy_unavailable", "policy is temporarily unavailable", 503
+        )
 
 
 @policy_bp.post("/admin/devices/<device_uuid>/policy-assignment")

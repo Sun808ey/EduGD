@@ -24,8 +24,14 @@ def test_function_hardening_migration_sets_a_fixed_search_path(monkeypatch) -> N
     assert "SET search_path = ''" in rendered
     assert "edug_reject_device_control_event_mutation()" in rendered
     assert "public.edug_valid_blocked_apps(value->'blocked_apps')" in rendered
-    assert "REVOKE ALL ON FUNCTION public.edug_valid_blocked_apps(value json) FROM PUBLIC" in rendered
-    assert "GRANT EXECUTE ON FUNCTION public.edug_valid_blocked_apps(value json) TO edug_runtime" in rendered
+    assert (
+        "REVOKE ALL ON FUNCTION public.edug_valid_blocked_apps(value json) FROM PUBLIC"
+        in rendered
+    )
+    assert (
+        "GRANT EXECUTE ON FUNCTION public.edug_valid_blocked_apps(value json) TO edug_runtime"
+        in rendered
+    )
 
 
 def test_function_hardening_migration_is_a_noop_on_sqlite(monkeypatch) -> None:

@@ -15,6 +15,13 @@ from app.administrator_schemas import (
     validate_administrator_login_request,
 )
 from app.extensions import db, limiter
+from app.models import ADMINISTRATOR_PERMISSIONS
+from app.services.administrator_authentication import (
+    AdministratorConflictError,
+    AdministratorDatabaseError,
+    AdministratorOperationError,
+    create_administrator,
+)
 from app.services.administrator_login import (
     AdministratorAuthenticationFailed,
     AdministratorLoginDatabaseError,
@@ -100,4 +107,58 @@ def administrator_identity() -> Response:
                 "permissions": permissions,
             }
         },
+    )
+
+
+@auth_bp.post("/admin/administrators")
+@administrator_required("administrator.manage")
+def administrator_create() -> Response:
+    """Create a fully privileged administrator from the admin console."""
+    request.max_content_length = current_app.config["ADMIN_AUTH_MAX_CONTENT_LENGTH"]
+    payload = request.get_json(silent=False)
+    fields = {
+        "username",
+        "display_name",
+        "password",
+        "operator_password",
+        "reason",
+    }
+    if not isinstance(payload, dict) or set(payload) != fields:
+        return admin_error("invalid_request", "invalid administrator request", 400)
+
+    context = get_administrator_request_context()
+    try:
+        result = create_administrator(
+            username=payload["username"],
+            display_name=payload["display_name"],
+            password=payload["password"],
+            operator_username=context.administrator.username,
+            operator_password=payload["operator_password"],
+            operator_subject=f"administrator:{context.administrator.username}",
+            reason=payload["reason"],
+        )
+    except AdministratorConflictError:
+        return admin_error(
+            "administrator_conflict",
+            "administrator username already exists",
+            409,
+        )
+    except AdministratorDatabaseError:
+        return admin_error("internal_server_error", "internal server error", 500)
+    except AdministratorOperationError as error:
+        if str(error) == "authorized administrator credentials are required":
+            return admin_error(
+                "authorization_failed",
+                "administrator authorization failed",
+                403,
+            )
+        return admin_error("invalid_request", "invalid administrator request", 400)
+    return admin_json(
+        {
+            "administrator_uuid": result.administrator_uuid,
+            "username": payload["username"],
+            "permissions": sorted(ADMINISTRATOR_PERMISSIONS),
+            "revoked_sessions": result.revoked_sessions,
+        },
+        201,
     )

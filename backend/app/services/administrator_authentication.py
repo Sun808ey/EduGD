@@ -7,7 +7,7 @@ from typing import Never
 from flask import current_app
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
 from app.models import (
@@ -120,6 +120,102 @@ def bootstrap_administrator(
         ) from error
     except SQLAlchemyError as error:
         _raise_database_error(error, "administrator_bootstrap_database_error")
+
+
+def create_administrator(
+    *,
+    username: str,
+    display_name: str,
+    password: str,
+    operator_username: str,
+    operator_password: str,
+    operator_subject: str,
+    reason: str,
+) -> AdministratorMutationResult:
+    """Create an administrator through an authenticated administrator operator.
+
+    The operator must be active, must hold ``administrator.manage``, and must
+    prove possession of the operator password.  All target permissions and
+    audit events are written in the same transaction as the account.
+    """
+    username = _validate_username(username)
+    display_name = _validate_printable_text(display_name, "display name", 120)
+    operator_username = _validate_username(operator_username)
+    operator_subject, reason = _validate_operator_context(operator_subject, reason)
+    _validate_password(password, username)
+    if not isinstance(operator_password, str) or not operator_password:
+        raise AdministratorOperationError(
+            "authorized administrator credentials are required"
+        )
+
+    try:
+        operator = _find_administrator(operator_username)
+        if (
+            operator.status != "active"
+            or not _has_permission(operator.id, "administrator.manage")
+            or not _check_password(operator.password_verifier, operator_password)
+        ):
+            raise AdministratorOperationError(
+                "authorized administrator credentials are required"
+            )
+
+        existing = db.session.execute(
+            select(Administrator.id).where(Administrator.username == username)
+        ).scalar_one_or_none()
+        if existing is not None:
+            raise AdministratorConflictError("administrator username already exists")
+
+        administrator = Administrator(
+            username=username,
+            display_name=display_name,
+            password_verifier=_hash_password(password),
+        )
+        db.session.add(administrator)
+        db.session.flush()
+
+        for permission in sorted(ADMINISTRATOR_PERMISSIONS):
+            db.session.add(
+                AdministratorPermission(
+                    administrator_id=administrator.id,
+                    permission=permission,
+                    granted_by_administrator_id=operator.id,
+                    reason=reason,
+                )
+            )
+            db.session.add(
+                AdministratorAuthenticationEvent(
+                    administrator_id=administrator.id,
+                    category="permission_granted",
+                    trusted_operator_subject=operator_subject,
+                    reason=reason,
+                )
+            )
+
+        # Keep this explicit so the operation remains safe if account creation
+        # later supports restoring or importing an existing session set.
+        revoked_sessions = _revoke_active_sessions(
+            administrator.id,
+            utc_now(),
+            operator_subject,
+            reason,
+        )
+        administrator_uuid = str(administrator.administrator_uuid)
+        db.session.commit()
+        _log_outcome("administrator_creation_completed")
+        return AdministratorMutationResult(
+            administrator_uuid=administrator_uuid,
+            revoked_sessions=revoked_sessions,
+        )
+    except AdministratorOperationError:
+        db.session.rollback()
+        raise
+    except IntegrityError as error:
+        db.session.rollback()
+        raise AdministratorConflictError(
+            "administrator could not be created"
+        ) from error
+    except SQLAlchemyError as error:
+        _raise_database_error(error, "administrator_creation_database_error")
 
 
 def reset_administrator_password(
@@ -261,6 +357,27 @@ def _find_administrator(username: str) -> Administrator:
     return administrator
 
 
+def _has_permission(administrator_id: int, permission: str) -> bool:
+    return (
+        db.session.execute(
+            select(AdministratorPermission.id).where(
+                AdministratorPermission.administrator_id == administrator_id,
+                AdministratorPermission.permission == permission,
+            )
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
+def _check_password(verifier: str, password: str) -> bool:
+    try:
+        return check_password_hash(verifier, password)
+    except ValueError as error:
+        raise AdministratorOperationError(
+            "authorized administrator credentials are required"
+        ) from error
+
+
 def _revoke_active_sessions(
     administrator_id: int,
     now: datetime,
@@ -372,6 +489,7 @@ __all__ = [
     "AdministratorNotFoundError",
     "AdministratorOperationError",
     "bootstrap_administrator",
+    "create_administrator",
     "disable_administrator",
     "reset_administrator_password",
     "revoke_administrator_sessions",

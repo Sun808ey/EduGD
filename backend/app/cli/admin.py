@@ -7,6 +7,7 @@ from app.services.administrator_authentication import (
     AdministratorMutationResult,
     AdministratorOperationError,
     bootstrap_administrator,
+    create_administrator,
     disable_administrator,
     reset_administrator_password,
     revoke_administrator_sessions,
@@ -44,6 +45,18 @@ def _prompt_password() -> str:
     )
 
 
+def _prompt_existing_password() -> str:
+    return cast(
+        str,
+        click.prompt(
+            "Authorizing administrator password",
+            hide_input=True,
+            confirmation_prompt=False,
+            type=str,
+        ),
+    )
+
+
 def _run_operation(
     operation: Callable[..., AdministratorMutationResult],
     **arguments: object,
@@ -74,6 +87,39 @@ def bootstrap_command(
         reason=reason,
     )
     click.echo("Administrator bootstrap completed.")
+
+
+@admin_cli.command("create")
+@click.option("--username", required=True)
+@click.option("--display-name", required=True)
+@click.option(
+    "--operator-username",
+    required=True,
+    help="Existing active administrator authorizing this operation.",
+)
+@_operator_options
+def create_command(
+    username: str,
+    display_name: str,
+    operator_username: str,
+    operator_subject: str,
+    reason: str,
+) -> None:
+    """Create an administrator with every currently defined permission."""
+    result = _run_operation(
+        create_administrator,
+        username=username,
+        display_name=display_name,
+        operator_username=operator_username,
+        operator_password=_prompt_existing_password(),
+        password=_prompt_password(),
+        operator_subject=operator_subject,
+        reason=reason,
+    )
+    click.echo(
+        f"Administrator created with all permissions; "
+        f"revoked sessions: {result.revoked_sessions}."
+    )
 
 
 @admin_cli.command("reset-password")

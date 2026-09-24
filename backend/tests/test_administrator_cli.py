@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from click.testing import Result
 from flask import Flask
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import check_password_hash
 
@@ -19,6 +19,7 @@ from app.services.administrator_authentication import (
     AdministratorDatabaseError,
     AdministratorOperationError,
     bootstrap_administrator,
+    create_administrator,
 )
 
 BOOTSTRAP_PASSWORD = "OfflineSchool!2026"
@@ -124,6 +125,153 @@ def test_bootstrap_refuses_second_administrator(app: Flask) -> None:
     with app.app_context():
         count = db.session.scalar(select(func.count()).select_from(Administrator))
         assert count == 1
+
+
+def test_create_administrator_requires_authorized_operator_and_grants_all_permissions(
+    app: Flask,
+) -> None:
+    assert _invoke_bootstrap(app).exit_code == 0
+
+    result = app.test_cli_runner().invoke(
+        args=[
+            "admin",
+            "create",
+            "--username",
+            "policy.admin",
+            "--display-name",
+            "Policy Administrator",
+            "--operator-username",
+            "enrollment.admin",
+            "--operator",
+            OPERATOR,
+            "--reason",
+            REASON,
+        ],
+        input=(f"{BOOTSTRAP_PASSWORD}\n{RESET_PASSWORD}\n{RESET_PASSWORD}\n"),
+    )
+
+    assert result.exit_code == 0
+    assert "Administrator created with all permissions" in result.output
+    assert RESET_PASSWORD not in result.output
+    assert BOOTSTRAP_PASSWORD not in result.output
+
+    with app.app_context():
+        administrator = db.session.execute(
+            select(Administrator).where(Administrator.username == "policy.admin")
+        ).scalar_one()
+        permissions = (
+            db.session.execute(
+                select(AdministratorPermission).where(
+                    AdministratorPermission.administrator_id == administrator.id
+                )
+            )
+            .scalars()
+            .all()
+        )
+        events = (
+            db.session.execute(
+                select(AdministratorAuthenticationEvent).where(
+                    AdministratorAuthenticationEvent.administrator_id
+                    == administrator.id
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        operator = _load_administrator()
+        assert administrator.status == "active"
+        assert check_password_hash(administrator.password_verifier, RESET_PASSWORD)
+        assert {permission.permission for permission in permissions} == (
+            ADMINISTRATOR_PERMISSIONS
+        )
+        assert all(
+            permission.granted_by_administrator_id == operator.id
+            and permission.trusted_operator_subject is None
+            and permission.reason == REASON
+            for permission in permissions
+        )
+        assert len(events) == len(ADMINISTRATOR_PERMISSIONS)
+        assert all(
+            event.category == "permission_granted"
+            and event.trusted_operator_subject == OPERATOR
+            and event.reason == REASON
+            for event in events
+        )
+
+
+def test_create_administrator_rejects_operator_without_management_permission(
+    app: Flask,
+) -> None:
+    assert _invoke_bootstrap(app).exit_code == 0
+    with app.app_context():
+        operator = _load_administrator()
+        db.session.execute(
+            delete(AdministratorPermission).where(
+                AdministratorPermission.administrator_id == operator.id,
+                AdministratorPermission.permission == "administrator.manage",
+            )
+        )
+        db.session.commit()
+
+    result = app.test_cli_runner().invoke(
+        args=[
+            "admin",
+            "create",
+            "--username",
+            "policy.admin",
+            "--display-name",
+            "Policy Administrator",
+            "--operator-username",
+            "enrollment.admin",
+            "--operator",
+            OPERATOR,
+            "--reason",
+            REASON,
+        ],
+        input=f"{BOOTSTRAP_PASSWORD}\n{RESET_PASSWORD}\n{RESET_PASSWORD}\n",
+    )
+
+    assert result.exit_code == 1
+    assert "authorized administrator credentials are required" in result.output
+    with app.app_context():
+        assert db.session.scalar(select(func.count()).select_from(Administrator)) == 1
+
+
+def test_create_administrator_rolls_back_account_permissions_and_audit_on_failure(
+    app: Flask,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert _invoke_bootstrap(app).exit_code == 0
+    with app.app_context():
+        original_commit = db.session.commit
+
+        def fail_commit() -> None:
+            raise SQLAlchemyError("forced test failure")
+
+        monkeypatch.setattr(db.session, "commit", fail_commit)
+        with pytest.raises(AdministratorDatabaseError):
+            create_administrator(
+                username="policy.admin",
+                display_name="Policy Administrator",
+                password=RESET_PASSWORD,
+                operator_username="enrollment.admin",
+                operator_password=BOOTSTRAP_PASSWORD,
+                operator_subject=OPERATOR,
+                reason=REASON,
+            )
+        monkeypatch.setattr(db.session, "commit", original_commit)
+
+        assert db.session.scalar(select(func.count()).select_from(Administrator)) == 1
+        assert db.session.scalar(
+            select(func.count()).select_from(AdministratorPermission)
+        ) == len(ADMINISTRATOR_PERMISSIONS)
+        assert (
+            db.session.scalar(
+                select(func.count()).select_from(AdministratorAuthenticationEvent)
+            )
+            == 1
+        )
 
 
 def test_reset_password_unlocks_and_revokes_active_sessions(app: Flask) -> None:

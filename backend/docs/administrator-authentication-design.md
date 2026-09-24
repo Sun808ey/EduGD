@@ -92,12 +92,19 @@ Permissions, rather than client-supplied roles, control privileged operations:
 
 - `administrator.manage`: create, disable, unlock, and assign permissions;
 - `enrollment_token.issue`: issue general or device-bound pairing tokens; and
-- `enrollment_token.revoke`: revoke eligible pairing tokens.
+- `enrollment_token.revoke`: revoke eligible pairing tokens;
+- `device_credential.revoke`: revoke device credentials;
+- `policy.assign`: assign approved policies to devices;
+- `device.control`: apply approved device-control actions; and
+- `policy.manage`: create and manage approved policies.
 
-The bootstrap administrator initially receives all three permissions. A normal
-enrollment administrator needs only the two enrollment-token permissions.
-Permission changes revoke all existing sessions for the affected administrator
-so stale JWTs cannot retain prior access.
+The bootstrap administrator initially receives every permission in
+`ADMINISTRATOR_PERMISSIONS`. A subsequent administrator can be created only by
+an active administrator holding `administrator.manage`; the creating command
+requires that operator's password and records the authorizing administrator,
+trusted operator subject, and reason. The new administrator receives the same
+complete permission set. Permission changes revoke all existing sessions for
+the affected administrator so stale JWTs cannot retain prior access.
 
 ## Password handling
 
@@ -116,6 +123,18 @@ so stale JWTs cannot retain prior access.
 Administrative recovery uses a trusted interactive CLI command that sets a new
 password, records the operator-provided reason, revokes every active session,
 and appends an audit event. It never reveals the previous password.
+
+To create a second administrator locally, run the command from the backend
+environment and enter the authorizing administrator password first, followed
+by the new administrator password and confirmation:
+
+```text
+python -m flask --app run admin create --username policy.admin --display-name "Policy Administrator" --operator-username enrollment.admin --operator trusted-host-operator --reason "approved administrator provisioning"
+```
+
+The command does not accept passwords as command-line arguments. The operator
+must be active and hold `administrator.manage`; otherwise the transaction is
+rejected and no account, permission, or audit rows are created.
 
 ## Session and JWT contract
 
@@ -156,6 +175,7 @@ Authentication routes use the existing `/api/v1` prefix:
 POST /api/v1/admin/auth/login
 POST /api/v1/admin/auth/logout
 GET  /api/v1/admin/auth/me
+POST /api/v1/admin/administrators
 ```
 
 Login accepts a JSON object no larger than 16 KiB:
@@ -213,6 +233,14 @@ The first requires `enrollment_token.issue`; the second requires
 administrator UUID and canonical username from the authentication context.
 Neither route accepts an administrator identity in its request body.
 
+`POST /api/v1/admin/administrators` requires an authenticated administrator
+with `administrator.manage`. Its JSON body contains `username`, `display_name`,
+`password`, `operator_password`, and `reason`; the current session supplies the
+authorizing administrator identity. The operator password is a hidden
+re-authentication check, and neither password is returned or logged. A
+successful response contains the new administrator UUID, username, complete
+permission list, and revoked-session count, never credential material.
+
 ## Bootstrap and recovery boundary
 
 The proposed CLI operations are:
@@ -222,6 +250,7 @@ flask admin bootstrap
 flask admin reset-password <username>
 flask admin disable <username>
 flask admin revoke-sessions <username>
+flask admin create
 ```
 
 Interactive prompts collect passwords twice using hidden input. Mutating
@@ -235,9 +264,11 @@ Commands use a database transaction and append an event before commit.
 and require `--operator` and `--reason`. No command defines a `--password`
 option; bootstrap and reset obtain it only from the hidden confirmation prompt.
 
-Production deployment documentation must restrict these commands to trusted
-host operators. They must never be exposed as web routes or executed by the
-Android DPC.
+Production deployment documentation must restrict bootstrap and recovery
+commands to trusted host operators. The account-creation operation may also be
+used through the protected administrator route above, but only by an active
+administrator with `administrator.manage` and password re-authentication; it
+must never be executed by the Android DPC.
 
 ## Persistence proposal
 

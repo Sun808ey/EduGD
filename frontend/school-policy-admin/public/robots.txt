@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /devices
+Disallow: /policies
+Disallow: /logs
+Disallow: /forbidden
+
+Sitemap: /sitemap.xml

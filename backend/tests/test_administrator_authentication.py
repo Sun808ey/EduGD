@@ -116,6 +116,70 @@ def test_me_requires_database_session_and_returns_current_permissions(
     assert set(administrator["permissions"]) == ADMINISTRATOR_PERMISSIONS
 
 
+def test_authenticated_management_endpoint_creates_fully_privileged_administrator(
+    app: Flask,
+) -> None:
+    _bootstrap(app)
+    access_token = _login(app).get_json()["access_token"]
+    new_password = "SecondAdministrator!2026"
+
+    response = app.test_client().post(
+        "/api/v1/admin/administrators",
+        headers=_authorization_header(access_token),
+        json={
+            "username": "policy.admin",
+            "display_name": "Policy Administrator",
+            "password": new_password,
+            "operator_password": PASSWORD,
+            "reason": "approved administrator provisioning",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.headers["Cache-Control"] == "no-store"
+    payload = response.get_json()
+    assert payload["username"] == "policy.admin"
+    assert set(payload["permissions"]) == ADMINISTRATOR_PERMISSIONS
+    assert new_password not in response.get_data(as_text=True)
+    assert PASSWORD not in response.get_data(as_text=True)
+
+    second_login = _login(
+        app,
+        username="policy.admin",
+        password=new_password,
+    )
+    assert second_login.status_code == 200
+
+
+def test_authenticated_management_endpoint_requires_reauthentication(
+    app: Flask,
+) -> None:
+    _bootstrap(app)
+    access_token = _login(app).get_json()["access_token"]
+
+    response = app.test_client().post(
+        "/api/v1/admin/administrators",
+        headers=_authorization_header(access_token),
+        json={
+            "username": "policy.admin",
+            "display_name": "Policy Administrator",
+            "password": "SecondAdministrator!2026",
+            "operator_password": WRONG_PASSWORD,
+            "reason": "approved administrator provisioning",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.get_json() == {
+        "error": {
+            "code": "authorization_failed",
+            "message": "administrator authorization failed",
+        }
+    }
+    with app.app_context():
+        assert db.session.scalar(select(func.count()).select_from(Administrator)) == 1
+
+
 @pytest.mark.parametrize(
     "headers",
     [

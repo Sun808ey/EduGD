@@ -79,4 +79,39 @@ describe('administrator API service', () => {
     await expect(adminService.listDevices({ page: 1, perPage: 25 }, undefined, signal)).resolves.toMatchObject({ devices: [device] })
     expect(api.get).toHaveBeenCalledWith('/admin/devices', { params: { page: 1, per_page: 25 }, signal })
   })
+
+  it('supports DPC dashboard, override and evidence reads', async () => {
+    const override = { version: 1, status: 'active', reason: 'focus time', issued_at: '2026-09-11T10:00:00Z', cleared_at: null }
+    const summary = { managed_devices: 2, active_block_overrides: 1, active_v3_assignments: 2, enforcement_failures: 0 }
+    const evidence = { kind: 'policy_application', occurred_at: null, operation: 'apply', outcome: 'success' }
+    vi.mocked(api.get)
+      .mockResolvedValueOnce({ data: { summary } })
+      .mockResolvedValueOnce({ data: { override } })
+      .mockResolvedValueOnce({ data: { evidence: [evidence], pagination } })
+
+    await expect(adminService.getDpcSummary()).resolves.toEqual(summary)
+    await expect(adminService.getBlockOverride(deviceUuid)).resolves.toEqual(override)
+    await expect(adminService.listDpcEvidence(deviceUuid, { page: 1, perPage: 25 })).resolves.toMatchObject({ evidence: [evidence] })
+  })
+
+  it('supports DPC override mutations and policy lifecycle mutations', async () => {
+    const override = { version: 1, status: 'active', reason: 'focus time', issued_at: '2026-09-11T10:00:00Z', cleared_at: null }
+    vi.mocked(api.post)
+      .mockResolvedValueOnce({ data: { override } })
+      .mockResolvedValueOnce({ data: { override: null } })
+      .mockResolvedValueOnce({ data: { policy_uuid: policyUuid, status: 'draft' } })
+      .mockResolvedValueOnce({ data: { accepted: true } })
+      .mockResolvedValueOnce({ data: { accepted: true } })
+
+    await expect(adminService.setBlockOverride(deviceUuid, 'temporary exception')).resolves.toEqual(override)
+    await expect(adminService.clearBlockOverride(deviceUuid, 'exception ended')).resolves.toBeNull()
+    await expect(adminService.createPolicy('School day', { blocked_packages: [] })).resolves.toEqual({ policy_uuid: policyUuid, status: 'draft' })
+    await adminService.createPolicyRevision(policyUuid, { blocked_packages: [] })
+    await adminService.setPolicyLifecycle(policyUuid, 'active', 'approved')
+
+    expect(api.post).toHaveBeenNthCalledWith(1, `/admin/devices/${deviceUuid}/block-overrides`, { reason: 'temporary exception' })
+    expect(api.post).toHaveBeenNthCalledWith(2, `/admin/devices/${deviceUuid}/block-overrides/clear`, { reason: 'exception ended' })
+    expect(api.post).toHaveBeenNthCalledWith(4, `/admin/policies/${policyUuid}/revisions`, { payload: { blocked_packages: [] } })
+    expect(api.post).toHaveBeenNthCalledWith(5, `/admin/policies/${policyUuid}/lifecycle`, { status: 'active', reason: 'approved' })
+  })
 })

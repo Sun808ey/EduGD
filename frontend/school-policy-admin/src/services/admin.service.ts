@@ -1,6 +1,7 @@
 import api from '@/services/api'
 import {
   assignmentMutationSchema, auditEventsSchema, clearMutationSchema,
+  administratorCreateSchema,
   currentAssignmentSchema, deviceDetailSchema, devicesSchema,
   enrollmentTokensSchema, issuedEnrollmentTokenSchema, messageSchema,
   policiesSchema, policyDetailSchema, revisionsSchema, blockOverrideResponseSchema,
@@ -12,6 +13,10 @@ const path = (value: string) => encodeURIComponent(value)
 const pageParams = ({ page, perPage }: PageRequest) => ({ page, per_page: perPage })
 
 export const adminService = {
+  async createAdministrator(username: string, displayName: string, password: string, operatorPassword: string, reason: string) {
+    const response = await api.post('/admin/administrators', { username, display_name: displayName, password, operator_password: operatorPassword, reason })
+    return administratorCreateSchema.parse(response.data)
+  },
   async listDevices(request: PageRequest, status?: string, signal?: AbortSignal) {
     const response = await api.get('/admin/devices', { params: { ...pageParams(request), ...(status ? { status } : {}) }, signal })
     return devicesSchema.parse(response.data)

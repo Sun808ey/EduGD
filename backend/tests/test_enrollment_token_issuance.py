@@ -132,11 +132,16 @@ def test_issuance_restores_missing_database_permission(app: Flask) -> None:
     assert response.status_code == 201
     with app.app_context():
         assert db.session.scalar(select(func.count()).select_from(EnrollmentToken)) == 1
-        assert db.session.scalar(
-            select(func.count()).select_from(AdministratorAuthenticationEvent).where(
-                AdministratorAuthenticationEvent.category == "permission_granted"
+        assert (
+            db.session.scalar(
+                select(func.count())
+                .select_from(AdministratorAuthenticationEvent)
+                .where(
+                    AdministratorAuthenticationEvent.category == "permission_granted"
+                )
             )
-        ) >= 1
+            >= 1
+        )
 
 
 def test_issuance_can_bind_token_to_an_existing_device(app: Flask) -> None:

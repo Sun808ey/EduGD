@@ -34,7 +34,9 @@ def _serialize(application: ManagedApplication) -> dict[str, object]:
     }
 
 
-def _parse_payload(payload: object, *, require_verified_identity: bool = True) -> dict[str, object]:
+def _parse_payload(
+    payload: object, *, require_verified_identity: bool = True
+) -> dict[str, object]:
     fields = {
         "display_name",
         "package_name",
@@ -49,7 +51,9 @@ def _parse_payload(payload: object, *, require_verified_identity: bool = True) -
     digest = payload["signing_certificate_sha256"]
     if require_verified_identity and not isinstance(digest, str):
         raise ValueError("verified signing certificate digest is required")
-    parsed_digest = None if digest is None else decode_base64url(digest, decoded_length=32)
+    parsed_digest = (
+        None if digest is None else decode_base64url(digest, decoded_length=32)
+    )
     if not isinstance(payload["education_approved"], bool) or not isinstance(
         payload["mandatory_block"], bool
     ):
@@ -84,7 +88,9 @@ def create_managed_application() -> Response:
         return admin_error("application_conflict", "application already exists", 409)
     except SQLAlchemyError:
         db.session.rollback()
-        return admin_error("write_unavailable", "applications are temporarily unavailable", 503)
+        return admin_error(
+            "write_unavailable", "applications are temporarily unavailable", 503
+        )
     return admin_json({"application": _serialize(application)}, 201)
 
 
@@ -115,5 +121,7 @@ def update_managed_application(application_uuid: str) -> Response:
         return admin_error("application_conflict", "application already exists", 409)
     except SQLAlchemyError:
         db.session.rollback()
-        return admin_error("write_unavailable", "applications are temporarily unavailable", 503)
+        return admin_error(
+            "write_unavailable", "applications are temporarily unavailable", 503
+        )
     return admin_json({"application": _serialize(application)})

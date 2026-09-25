@@ -77,13 +77,17 @@ def translate_text(
     with _CACHE_LOCK:
         with db.engine.begin() as connection:
             _acquire_cache_lock(connection, lock_hash)
-            cached = connection.execute(
-                select(TranslationCacheEntry.__table__).where(
-                    TranslationCacheEntry.__table__.c.source_language == source_key,
-                    TranslationCacheEntry.__table__.c.target_language == target,
-                    TranslationCacheEntry.__table__.c.source_hash == source_hash,
+            cached = (
+                connection.execute(
+                    select(TranslationCacheEntry.__table__).where(
+                        TranslationCacheEntry.__table__.c.source_language == source_key,
+                        TranslationCacheEntry.__table__.c.target_language == target,
+                        TranslationCacheEntry.__table__.c.source_hash == source_hash,
+                    )
                 )
-            ).mappings().first()
+                .mappings()
+                .first()
+            )
             if cached is not None:
                 return TranslationResult(
                     translated_text=cached["translated_text"],
@@ -150,14 +154,16 @@ def _call_sunbird(text_value: str, source: str | None, target: str) -> str:
         method="POST",
     )
     try:
-        with urlopen(
+        with urlopen(  # nosec B310 - base URL is validated as HTTPS before use
             request,
             timeout=current_app.config["SUNBIRD_TRANSLATION_TIMEOUT_SECONDS"],
         ) as response:
             raw = response.read(64 * 1024 + 1)
     except HTTPError as error:
         if error.code == 429:
-            raise TranslationRateLimitError("translation provider rate limited") from error
+            raise TranslationRateLimitError(
+                "translation provider rate limited"
+            ) from error
         raise TranslationProviderError("translation provider request failed") from error
     except (TimeoutError, URLError, OSError) as error:
         raise TranslationProviderError("translation provider unavailable") from error
@@ -167,7 +173,9 @@ def _call_sunbird(text_value: str, source: str | None, target: str) -> str:
     try:
         body = json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise TranslationResponseError("translation provider response is invalid") from error
+        raise TranslationResponseError(
+            "translation provider response is invalid"
+        ) from error
     if not isinstance(body, dict) or body.get("status") != "COMPLETED":
         raise TranslationResponseError("translation provider response is incomplete")
     output = body.get("output")

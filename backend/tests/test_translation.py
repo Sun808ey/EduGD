@@ -41,7 +41,9 @@ def test_unknown_translation_language_is_rejected(value: object) -> None:
         normalize_language(value)
 
 
-def test_translation_service_caches_successful_provider_result(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_translation_service_caches_successful_provider_result(
+    app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     app.config["SUNBIRD_API_TOKEN"] = "provider-secret"
     calls = 0
 
@@ -56,8 +58,12 @@ def test_translation_service_caches_successful_provider_result(app: Any, monkeyp
     monkeypatch.setattr(sunbird_translation, "_call_sunbird", fake_provider)
     with app.app_context():
         clear_translation_cache()
-        first = translate_text(text="Hello", source_language="eng", target_language="lug")
-        second = translate_text(text="Hello", source_language="eng", target_language="lug")
+        first = translate_text(
+            text="Hello", source_language="eng", target_language="lug"
+        )
+        second = translate_text(
+            text="Hello", source_language="eng", target_language="lug"
+        )
 
     assert first.translated_text == "Oli otya?"
     assert first.cached is False
@@ -76,7 +82,9 @@ def test_translation_requires_provider_token(app: Any) -> None:
         translate_text(text="Hello", source_language="eng", target_language="lug")
 
 
-def test_provider_failure_is_not_cached(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_provider_failure_is_not_cached(
+    app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     app.config["SUNBIRD_API_TOKEN"] = "provider-secret"
     calls = 0
 
@@ -117,7 +125,9 @@ def test_public_translation_accepts_only_landing_content_and_falls_back(
     monkeypatch.setattr(
         sunbird_translation,
         "_call_sunbird",
-        lambda text, source, target: (_ for _ in ()).throw(TranslationProviderError("down")),
+        lambda text, source, target: (_ for _ in ()).throw(
+            TranslationProviderError("down")
+        ),
     )
     response = app.test_client().post(
         "/api/v1/public/translation/translate",
@@ -125,7 +135,10 @@ def test_public_translation_accepts_only_landing_content_and_falls_back(
     )
     assert response.status_code == 200
     assert response.get_json()["fallback"] is True
-    assert response.get_json()["translated_text"] == "Keep the school day in focus, even when the network cannot."
+    assert (
+        response.get_json()["translated_text"]
+        == "Keep the school day in focus, even when the network cannot."
+    )
     assert "provider-secret" not in response.get_data(as_text=True)
 
     rejected = app.test_client().post(

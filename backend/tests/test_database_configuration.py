@@ -93,9 +93,7 @@ def test_development_accepts_only_the_dedicated_local_database(
 def test_non_development_rejects_local_postgres_database(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    local_url = (
-        "postgresql+psycopg2://edug_local:placeholder@127.0.0.1:5432/edug_local"
-    )
+    local_url = "postgresql+psycopg2://edug_local:placeholder@127.0.0.1:5432/edug_local"
     monkeypatch.setenv("PRODUCTION_DATABASE_URL", local_url)
 
     with pytest.raises(RuntimeError, match="PRODUCTION_DATABASE_URL"):

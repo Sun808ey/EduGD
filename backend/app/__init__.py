@@ -153,7 +153,9 @@ def _validate_startup_configuration(app: Flask) -> None:
             or parsed_sunbird_url.query
             or parsed_sunbird_url.fragment
         ):
-            raise RuntimeError("SUNBIRD_API_BASE_URL must be an HTTPS URL without credentials or query")
+            raise RuntimeError(
+                "SUNBIRD_API_BASE_URL must be an HTTPS URL without credentials or query"
+            )
 
     enrollment_mode = app.config["DEVICE_ENROLLMENT_MODE"]
     if enrollment_mode not in {"legacy", "new_devices_required", "all_required"}:
@@ -280,7 +282,9 @@ def _configure_admin_cors(app: Flask) -> None:
             return response
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-CSRF-TOKEN"
+        response.headers["Access-Control-Allow-Headers"] = (
+            "Authorization, Content-Type, X-CSRF-TOKEN"
+        )
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Max-Age"] = "600"
         response.headers["Vary"] = _append_vary(response.headers.get("Vary"), "Origin")

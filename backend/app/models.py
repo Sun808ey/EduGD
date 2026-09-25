@@ -63,9 +63,7 @@ ENROLLMENT_TOKEN_STATUSES = frozenset(
     {"active", "consumed", "revoked", "expired", "locked"}
 )
 DEVICE_CREDENTIAL_STATUSES = frozenset({"active", "revoked", "superseded"})
-DEVICE_CREDENTIAL_ALGORITHMS = frozenset(
-    {"ECDSA_P256_SHA256", "RSA_2048_SHA256"}
-)
+DEVICE_CREDENTIAL_ALGORITHMS = frozenset({"ECDSA_P256_SHA256", "RSA_2048_SHA256"})
 DEVICE_ENROLLMENT_EVENT_CATEGORIES = frozenset(
     {
         "token_issued",
@@ -840,10 +838,16 @@ class ManagedApplication(db.Model):
         String(16), nullable=False, default="enabled", server_default="enabled"
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
     )
 
     @validates("display_name")
@@ -924,11 +928,18 @@ class TranslationCacheEntry(db.Model):
         String(16), nullable=False, default="machine", server_default="machine"
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
     )
+
 
 class Policy(db.Model):
     __tablename__ = "policies"

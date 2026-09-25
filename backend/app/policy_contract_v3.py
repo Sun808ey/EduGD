@@ -104,7 +104,11 @@ def validate_policy_v3(value: object) -> dict[str, object]:
     ids: set[str] = set()
     for raw in web["rules"]:
         if not isinstance(raw, dict) or set(raw) != {
-            "rule_id", "domain", "include_subdomains", "action", "reason"
+            "rule_id",
+            "domain",
+            "include_subdomains",
+            "action",
+            "reason",
         }:
             raise PolicyContractError("invalid web-filter rule")
         rule_id = raw["rule_id"]
@@ -153,9 +157,7 @@ def validate_policy_v3(value: object) -> dict[str, object]:
             "rules": sorted(rules, key=lambda r: r["rule_id"]),
         },
         "network_controls": _validate_network_controls(value["network_controls"]),
-        "telephony_controls": _validate_telephony_controls(
-            value["telephony_controls"]
-        ),
+        "telephony_controls": _validate_telephony_controls(value["telephony_controls"]),
     }
 
 
@@ -229,7 +231,7 @@ def build_policy_v3_envelope(
     )
     return {
         **base,
-            "protocol_version": POLICY_PROTOCOL_VERSION,
+        "protocol_version": POLICY_PROTOCOL_VERSION,
         "payload_hash": policy_v3_hash(checked),
         "payload": checked,
     }

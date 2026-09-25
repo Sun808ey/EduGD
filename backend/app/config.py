@@ -300,8 +300,13 @@ def validate_migration_target(
         and application_url.database == migration_url.database == "edug_local"
     )
     if local_urls:
-        if application_url.host != migration_url.host or application_url.port != migration_url.port:
-            raise RuntimeError("MIGRATION_DATABASE_URL must match the local application database")
+        if (
+            application_url.host != migration_url.host
+            or application_url.port != migration_url.port
+        ):
+            raise RuntimeError(
+                "MIGRATION_DATABASE_URL must match the local application database"
+            )
         return
     if (
         database_project_identity(application_url)

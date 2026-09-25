@@ -11,9 +11,7 @@ SUPPORTED_TRANSLATION_LANGUAGES: Final[dict[str, str]] = {
     "lug": "Luganda",
 }
 
-TRANSLATION_CONTENT_CLASSES: Final[frozenset[str]] = frozenset(
-    {"approved_dynamic"}
-)
+TRANSLATION_CONTENT_CLASSES: Final[frozenset[str]] = frozenset({"approved_dynamic"})
 
 MARKETING_PAGE_CONTENT: Final[dict[str, str]] = {
     "header.choose_languages": "Choose Languages",

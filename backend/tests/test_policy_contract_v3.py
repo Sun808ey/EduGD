@@ -117,7 +117,10 @@ def test_v3_requires_existing_exhausted_mode() -> None:
 
 @pytest.mark.parametrize(
     ("section", "field"),
-    [("network_controls", "always_on_filtering_vpn"), ("telephony_controls", "preserve_emergency_calls")],
+    [
+        ("network_controls", "always_on_filtering_vpn"),
+        ("telephony_controls", "preserve_emergency_calls"),
+    ],
 )
 def test_v3_rejects_unsafe_network_or_telephony_controls(
     section: str, field: str
@@ -131,7 +134,9 @@ def test_v3_rejects_unsafe_network_or_telephony_controls(
 
 def test_v3_golden_vector_is_reproducible_without_private_key() -> None:
     vector = json.loads(
-        (Path(__file__).parent / "fixtures" / "policy_v3_golden_vector.json").read_text()
+        (
+            Path(__file__).parent / "fixtures" / "policy_v3_golden_vector.json"
+        ).read_text()
     )
     public_key = Ed25519PublicKey.from_public_bytes(
         base64.urlsafe_b64decode(vector["public_key_base64url"] + "==")

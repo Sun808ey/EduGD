@@ -25,25 +25,72 @@ translation_bp = Blueprint("translation", __name__)
 @limiter.limit("60 per minute")
 def translate_public_landing_content() -> Response:
     payload = request.get_json(silent=True)
-    if not isinstance(payload, dict) or set(payload) != {"content_key", "target_language"}:
-        return admin_error("invalid_translation_request", "invalid translation request", 400)
+    if not isinstance(payload, dict) or set(payload) != {
+        "content_key",
+        "target_language",
+    }:
+        return admin_error(
+            "invalid_translation_request", "invalid translation request", 400
+        )
     key = payload.get("content_key")
     if not isinstance(key, str) or key not in LANDING_PAGE_CONTENT:
-        return admin_error("invalid_translation_content", "content is not approved for landing translation", 400)
+        return admin_error(
+            "invalid_translation_content",
+            "content is not approved for landing translation",
+            400,
+        )
     try:
         target = normalize_language(payload.get("target_language"))
     except (TypeError, ValueError):
-        return admin_error("invalid_translation_request", "invalid translation request", 400)
+        return admin_error(
+            "invalid_translation_request", "invalid translation request", 400
+        )
     source = LANDING_PAGE_CONTENT[key]
     try:
         if target == "eng":
-            return admin_json({"content_key": key, "translated_text": source, "target_language": target, "cached": False, "fallback": False, "quality_status": "canonical"})
-        result = translate_text(text=source, source_language="eng", target_language=target)
+            return admin_json(
+                {
+                    "content_key": key,
+                    "translated_text": source,
+                    "target_language": target,
+                    "cached": False,
+                    "fallback": False,
+                    "quality_status": "canonical",
+                }
+            )
+        result = translate_text(
+            text=source, source_language="eng", target_language=target
+        )
     except (TypeError, ValueError):
-        return admin_error("invalid_translation_request", "invalid translation request", 400)
-    except (TranslationConfigurationError, TranslationRateLimitError, TranslationProviderError, TranslationResponseError):
-        return admin_json({"content_key": key, "translated_text": source, "target_language": target, "cached": False, "fallback": True, "quality_status": "canonical"})
-    return admin_json({"content_key": key, "translated_text": result.translated_text, "target_language": target, "cached": result.cached, "fallback": False, "quality_status": result.quality_status})
+        return admin_error(
+            "invalid_translation_request", "invalid translation request", 400
+        )
+    except (
+        TranslationConfigurationError,
+        TranslationRateLimitError,
+        TranslationProviderError,
+        TranslationResponseError,
+    ):
+        return admin_json(
+            {
+                "content_key": key,
+                "translated_text": source,
+                "target_language": target,
+                "cached": False,
+                "fallback": True,
+                "quality_status": "canonical",
+            }
+        )
+    return admin_json(
+        {
+            "content_key": key,
+            "translated_text": result.translated_text,
+            "target_language": target,
+            "cached": result.cached,
+            "fallback": False,
+            "quality_status": result.quality_status,
+        }
+    )
 
 
 @translation_bp.post("/admin/translation/translate")
@@ -67,13 +114,21 @@ def translate_admin_content() -> Response:
             target_language=payload["target_language"],
         )
     except (TypeError, ValueError):
-        return admin_error("invalid_translation_request", "invalid translation request", 400)
+        return admin_error(
+            "invalid_translation_request", "invalid translation request", 400
+        )
     except TranslationConfigurationError:
-        return admin_error("translation_unavailable", "translation is not configured", 503)
+        return admin_error(
+            "translation_unavailable", "translation is not configured", 503
+        )
     except TranslationRateLimitError:
-        return admin_error("translation_rate_limited", "translation is temporarily rate limited", 429)
+        return admin_error(
+            "translation_rate_limited", "translation is temporarily rate limited", 429
+        )
     except (TranslationProviderError, TranslationResponseError):
-        return admin_error("translation_unavailable", "translation is temporarily unavailable", 503)
+        return admin_error(
+            "translation_unavailable", "translation is temporarily unavailable", 503
+        )
     return admin_json(
         {
             "translated_text": result.translated_text,

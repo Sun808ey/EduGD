@@ -7,6 +7,8 @@ import { LoadingState } from '@/components/ui/AsyncState'
 import { LandingPage } from '@/pages/LandingPage'
 import { MarketingShell } from '@/components/marketing/MarketingShell'
 import { AboutPage, ArchitecturePage, ContactPage, FeatureDetailPage, FeaturesPage, HowItWorksPage, ProductPage, ResourcesPage, SchoolsPage, SecurityPage } from '@/pages/MarketingPages'
+import { LanguageProvider } from '@/i18n/LanguageContext'
+import { LandingLanguageProvider } from '@/i18n/LandingLanguageContext'
 
 const DashboardPage = lazy(() => import('@/pages/dashboard').then((module) => ({ default: module.DashboardPage })))
 const DevicesPage = lazy(() => import('@/pages/devices').then((module) => ({ default: module.DevicesPage })))
@@ -18,8 +20,8 @@ const DeviceDetailPage = lazy(() => import('@/pages/DeviceDetailPage').then((mod
 
 function App() {
   return (
-      <Suspense fallback={<LoadingState label="Loading page…" />}><Routes>
-        <Route path="/landing" element={<MarketingShell><LandingPage /></MarketingShell>} />
+  <Suspense fallback={<LoadingState label="Loading page…" />}><Routes>
+        <Route path="/landing" element={<LandingLanguageProvider><MarketingShell><LandingPage /></MarketingShell></LandingLanguageProvider>} />
         <Route path="/product" element={<MarketingShell><ProductPage /></MarketingShell>} />
         <Route path="/features" element={<MarketingShell><FeaturesPage /></MarketingShell>} />
         <Route path="/features/:slug" element={<MarketingShell><FeatureDetailPage /></MarketingShell>} />
@@ -31,7 +33,7 @@ function App() {
         <Route path="/about" element={<MarketingShell><AboutPage /></MarketingShell>} />
         <Route path="/contact" element={<MarketingShell><ContactPage /></MarketingShell>} />
         <Route path="/login" element={<LoginPage />} />
-        <Route element={<ProtectedRoute><AdminShell /></ProtectedRoute>}>
+        <Route element={<ProtectedRoute><LanguageProvider><AdminShell /></LanguageProvider></ProtectedRoute>}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/devices" element={<DevicesPage />} />
           <Route path="/devices/:deviceUuid" element={<DeviceDetailPage />} />
@@ -40,7 +42,7 @@ function App() {
           <Route path="/policies/:policyUuid" element={<PolicyDetailPage />} />
           <Route path="/logs" element={<LogsPage />} />
         </Route>
-        <Route path="/" element={<MarketingShell><LandingPage /></MarketingShell>} />
+        <Route path="/" element={<LandingLanguageProvider><MarketingShell><LandingPage /></MarketingShell></LandingLanguageProvider>} />
         <Route path="/forbidden" element={<MessagePage title="Permission denied" message="Your account does not have permission to perform that action." />} />
         <Route path="*" element={<MessagePage title="Page not found" message="The requested page does not exist." />} />
       </Routes></Suspense>

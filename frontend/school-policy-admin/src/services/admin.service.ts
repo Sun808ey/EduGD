@@ -6,6 +6,8 @@ import {
   enrollmentTokensSchema, issuedEnrollmentTokenSchema, messageSchema,
   policiesSchema, policyDetailSchema, revisionsSchema, blockOverrideResponseSchema,
   dpcEvidenceResponseSchema, dpcSummarySchema, policyCreateSchema,
+  managedApplicationsSchema, managedApplicationSchema,
+  translationResultSchema,
 } from '@/schemas/api'
 import type { PageRequest, Policy } from '@/types/api.types'
 
@@ -102,6 +104,22 @@ export const adminService = {
   async createPolicy(name: string, payload: Record<string, unknown>) {
     const response = await api.post('/admin/policies', { name, payload })
     return policyCreateSchema.parse(response.data)
+  },
+  async listManagedApplications(signal?: AbortSignal) {
+    const response = await api.get('/admin/applications', { signal })
+    return managedApplicationsSchema.parse(response.data).applications
+  },
+  async createManagedApplication(application: Omit<import('@/types/api.types').ManagedApplication, 'application_uuid' | 'created_at' | 'updated_at'>) {
+    const response = await api.post('/admin/applications', application)
+    return managedApplicationSchema.parse(response.data.application)
+  },
+  async updateManagedApplication(uuid: string, application: Omit<import('@/types/api.types').ManagedApplication, 'application_uuid' | 'created_at' | 'updated_at'>) {
+    const response = await api.patch(`/admin/applications/${path(uuid)}`, application)
+    return managedApplicationSchema.parse(response.data.application)
+  },
+  async translateApprovedDynamicContent(text: string, targetLanguage: import('@/types/api.types').SupportedLanguage, sourceLanguage: import('@/types/api.types').SupportedLanguage | null = 'eng') {
+    const response = await api.post('/admin/translation/translate', { text, target_language: targetLanguage, source_language: sourceLanguage, content_class: 'approved_dynamic' })
+    return translationResultSchema.parse(response.data)
   },
   async createPolicyRevision(policyUuid: string, payload: Record<string, unknown>) {
     return api.post(`/admin/policies/${path(policyUuid)}/revisions`, { payload })

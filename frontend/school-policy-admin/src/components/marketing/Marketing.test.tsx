@@ -4,8 +4,9 @@ import { expect, test } from 'vitest'
 import { LandingPage } from '@/pages/LandingPage'
 import { AboutPage, ArchitecturePage, ContactPage, FeatureDetailPage, FeaturesPage, HowItWorksPage, ProductPage, ResourcesPage, SchoolsPage, SecurityPage } from '@/pages/MarketingPages'
 import { MarketingShell } from './MarketingShell'
+import { LandingLanguageProvider } from '@/i18n/LandingLanguageContext'
 
-function renderPage(page: React.ReactNode) { return render(<MemoryRouter><MarketingShell>{page}</MarketingShell></MemoryRouter>) }
+function renderPage(page: React.ReactNode) { return render(<MemoryRouter><LandingLanguageProvider><MarketingShell>{page}</MarketingShell></LandingLanguageProvider></MemoryRouter>) }
 
 test('renders the public homepage and shared marketing shell', () => {
   renderPage(<LandingPage />)

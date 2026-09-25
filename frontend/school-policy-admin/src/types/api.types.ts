@@ -114,3 +114,6 @@ export interface ApiFailure {
 export interface BlockOverride { version: number; status: 'active' | 'cleared'; reason: string; issued_at: string; cleared_at: string | null }
 export interface DpcEvidence { kind: 'usage' | 'override' | 'web_filter' | 'policy_application'; occurred_at: string | null; usage_date?: string; active_minutes?: number; operation?: string; reason?: string; domain_hash?: string; rule_id?: string; outcome?: string; error_code?: string | null; policy_uuid?: string | null; revision_uuid?: string | null }
 export interface DpcSummary { managed_devices: number; active_block_overrides: number; active_v3_assignments: number; enforcement_failures: number }
+export interface ManagedApplication { application_uuid: string; display_name: string; package_name: string; signing_certificate_sha256: string | null; category: string; education_approved: boolean; mandatory_block: boolean; status: 'enabled' | 'disabled'; created_at: string; updated_at: string }
+export type SupportedLanguage = 'eng' | 'ach' | 'lgg' | 'teo' | 'nyn' | 'lug'
+export interface TranslationResult { translated_text: string; source_language: SupportedLanguage | null; target_language: SupportedLanguage; cached: boolean; content_class: 'approved_dynamic' }

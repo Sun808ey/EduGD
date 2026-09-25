@@ -140,4 +140,17 @@ describe('administrator API service', () => {
     expect(api.post).toHaveBeenNthCalledWith(4, `/admin/policies/${policyUuid}/revisions`, { payload: { blocked_packages: [] } })
     expect(api.post).toHaveBeenNthCalledWith(5, `/admin/policies/${policyUuid}/lifecycle`, { status: 'active', reason: 'approved' })
   })
+
+  it('uses the authenticated approved-dynamic translation route', async () => {
+    const translation = { translated_text: 'Oli otya?', source_language: 'eng', target_language: 'lug', cached: false, content_class: 'approved_dynamic' }
+    vi.mocked(api.post).mockResolvedValueOnce({ data: translation })
+
+    await expect(adminService.translateApprovedDynamicContent('Hello', 'lug')).resolves.toEqual(translation)
+    expect(api.post).toHaveBeenCalledWith('/admin/translation/translate', {
+      text: 'Hello',
+      target_language: 'lug',
+      source_language: 'eng',
+      content_class: 'approved_dynamic',
+    })
+  })
 })

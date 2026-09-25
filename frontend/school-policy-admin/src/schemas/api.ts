@@ -146,3 +146,6 @@ export const dpcEvidenceSchema = z.object({ kind: z.enum(['usage', 'override', '
 export const dpcEvidenceResponseSchema = z.object({ evidence: z.array(dpcEvidenceSchema), pagination })
 export const dpcSummarySchema = z.object({ summary: z.object({ managed_devices: z.number().int().nonnegative(), active_block_overrides: z.number().int().nonnegative(), active_v3_assignments: z.number().int().nonnegative(), enforcement_failures: z.number().int().nonnegative() }) })
 export const policyCreateSchema = z.object({ policy_uuid: uuid, status: z.enum(['draft', 'active', 'inactive', 'revoked']) })
+export const managedApplicationSchema = z.object({ application_uuid: uuid, display_name: z.string(), package_name: z.string(), signing_certificate_sha256: z.string().nullable(), category: z.string(), education_approved: z.boolean(), mandatory_block: z.boolean(), status: z.enum(['enabled', 'disabled']), created_at: z.string(), updated_at: z.string() })
+export const managedApplicationsSchema = z.object({ applications: z.array(managedApplicationSchema) })
+export const translationResultSchema = z.object({ translated_text: z.string().min(1), source_language: z.string().nullable(), target_language: z.enum(['eng', 'ach', 'lgg', 'teo', 'nyn', 'lug']), cached: z.boolean(), content_class: z.literal('approved_dynamic') })

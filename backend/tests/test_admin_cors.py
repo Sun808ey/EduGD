@@ -29,7 +29,6 @@ def test_admin_cors_allows_configured_origin_on_preflight(app: Flask) -> None:
     assert response.headers["Access-Control-Allow-Credentials"] == "true"
     assert response.headers["Access-Control-Allow-Methods"] == "GET, POST, OPTIONS"
     assert response.headers["Vary"] == "Origin"
-    assert "Access-Control-Allow-Credentials" not in response.headers
 
 
 def test_admin_cors_rejects_unconfigured_origin_preflight(app: Flask) -> None:

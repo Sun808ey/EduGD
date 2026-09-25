@@ -46,6 +46,7 @@ def policy() -> dict[str, object]:
                 {
                     "rule_id": "social",
                     "domain": "Example.COM.",
+                    "include_subdomains": True,
                     "action": "block",
                     "reason": "focus",
                 }
@@ -58,6 +59,23 @@ def test_v3_normalizes_domain_rules() -> None:
     result = validate_policy_v3(policy())
     assert result["schema_version"] == 3
     assert result["web_filter"]["rules"][0]["domain"] == "example.com"
+    assert result["web_filter"]["rules"][0]["include_subdomains"] is True
+
+
+@pytest.mark.parametrize("default_action", ["allow", "block"])
+def test_v3_supports_both_web_filter_defaults(default_action: str) -> None:
+    value = policy()
+    value["web_filter"]["default_action"] = default_action
+
+    assert validate_policy_v3(value)["web_filter"]["default_action"] == default_action
+
+
+def test_v3_rejects_web_filter_rule_without_subdomain_semantics() -> None:
+    value = policy()
+    del value["web_filter"]["rules"][0]["include_subdomains"]
+
+    with pytest.raises(PolicyContractError):
+        validate_policy_v3(value)
 
 
 @pytest.mark.parametrize(

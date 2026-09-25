@@ -103,7 +103,7 @@ def validate_profile_payload(value: object) -> dict[str, Any]:
     for key in keys - {"api_level", "security_patch", "carrier_configuration_sha256"}:
         _text(identity[key], 512 if key == "build_fingerprint" else 120)
     _digest(identity["carrier_configuration_sha256"])
-    if type(identity["api_level"]) is not int or not 29 <= identity["api_level"] <= 36:
+    if type(identity["api_level"]) is not int or not 29 <= identity["api_level"] <= 35:
         raise CertificationError("unsupported API level")
     _date(identity["security_patch"])
     _digest(value["baseline_sha256"])

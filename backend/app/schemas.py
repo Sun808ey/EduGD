@@ -5,8 +5,8 @@ from flask import Request
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 from app.device_identity import (
-    ANDROID_VERSION_BY_API_LEVEL,
     parse_canonical_uuid4,
+    validate_android_compatibility,
 )
 
 REGISTRATION_FIELDS = frozenset({"device_uuid", "android_version", "api_level"})
@@ -88,17 +88,13 @@ def _validate_android_version(
     android_version: object,
     api_level: object,
 ) -> tuple[str, int]:
-    if (
-        not isinstance(android_version, str)
-        or isinstance(api_level, bool)
-        or not isinstance(api_level, int)
-        or ANDROID_VERSION_BY_API_LEVEL.get(api_level) != android_version
-    ):
+    try:
+        return validate_android_compatibility(android_version, api_level)
+    except ValueError:
         raise DeviceRegistrationValidationError(
             "android_version and api_level must identify a supported Android "
             "version and API level"
         )
-    return android_version, api_level
 
 
 __all__ = [

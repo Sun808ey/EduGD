@@ -21,7 +21,7 @@ ANDROID_VERSION_BY_API_LEVEL = {
 SUPPORTED_ANDROID_VERSION_BY_API_LEVEL = {
     level: version
     for level, version in ANDROID_VERSION_BY_API_LEVEL.items()
-    if 29 <= level <= 36
+    if 29 <= level <= 35
 }
 
 

@@ -8,7 +8,7 @@ from urllib.parse import quote_from_bytes
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 
 BASE64URL_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 HEX_DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -23,7 +23,7 @@ class DeviceCryptographyError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class ValidatedPublicKey:
-    key: rsa.RSAPublicKey
+    key: ec.EllipticCurvePublicKey | rsa.RSAPublicKey
     der: bytes
     fingerprint: bytes
 
@@ -50,7 +50,10 @@ def encode_base64url(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
-def validate_public_key(value: object) -> ValidatedPublicKey:
+def validate_public_key(
+    value: object,
+    algorithm: str = "RSA_2048_SHA256",
+) -> ValidatedPublicKey:
     der = decode_base64url(value)
     if len(der) > 512:
         raise DeviceCryptographyError("public key is too large")
@@ -58,11 +61,19 @@ def validate_public_key(value: object) -> ValidatedPublicKey:
         key = serialization.load_der_public_key(der)
     except (ValueError, TypeError) as error:
         raise DeviceCryptographyError("invalid public key") from error
-    if not isinstance(key, rsa.RSAPublicKey):
-        raise DeviceCryptographyError("unsupported public key type")
-    numbers = key.public_numbers()
-    if key.key_size != 2048 or numbers.e != 65537:
-        raise DeviceCryptographyError("unsupported RSA parameters")
+    if algorithm == "RSA_2048_SHA256":
+        if not isinstance(key, rsa.RSAPublicKey):
+            raise DeviceCryptographyError("unsupported public key type")
+        numbers = key.public_numbers()
+        if key.key_size != 2048 or numbers.e != 65537:
+            raise DeviceCryptographyError("unsupported RSA parameters")
+    elif algorithm == "ECDSA_P256_SHA256":
+        if not isinstance(key, ec.EllipticCurvePublicKey) or not isinstance(
+            key.curve, ec.SECP256R1
+        ):
+            raise DeviceCryptographyError("unsupported ECDSA parameters")
+    else:
+        raise DeviceCryptographyError("unsupported credential algorithm")
     canonical_der = key.public_bytes(
         serialization.Encoding.DER,
         serialization.PublicFormat.SubjectPublicKeyInfo,
@@ -117,13 +128,24 @@ def rotation_message(
 
 
 def verify_signature(
-    key: rsa.RSAPublicKey,
+    key: ec.EllipticCurvePublicKey | rsa.RSAPublicKey,
     signature_value: object,
     message: bytes,
+    algorithm: str = "RSA_2048_SHA256",
 ) -> None:
-    signature = decode_base64url(signature_value, decoded_length=256)
+    signature = decode_base64url(
+        signature_value,
+        decoded_length=256 if algorithm == "RSA_2048_SHA256" else None,
+    )
     try:
-        key.verify(signature, message, padding.PKCS1v15(), hashes.SHA256())
+        if algorithm == "RSA_2048_SHA256" and isinstance(key, rsa.RSAPublicKey):
+            key.verify(signature, message, padding.PKCS1v15(), hashes.SHA256())
+        elif algorithm == "ECDSA_P256_SHA256" and isinstance(
+            key, ec.EllipticCurvePublicKey
+        ):
+            key.verify(signature, message, ec.ECDSA(hashes.SHA256()))
+        else:
+            raise DeviceCryptographyError("signature algorithm does not match key")
     except InvalidSignature as error:
         raise DeviceCryptographyError("invalid signature") from error
 

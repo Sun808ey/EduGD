@@ -64,6 +64,24 @@ def test_production_verifier_accepts_shared_request_vector() -> None:
     verify_signature(public_key.key, request["signature_base64url"], message)
 
 
+def test_production_verifier_accepts_ecdsa_p256_signature() -> None:
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    der = private_key.public_key().public_bytes(
+        serialization.Encoding.DER,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    public_key = validate_public_key(encode_base64url(der), "ECDSA_P256_SHA256")
+    message = b"DEVICE-AUTH-V1\necdsa"
+    signature = private_key.sign(message, ec.ECDSA(hashes.SHA256()))
+
+    verify_signature(
+        public_key.key,
+        encode_base64url(signature),
+        message,
+        "ECDSA_P256_SHA256",
+    )
+
+
 def test_verifier_rejects_wrong_rsa_padding_and_protocol_domain() -> None:
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     message = b"DEVICE-AUTH-V1\ntest"

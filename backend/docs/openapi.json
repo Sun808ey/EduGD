@@ -317,6 +317,96 @@
         }
       }
     },
+    "/admin/translation/translate": {
+      "post": {
+        "security": {
+          "administratorBearer": []
+        },
+        "responses": {
+          "200": {
+            "description": "Approved dynamic content translated"
+          },
+          "400": {
+            "description": "Invalid or unapproved translation request"
+          },
+          "401": {
+            "description": "Authentication failed"
+          },
+          "429": {
+            "description": "Translation rate limit exceeded"
+          },
+          "503": {
+            "description": "Translation provider unavailable or not configured"
+          }
+        }
+      }
+    },
+    "/admin/applications": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Managed application catalogue"
+          },
+          "401": {
+            "description": "Authentication failed"
+          }
+        }
+      },
+      "post": {
+        "security": {
+          "administratorBearer": []
+        },
+        "responses": {
+          "201": {
+            "description": "Managed application created"
+          },
+          "400": {
+            "description": "Invalid application"
+          },
+          "409": {
+            "description": "Application conflict"
+          },
+          "503": {
+            "description": "Persistence unavailable"
+          }
+        }
+      }
+    },
+    "/admin/applications/{application_uuid}": {
+      "parameters": [
+        {
+          "name": "application_uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "security": {
+          "administratorBearer": []
+        },
+        "responses": {
+          "200": {
+            "description": "Managed application updated"
+          },
+          "400": {
+            "description": "Invalid application"
+          },
+          "404": {
+            "description": "Application not found"
+          },
+          "409": {
+            "description": "Application conflict"
+          },
+          "503": {
+            "description": "Persistence unavailable"
+          }
+        }
+      }
+    },
     "/admin/policies": {
       "get": {
         "parameters": [

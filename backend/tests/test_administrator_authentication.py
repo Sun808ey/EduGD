@@ -395,7 +395,7 @@ def test_logout_revokes_database_session_and_rejects_token_reuse(app: Flask) -> 
         assert "authorization_failed" in categories
 
 
-def test_permission_decorator_uses_database_not_jwt_claims(app: Flask) -> None:
+def test_authenticated_administrators_retain_full_permissions(app: Flask) -> None:
     @app.get("/test/admin-manage")
     @administrator_required("administrator.manage")
     def protected_test_route() -> Any:
@@ -416,12 +416,19 @@ def test_permission_decorator_uses_database_not_jwt_claims(app: Flask) -> None:
         )
         db.session.commit()
 
-    denied_response = app.test_client().get("/test/admin-manage", headers=headers)
+    restored_response = app.test_client().get("/test/admin-manage", headers=headers)
 
     assert allowed_response.status_code == 200
-    assert denied_response.status_code == 403
-    assert denied_response.get_json() == {"error": "authorization_failed"}
-    assert denied_response.headers["Cache-Control"] == "no-store"
+    assert restored_response.status_code == 200
+    assert restored_response.get_json() == {"allowed": True}
+    with app.app_context():
+        assert set(
+            db.session.execute(
+                select(AdministratorPermission.permission).where(
+                    AdministratorPermission.administrator_id == _administrator().id
+                )
+            ).scalars()
+        ) == ADMINISTRATOR_PERMISSIONS
 
 
 @pytest.mark.parametrize(

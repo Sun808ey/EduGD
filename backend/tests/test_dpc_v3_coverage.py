@@ -43,7 +43,7 @@ def test_v3_envelope_round_trip_and_tamper_detection() -> None:
     [
         ("daily_limit_minutes", 0),
         ("reset_minute", 1440),
-        ("web_filter", {"default_action": "block", "rules": []}),
+        ("web_filter", {"default_action": "invalid", "rules": []}),
     ],
 )
 def test_v3_rejects_invalid_limits_and_filter(field: str, value: object) -> None:

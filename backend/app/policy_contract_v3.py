@@ -15,9 +15,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 )
 
 from app.policy_contract import PolicyContractError, canonical_json_bytes
+from app.protocol_versions import POLICY_PROTOCOL_VERSION, POLICY_SCHEMA_VERSION
 
-POLICY_SCHEMA_VERSION = 3
-DPC_PROTOCOL_VERSION = 3
 _DOMAIN = re.compile(r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 _RULE_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
@@ -91,30 +90,31 @@ def validate_policy_v3(value: object) -> dict[str, object]:
     if not isinstance(exhausted, str) or exhausted not in {m["mode_id"] for m in modes}:
         raise PolicyContractError("invalid exhausted_mode_id")
     web = value["web_filter"]
-    if (
-        not isinstance(web, dict)
-        or set(web) != {"default_action", "rules"}
-        or web["default_action"] != "allow"
-    ):
+    if not isinstance(web, dict) or set(web) != {"default_action", "rules"}:
         raise PolicyContractError("invalid web_filter")
+    default_action = web["default_action"]
+    if default_action not in {"allow", "block"}:
+        raise PolicyContractError("invalid web-filter default_action")
     if not isinstance(web["rules"], list) or len(web["rules"]) > 256:
         raise PolicyContractError("invalid web-filter rules")
-    rules: list[dict[str, str]] = []
+    rules: list[dict[str, object]] = []
     seen: set[tuple[str, str]] = set()
     ids: set[str] = set()
     for raw in web["rules"]:
         if not isinstance(raw, dict) or set(raw) != {
-            "rule_id",
-            "domain",
-            "action",
-            "reason",
+            "rule_id", "domain", "include_subdomains", "action", "reason"
         }:
             raise PolicyContractError("invalid web-filter rule")
-        rule_id, domain, action, reason = raw.values()
+        rule_id = raw["rule_id"]
+        domain = raw["domain"]
+        include_subdomains = raw["include_subdomains"]
+        action = raw["action"]
+        reason = raw["reason"]
         if (
             not isinstance(rule_id, str)
             or not _RULE_ID.fullmatch(rule_id)
             or rule_id in ids
+            or not isinstance(include_subdomains, bool)
         ):
             raise PolicyContractError("invalid web-filter rule_id")
         domain = normalize_domain(domain)
@@ -130,7 +130,13 @@ def validate_policy_v3(value: object) -> dict[str, object]:
         seen.add((domain, action))
         ids.add(rule_id)
         rules.append(
-            {"rule_id": rule_id, "domain": domain, "action": action, "reason": reason}
+            {
+                "rule_id": rule_id,
+                "domain": domain,
+                "include_subdomains": include_subdomains,
+                "action": action,
+                "reason": reason,
+            }
         )
     return {
         **common,
@@ -141,7 +147,7 @@ def validate_policy_v3(value: object) -> dict[str, object]:
             "exhausted_mode_id": exhausted,
         },
         "web_filter": {
-            "default_action": "allow",
+            "default_action": default_action,
             "rules": sorted(rules, key=lambda r: r["rule_id"]),
         },
     }
@@ -186,7 +192,7 @@ def build_policy_v3_envelope(
     )
     return {
         **base,
-        "protocol_version": DPC_PROTOCOL_VERSION,
+            "protocol_version": POLICY_PROTOCOL_VERSION,
         "payload_hash": policy_v3_hash(checked),
         "payload": checked,
     }
@@ -219,7 +225,7 @@ def verify_policy_v3_envelope(
             "payload",
             "signature",
         }
-        or envelope.get("protocol_version") != DPC_PROTOCOL_VERSION
+        or envelope.get("protocol_version") != POLICY_PROTOCOL_VERSION
     ):
         raise PolicyContractError("invalid v3 policy envelope")
     try:

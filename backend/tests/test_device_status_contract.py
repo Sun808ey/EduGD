@@ -12,7 +12,7 @@ from app.device_status_contract import (
 
 def check_in() -> dict[str, object]:
     return {
-        "protocol_version": 2,
+        "protocol_version": 3,
         "check_in_uuid": str(uuid4()),
         "observed_at": "2026-09-20T12:00:00Z",
         "elapsed_realtime_ms": 1000,
@@ -32,7 +32,7 @@ def check_in() -> dict[str, object]:
 
 def acknowledgement() -> dict[str, object]:
     return {
-        "protocol_version": 2,
+        "protocol_version": 3,
         "acknowledgement_uuid": str(uuid4()),
         "observed_at": "2026-09-20T12:00:00Z",
         "elapsed_realtime_ms": 1000,

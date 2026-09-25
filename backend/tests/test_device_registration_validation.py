@@ -200,6 +200,19 @@ def test_registration_rejects_invalid_android_compatibility(
     )
 
 
+def test_registration_rejects_android_16_api_36(app: Flask) -> None:
+    payload = {**VALID_PAYLOAD, "android_version": "16", "api_level": 36}
+
+    with request_context(app, payload=payload):
+        with pytest.raises(DeviceRegistrationValidationError) as error:
+            validate_device_registration_request(request)
+
+    assert error.value.message == (
+        "android_version and api_level must identify a supported Android "
+        "version and API level"
+    )
+
+
 @pytest.mark.parametrize("field", ["id", "status", "created_at", "extra"])
 def test_registration_rejects_unexpected_client_fields(
     app: Flask,

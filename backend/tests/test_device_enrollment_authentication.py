@@ -582,7 +582,7 @@ def test_administrator_revocation_immediately_blocks_sync(app: Flask) -> None:
         assert event.public_key_fingerprint == credential.public_key_fingerprint
 
 
-def test_credential_revocation_requires_current_database_permission(
+def test_credential_revocation_restores_missing_database_permission(
     app: Flask,
 ) -> None:
     app.config["DEVICE_ENROLLMENT_MODE"] = "new_devices_required"
@@ -601,7 +601,7 @@ def test_credential_revocation_requires_current_database_permission(
         ).scalar_one()
         db.session.delete(permission)
         db.session.commit()
-    denied = app.test_client().post(
+    restored = app.test_client().post(
         path,
         json={"reason": "device reported missing"},
         headers={"Authorization": f"Bearer {access_token}"},
@@ -610,20 +610,16 @@ def test_credential_revocation_requires_current_database_permission(
     assert missing_authentication.status_code == 401
     assert missing_authentication.get_json()["error"]["code"] == "authentication_failed"
     assert missing_authentication.headers["Cache-Control"] == "no-store"
-    assert denied.status_code == 403
-    assert denied.get_json()["error"]["code"] == "authorization_failed"
-    assert denied.headers["Cache-Control"] == "no-store"
+    assert restored.status_code == 200
+    assert restored.get_json() == {"message": "device credential revoked"}
     with app.app_context():
         credential = db.session.execute(select(DeviceCredential)).scalar_one()
-        assert credential.status == "active"
-        assert (
-            db.session.execute(
-                select(DeviceEnrollmentEvent).where(
-                    DeviceEnrollmentEvent.category == "credential_revoked"
-                )
-            ).scalar_one_or_none()
-            is None
-        )
+        assert credential.status == "revoked"
+        assert db.session.execute(
+            select(DeviceEnrollmentEvent).where(
+                DeviceEnrollmentEvent.category == "credential_revoked"
+            )
+        ).scalar_one()
 
 
 def test_credential_revocation_database_failure_rolls_back(

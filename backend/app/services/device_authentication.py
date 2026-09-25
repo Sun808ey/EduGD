@@ -11,7 +11,7 @@ from uuid import UUID
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from flask import Response, current_app, g, jsonify, request
 from flask.typing import ResponseReturnValue
 from sqlalchemy import delete, select
@@ -154,10 +154,20 @@ def authenticate_device_request(
             device_uuid=str(device.device_uuid),
         )
         key = serialization.load_der_public_key(credential.public_key_der)
-        if not isinstance(key, rsa.RSAPublicKey):
+        signature = decode_base64url(
+            signature_text,
+            decoded_length=256 if credential.algorithm == "RSA_2048_SHA256" else None,
+        )
+        if credential.algorithm == "RSA_2048_SHA256" and isinstance(
+            key, rsa.RSAPublicKey
+        ):
+            key.verify(signature, message, padding.PKCS1v15(), hashes.SHA256())
+        elif credential.algorithm == "ECDSA_P256_SHA256" and isinstance(
+            key, ec.EllipticCurvePublicKey
+        ):
+            key.verify(signature, message, ec.ECDSA(hashes.SHA256()))
+        else:
             raise DeviceCryptographyError("stored public key is invalid")
-        signature = decode_base64url(signature_text, decoded_length=256)
-        key.verify(signature, message, padding.PKCS1v15(), hashes.SHA256())
     except (DeviceCryptographyError, InvalidSignature, ValueError, TypeError):
         _fail(device, credential, "invalid_signature")
 

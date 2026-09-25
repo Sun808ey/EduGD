@@ -24,6 +24,12 @@ file or in Git.
 - `REDIS_URL` identifies the existing shared Redis service used for
   production rate-limit state. Production startup and readiness fail closed
   when it is missing or unreachable.
+- `SUNBIRD_API_BASE_URL` identifies the HTTPS Sunbird AI API base URL used only
+  by the backend translation service. The default API host is
+  `https://api.sunbird.ai`.
+- `SUNBIRD_API_TOKEN` is a backend-only Sunbird bearer token. Never put it in a
+  `VITE_*` variable, browser code, Vercel configuration, logs, fixtures, or
+  OpenAPI examples.
 
 All secret variables must remain unset in committed files. Production requires
 distinct `SECRET_KEY`, `JWT_SECRET_KEY`, `ADMIN_AUDIT_PSEUDONYM_KEY`, and

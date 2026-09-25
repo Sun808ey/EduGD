@@ -55,7 +55,7 @@ def _post(
 
 def _check_in(observed_at: str = "2026-09-20T12:00:00Z") -> dict[str, object]:
     return {
-        "protocol_version": 2,
+        "protocol_version": 3,
         "check_in_uuid": str(uuid4()),
         "observed_at": observed_at,
         "elapsed_realtime_ms": 1000,
@@ -147,7 +147,7 @@ def test_policy_acknowledgement_records_known_revision(app: Flask) -> None:
         revision_uuid = str(revision.revision_uuid)
 
     acknowledgement = {
-        "protocol_version": 2,
+        "protocol_version": 3,
         "acknowledgement_uuid": str(uuid4()),
         "observed_at": "2026-09-20T12:00:00Z",
         "elapsed_realtime_ms": 1000,
@@ -171,7 +171,7 @@ def test_policy_acknowledgement_records_known_revision(app: Flask) -> None:
 def test_policy_acknowledgement_rejects_unknown_revision(app: Flask) -> None:
     credential_uuid, private_key = _enroll(app)
     acknowledgement = {
-        "protocol_version": 2,
+        "protocol_version": 3,
         "acknowledgement_uuid": str(uuid4()),
         "observed_at": "2026-09-20T12:00:00Z",
         "elapsed_realtime_ms": 1000,

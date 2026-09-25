@@ -63,7 +63,9 @@ ENROLLMENT_TOKEN_STATUSES = frozenset(
     {"active", "consumed", "revoked", "expired", "locked"}
 )
 DEVICE_CREDENTIAL_STATUSES = frozenset({"active", "revoked", "superseded"})
-DEVICE_CREDENTIAL_ALGORITHMS = frozenset({"RSA_2048_SHA256"})
+DEVICE_CREDENTIAL_ALGORITHMS = frozenset(
+    {"ECDSA_P256_SHA256", "RSA_2048_SHA256"}
+)
 DEVICE_ENROLLMENT_EVENT_CATEGORIES = frozenset(
     {
         "token_issued",
@@ -681,7 +683,7 @@ class Device(db.Model):
             name="ck_devices_api_level_supported",
         ),
         CheckConstraint(
-            "status <> 'active' OR api_level BETWEEN 29 AND 36",
+            "status <> 'active' OR api_level BETWEEN 29 AND 35",
             name="ck_devices_active_api_supported",
         ),
         CheckConstraint(
@@ -796,6 +798,92 @@ class Device(db.Model):
             raise ValueError("unsupported Android API level")
         return value
 
+
+class ManagedApplication(db.Model):
+    __tablename__ = "managed_applications"
+    __table_args__ = (
+        UniqueConstraint("application_uuid", name="uq_managed_applications_uuid"),
+        UniqueConstraint("package_name", name="uq_managed_applications_package"),
+        CheckConstraint(
+            "status IN ('enabled', 'disabled')",
+            name="ck_managed_applications_status",
+        ),
+        CheckConstraint(
+            "length(display_name) BETWEEN 1 AND 120",
+            name="ck_managed_applications_display_name",
+        ),
+        CheckConstraint(
+            "category = lower(category) AND length(category) BETWEEN 1 AND 64",
+            name="ck_managed_applications_category",
+        ),
+        CheckConstraint(
+            "signing_certificate_sha256 IS NULL OR "
+            "length(signing_certificate_sha256) = 32",
+            name="ck_managed_applications_signing_digest",
+        ),
+        Index("ix_managed_applications_status_category", "status", "category"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    application_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, default=uuid4
+    )
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    package_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    signing_certificate_sha256: Mapped[bytes | None] = mapped_column(
+        LargeBinary(32), nullable=True
+    )
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    education_approved: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    mandatory_block: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="enabled", server_default="enabled"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+    )
+
+    @validates("display_name")
+    def validate_display_name(self, _key: str, value: object) -> str:
+        return _validate_printable_text(value, "application display name", 120)
+
+    @validates("package_name")
+    def validate_package_name(self, _key: str, value: object) -> str:
+        if (
+            not isinstance(value, str)
+            or len(value) > 255
+            or ANDROID_PACKAGE_PATTERN.fullmatch(value) is None
+        ):
+            raise ValueError("invalid Android package name")
+        return value
+
+    @validates("signing_certificate_sha256")
+    def validate_signing_certificate_sha256(
+        self, _key: str, value: object
+    ) -> bytes | None:
+        if value is not None and (not isinstance(value, bytes) or len(value) != 32):
+            raise ValueError("signing certificate digest must contain 32 bytes")
+        return value
+
+    @validates("category")
+    def validate_category(self, _key: str, value: object) -> str:
+        if (
+            not isinstance(value, str)
+            or not 1 <= len(value) <= 64
+            or value != value.lower()
+            or not value.isprintable()
+        ):
+            raise ValueError("invalid application category")
+        return value
+
+    @validates("status")
+    def validate_status(self, _key: str, value: object) -> str:
+        if value not in {"enabled", "disabled"}:
+            raise ValueError("invalid managed application status")
+        return value
 
 class Policy(db.Model):
     __tablename__ = "policies"
@@ -1146,7 +1234,7 @@ class DeviceCredential(db.Model):
             name="uq_device_credentials_public_key_fingerprint",
         ),
         CheckConstraint(
-            "algorithm IN ('RSA_2048_SHA256')",
+            "algorithm IN ('ECDSA_P256_SHA256', 'RSA_2048_SHA256')",
             name="ck_device_credentials_algorithm",
         ),
         CheckConstraint(

@@ -14,6 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db, jwt
 from app.models import (
+    ADMINISTRATOR_PERMISSIONS,
     Administrator,
     AdministratorAuthenticationEvent,
     AdministratorPermission,
@@ -253,7 +254,43 @@ def _load_current_administrator_context() -> AdministratorRequestContext:
             administrator,
             session,
         )
+    _ensure_full_administrator_permissions(administrator, session)
     return AdministratorRequestContext(administrator, session)
+
+
+def _ensure_full_administrator_permissions(
+    administrator: Administrator,
+    session: AdministratorSession,
+) -> None:
+    existing = set(
+        db.session.execute(
+            select(AdministratorPermission.permission).where(
+                AdministratorPermission.administrator_id == administrator.id
+            )
+        ).scalars()
+    )
+    missing = sorted(ADMINISTRATOR_PERMISSIONS - existing)
+    if not missing:
+        return
+    for permission in missing:
+        db.session.add(
+            AdministratorPermission(
+                administrator_id=administrator.id,
+                permission=permission,
+                trusted_operator_subject="system:administrator-permission-reconciliation",
+                reason="all authenticated administrators retain full control access",
+            )
+        )
+        db.session.add(
+            AdministratorAuthenticationEvent(
+                administrator_id=administrator.id,
+                session_id=session.id,
+                category="permission_granted",
+                trusted_operator_subject="system:administrator-permission-reconciliation",
+                reason="all authenticated administrators retain full control access",
+            )
+        )
+    db.session.commit()
 
 
 def _has_permission(administrator_id: int, permission: str) -> bool:

@@ -4,7 +4,7 @@ import re
 from datetime import date, datetime
 from uuid import UUID
 
-from app.policy_contract import DPC_PROTOCOL_VERSION
+from app.protocol_versions import CONTROL_STATE_PROTOCOL_VERSION
 
 MAX_CAPABILITIES = 64
 MAX_DPC_VERSION = 2_147_483_647
@@ -106,7 +106,7 @@ def _policy_identity(policy: object, revision: object) -> tuple[str | None, str 
 
 def validate_check_in(value: object) -> dict[str, object]:
     payload = _strict(value, _CHECK_IN_KEYS, "device check-in")
-    if payload["protocol_version"] != DPC_PROTOCOL_VERSION:
+    if payload["protocol_version"] != CONTROL_STATE_PROTOCOL_VERSION:
         raise DeviceStatusContractError("unsupported protocol version")
     android_version = payload["android_version"]
     if (
@@ -148,7 +148,7 @@ def validate_check_in(value: object) -> dict[str, object]:
     if not isinstance(healthy, bool):
         raise DeviceStatusContractError("invalid enforcement_healthy")
     return {
-        "protocol_version": DPC_PROTOCOL_VERSION,
+        "protocol_version": CONTROL_STATE_PROTOCOL_VERSION,
         "check_in_uuid": _uuid(payload["check_in_uuid"], "check_in_uuid"),
         "observed_at": _timestamp(payload["observed_at"]),
         "elapsed_realtime_ms": _integer(
@@ -159,7 +159,7 @@ def validate_check_in(value: object) -> dict[str, object]:
             payload["dpc_version"], "dpc_version", 1, MAX_DPC_VERSION
         ),
         "android_version": android_version,
-        "api_level": _integer(payload["api_level"], "api_level", 29, 36),
+        "api_level": _integer(payload["api_level"], "api_level", 29, 35),
         "security_patch": patch,
         "capabilities": sorted(capabilities),
         "current_policy_uuid": policy_uuid,
@@ -174,7 +174,7 @@ def validate_check_in(value: object) -> dict[str, object]:
 
 def validate_policy_acknowledgement(value: object) -> dict[str, object]:
     payload = _strict(value, _ACK_KEYS, "policy acknowledgement")
-    if payload["protocol_version"] != DPC_PROTOCOL_VERSION:
+    if payload["protocol_version"] != CONTROL_STATE_PROTOCOL_VERSION:
         raise DeviceStatusContractError("unsupported protocol version")
     policy_uuid, revision_uuid = _policy_identity(
         payload["policy_uuid"], payload["revision_uuid"]
@@ -196,7 +196,7 @@ def validate_policy_acknowledgement(value: object) -> dict[str, object]:
             "successful acknowledgement cannot include error_code"
         )
     return {
-        "protocol_version": DPC_PROTOCOL_VERSION,
+        "protocol_version": CONTROL_STATE_PROTOCOL_VERSION,
         "acknowledgement_uuid": _uuid(
             payload["acknowledgement_uuid"], "acknowledgement_uuid"
         ),

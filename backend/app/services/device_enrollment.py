@@ -218,9 +218,9 @@ def enroll_device(data: DeviceEnrollmentData) -> EnrollmentResult:
         raise EnrollmentConflict("device already has an active credential")
 
     try:
-        public_key = validate_public_key(data.credential.public_key)
-        if data.credential.algorithm != "RSA_2048_SHA256":
-            raise DeviceCryptographyError("unsupported credential algorithm")
+        public_key = validate_public_key(
+            data.credential.public_key, data.credential.algorithm
+        )
         decode_base64url(data.credential.nonce, decoded_length=16)
         message = enrollment_message(
             device_uuid=data.device_uuid,
@@ -231,7 +231,12 @@ def enroll_device(data: DeviceEnrollmentData) -> EnrollmentResult:
             api_level=data.api_level,
             nonce=data.credential.nonce,
         )
-        verify_signature(public_key.key, data.credential.proof, message)
+        verify_signature(
+            public_key.key,
+            data.credential.proof,
+            message,
+            data.credential.algorithm,
+        )
     except DeviceCryptographyError:
         _record_failed_enrollment(token, token.bound_device_id, "invalid_proof")
 
@@ -299,9 +304,7 @@ def rotate_device_credential(
     data: RotationData,
 ) -> str:
     try:
-        public_key = validate_public_key(data.public_key)
-        if data.algorithm != "RSA_2048_SHA256":
-            raise DeviceCryptographyError("unsupported algorithm")
+        public_key = validate_public_key(data.public_key, data.algorithm)
         decode_base64url(data.nonce, decoded_length=16)
         message = rotation_message(
             device_uuid=str(current.device.device_uuid),
@@ -310,7 +313,7 @@ def rotate_device_credential(
             public_key_fingerprint=public_key.fingerprint,
             nonce=data.nonce,
         )
-        verify_signature(public_key.key, data.proof, message)
+        verify_signature(public_key.key, data.proof, message, data.algorithm)
     except DeviceCryptographyError as error:
         raise EnrollmentFailed("credential rotation failed") from error
     try:

@@ -32,6 +32,7 @@ from app.models import (
 )
 from app.policy_contract import canonical_json_bytes
 from app.policy_contract_v3 import build_policy_v3_envelope, sign_policy_v3_envelope
+from app.protocol_versions import CONTROL_STATE_PROTOCOL_VERSION
 from app.services.device_authentication import (
     device_authentication_required,
     get_device_authentication_context,
@@ -402,7 +403,7 @@ def sync_v3(device_uuid: str) -> Response:
             )
         )
         state = {
-            "protocol_version": 3,
+            "protocol_version": CONTROL_STATE_PROTOCOL_VERSION,
             "device_uuid": device_uuid,
             "override": _override(override) if override else None,
         }

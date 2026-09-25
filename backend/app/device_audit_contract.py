@@ -9,10 +9,8 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 
-from app.policy_contract import (
-    DPC_PROTOCOL_VERSION,
-    canonical_json_bytes,
-)
+from app.policy_contract import canonical_json_bytes
+from app.protocol_versions import AUDIT_PROTOCOL_VERSION
 
 MAX_EVENTS_PER_BATCH = 200
 MAX_METADATA_ENTRIES = 16
@@ -252,7 +250,7 @@ def build_audit_batch(
         if index and event["previous_event_hash"] != expected_previous:
             raise DeviceAuditContractError("audit chain mismatch")
     return {
-        "protocol_version": DPC_PROTOCOL_VERSION,
+        "protocol_version": AUDIT_PROTOCOL_VERSION,
         "batch_uuid": _uuid(batch_uuid, "batch_uuid"),
         "device_uuid": _uuid(device_uuid, "device_uuid"),
         "credential_uuid": _uuid(credential_uuid, "credential_uuid"),
@@ -268,7 +266,7 @@ def build_audit_batch(
 def _validate_batch(value: object) -> dict[str, object]:
     if not isinstance(value, dict) or set(value) != _BATCH_KEYS:
         raise DeviceAuditContractError("invalid audit batch")
-    if value["protocol_version"] != DPC_PROTOCOL_VERSION:
+    if value["protocol_version"] != AUDIT_PROTOCOL_VERSION:
         raise DeviceAuditContractError("unsupported protocol version")
     rebuilt = build_audit_batch(
         batch_uuid=value["batch_uuid"],

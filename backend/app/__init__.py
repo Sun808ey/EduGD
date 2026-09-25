@@ -138,6 +138,22 @@ def _apply_nonproduction_secret_defaults(app: Flask) -> None:
 
 
 def _validate_startup_configuration(app: Flask) -> None:
+    sunbird_base_url = app.config.get("SUNBIRD_API_BASE_URL")
+    sunbird_token = app.config.get("SUNBIRD_API_TOKEN")
+    if sunbird_token is not None and not isinstance(sunbird_token, str):
+        raise RuntimeError("SUNBIRD_API_TOKEN must be a non-empty string")
+    if sunbird_token:
+        parsed_sunbird_url = urlsplit(str(sunbird_base_url))
+        if (
+            parsed_sunbird_url.scheme != "https"
+            or not parsed_sunbird_url.hostname
+            or parsed_sunbird_url.username
+            or parsed_sunbird_url.password
+            or parsed_sunbird_url.query
+            or parsed_sunbird_url.fragment
+        ):
+            raise RuntimeError("SUNBIRD_API_BASE_URL must be an HTTPS URL without credentials or query")
+
     enrollment_mode = app.config["DEVICE_ENROLLMENT_MODE"]
     if enrollment_mode not in {"legacy", "new_devices_required", "all_required"}:
         raise RuntimeError("DEVICE_ENROLLMENT_MODE is invalid")
@@ -324,6 +340,7 @@ def _load_models() -> None:
         AdministratorPermission,
         AdministratorSession,
         Device,
+        ManagedApplication,
         DeviceAuditBatch,
         DeviceAuditChainHead,
         DeviceBlockOverride,
@@ -355,6 +372,7 @@ def _load_models() -> None:
         AdministratorPermission,
         AdministratorSession,
         Device,
+        ManagedApplication,
         DeviceBlockOverride,
         DeviceControlEvent,
         DeviceUsageDaily,

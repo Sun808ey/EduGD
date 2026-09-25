@@ -13,7 +13,7 @@ from app.extensions import db
 from app.services.policy_sync import DeviceBlockedError, get_policy_sync_payload
 
 LEGACY_REVISION = "f4a7c9e2b6d1"
-HEAD_REVISION = "c2f8a1b4d630"
+HEAD_REVISION = "e2a6c8d4f0b1"
 
 
 def _migration_app(database_path: Path) -> Flask:

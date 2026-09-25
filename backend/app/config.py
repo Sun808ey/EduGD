@@ -21,6 +21,7 @@ DEFAULT_PRODUCTION_POOL_SIZE = 3
 DEFAULT_PRODUCTION_MAX_OVERFLOW = 2
 MAX_PRODUCTION_POOL_COMPONENT = 10
 MAX_PRODUCTION_CONNECTIONS_PER_WORKER = 10
+LOCAL_DEVELOPMENT_HOSTNAMES = frozenset({"localhost", "127.0.0.1", "::1"})
 POSTGRES_ENGINE_OPTIONS: dict[str, object] = {
     "connect_args": {"connect_timeout": POSTGRES_CONNECTION_TIMEOUT_SECONDS},
     "pool_pre_ping": True,
@@ -97,7 +98,12 @@ class Config:
     JWT_ALGORITHM = "HS256"
     JWT_DECODE_ALGORITHMS = ["HS256"]
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
-    JWT_TOKEN_LOCATION = ("headers",)
+    JWT_TOKEN_LOCATION = ("headers", "cookies")
+    JWT_COOKIE_SECURE = os.getenv("APP_ENV", "development") == "production"
+    JWT_COOKIE_SAMESITE = "Lax"
+    JWT_COOKIE_CSRF_PROTECT = True
+    JWT_ACCESS_COOKIE_PATH = "/api/v1/admin"
+    JWT_COOKIE_CSRF_HEADER_NAME = "X-CSRF-TOKEN"
     JWT_HEADER_TYPE = "Bearer"
     JWT_ENCODE_ISSUER = "edug-school-policy-api"
     JWT_DECODE_ISSUER = "edug-school-policy-api"
@@ -133,7 +139,6 @@ class Config:
     SUNBIRD_API_BASE_URL = os.getenv("SUNBIRD_API_BASE_URL", "https://api.sunbird.ai")
     SUNBIRD_API_TOKEN = os.getenv("SUNBIRD_API_TOKEN")
     SUNBIRD_TRANSLATION_TIMEOUT_SECONDS = 10
-    SUNBIRD_TRANSLATION_CACHE_TTL_SECONDS = 86_400
     SUNBIRD_TRANSLATION_MAX_TEXT_LENGTH = 4_000
 
 
@@ -211,6 +216,7 @@ def resolve_database_uri(configuration: type[Config]) -> str | None:
     validate_postgres_database_uri(
         configuration.DATABASE_ENV_VAR,
         normalized_uri,
+        allow_local_development=configuration is DevelopmentConfig,
     )
     return normalized_uri
 
@@ -224,12 +230,15 @@ def resolve_migration_database_uri(
 
     database_uri = os.getenv("MIGRATION_DATABASE_URL")
     if not database_uri:
+        if app_environment == "development":
+            return application_database_uri
         return None
 
     normalized_uri = _normalize_database_uri(database_uri)
     validate_postgres_database_uri(
         "MIGRATION_DATABASE_URL",
         normalized_uri,
+        allow_local_development=app_environment == "development",
     )
     return normalized_uri
 
@@ -246,7 +255,19 @@ def validate_database_separation() -> None:
         parsed_url = validate_postgres_database_uri(
             variable_name,
             normalized_uri,
+            allow_local_development=(
+                variable_name == "DEVELOPMENT_DATABASE_URL"
+                and os.getenv("APP_ENV", "development").lower() == "development"
+            ),
         )
+        is_local_development = (
+            variable_name == "DEVELOPMENT_DATABASE_URL"
+            and os.getenv("APP_ENV", "development").lower() == "development"
+            and (parsed_url.host or "").lower() in LOCAL_DEVELOPMENT_HOSTNAMES
+            and parsed_url.database == "edug_local"
+        )
+        if is_local_development:
+            continue
         project_identity = database_project_identity(parsed_url)
         existing_variable = project_variables.get(project_identity)
         if existing_variable is not None:
@@ -259,15 +280,29 @@ def validate_database_separation() -> None:
 def validate_migration_target(
     application_database_uri: str,
     migration_database_uri: str,
+    *,
+    allow_local_development: bool = False,
 ) -> None:
     application_url = validate_postgres_database_uri(
         "active application database URL",
         application_database_uri,
+        allow_local_development=allow_local_development,
     )
     migration_url = validate_postgres_database_uri(
         "MIGRATION_DATABASE_URL",
         migration_database_uri,
+        allow_local_development=allow_local_development,
     )
+    local_urls = (
+        allow_local_development
+        and (application_url.host or "").lower() in LOCAL_DEVELOPMENT_HOSTNAMES
+        and (migration_url.host or "").lower() in LOCAL_DEVELOPMENT_HOSTNAMES
+        and application_url.database == migration_url.database == "edug_local"
+    )
+    if local_urls:
+        if application_url.host != migration_url.host or application_url.port != migration_url.port:
+            raise RuntimeError("MIGRATION_DATABASE_URL must match the local application database")
+        return
     if (
         database_project_identity(application_url)
         != database_project_identity(migration_url)
@@ -281,6 +316,8 @@ def validate_migration_target(
 def validate_postgres_database_uri(
     variable_name: str,
     database_uri: str,
+    *,
+    allow_local_development: bool = False,
 ) -> URL:
     try:
         parsed_url = make_url(_normalize_database_uri(database_uri))
@@ -326,15 +363,21 @@ def validate_postgres_database_uri(
     ssl_mode = parsed_url.query.get("sslmode")
     if port not in {None, 5432}:
         raise RuntimeError(f"{variable_name} requires direct or session port 5432")
-    try:
-        database_project_identity(parsed_url)
-    except ValueError:
-        raise RuntimeError(
-            f"{variable_name} must identify a Supabase project"
-        ) from None
+    is_local_development = (
+        allow_local_development
+        and hostname in LOCAL_DEVELOPMENT_HOSTNAMES
+        and parsed_url.database == "edug_local"
+    )
+    if not is_local_development:
+        try:
+            database_project_identity(parsed_url)
+        except ValueError:
+            raise RuntimeError(
+                f"{variable_name} must identify a Supabase project"
+            ) from None
     if not parsed_url.username:
         raise RuntimeError(f"{variable_name} requires a database role")
-    if ssl_mode != "verify-full":
+    if not is_local_development and ssl_mode != "verify-full":
         raise RuntimeError(f"{variable_name} must use verify-full PostgreSQL TLS")
 
     return parsed_url

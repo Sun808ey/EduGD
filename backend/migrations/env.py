@@ -1,12 +1,11 @@
 import logging
 from logging.config import fileConfig
 
+from alembic import context
 from flask import current_app
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import NullPool
-
-from alembic import context
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

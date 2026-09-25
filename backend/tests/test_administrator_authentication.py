@@ -431,6 +431,43 @@ def test_authenticated_administrators_retain_full_permissions(app: Flask) -> Non
         ) == ADMINISTRATOR_PERMISSIONS
 
 
+@pytest.mark.parametrize("permission", sorted(ADMINISTRATOR_PERMISSIONS))
+def test_every_named_control_permission_is_restored_for_authenticated_admin(
+    app: Flask, permission: str
+) -> None:
+    route = f"/test/control/{permission.replace('.', '-') }"
+
+    @app.get(route)
+    @administrator_required(permission)
+    def protected_control() -> Any:
+        return jsonify({"allowed": True})
+
+    _bootstrap(app)
+    access_token = _login(app).get_json()["access_token"]
+    with app.app_context():
+        administrator = _administrator()
+        db.session.execute(
+            delete(AdministratorPermission).where(
+                AdministratorPermission.administrator_id == administrator.id,
+                AdministratorPermission.permission == permission,
+            )
+        )
+        db.session.commit()
+
+    response = app.test_client().get(route, headers=_authorization_header(access_token))
+
+    assert response.status_code == 200
+    with app.app_context():
+        permissions = set(
+            db.session.execute(
+                select(AdministratorPermission.permission).where(
+                    AdministratorPermission.administrator_id == _administrator().id
+                )
+            ).scalars()
+        )
+    assert permissions == ADMINISTRATOR_PERMISSIONS
+
+
 @pytest.mark.parametrize(
     ("content_type", "body", "expected_status"),
     [

@@ -16,8 +16,10 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PublicKey,
 )
 
-POLICY_SCHEMA_VERSION = 2
-DPC_PROTOCOL_VERSION = 2
+# These names are explicitly legacy. Android-facing v3 contracts use the
+# version constants in ``app.protocol_versions`` instead.
+LEGACY_POLICY_SCHEMA_VERSION = 2
+LEGACY_DPC_PROTOCOL_VERSION = 2
 MIN_REFRESH_SECONDS = 300
 MAX_REFRESH_SECONDS = 604_800
 MAX_MODES = 16
@@ -132,7 +134,7 @@ def _strict_keys(value: object, keys: frozenset[str], field: str) -> dict[str, A
 
 def validate_policy_v2(value: object) -> dict[str, object]:
     policy = _strict_keys(value, _POLICY_KEYS, "policy")
-    if policy["schema_version"] != POLICY_SCHEMA_VERSION:
+    if policy["schema_version"] != LEGACY_POLICY_SCHEMA_VERSION:
         raise PolicyContractError("unsupported policy schema version")
     if policy["timezone"] != "Africa/Kampala":
         raise PolicyContractError("unsupported policy timezone")
@@ -243,7 +245,7 @@ def validate_policy_v2(value: object) -> dict[str, object]:
         )
 
     return {
-        "schema_version": POLICY_SCHEMA_VERSION,
+        "schema_version": LEGACY_POLICY_SCHEMA_VERSION,
         "timezone": "Africa/Kampala",
         "refresh_after_seconds": _bounded_int(
             policy["refresh_after_seconds"],
@@ -330,7 +332,7 @@ def build_policy_envelope(
         raise PolicyContractError("invalid signing_key_id")
     canonical_payload = validate_policy_v2(payload)
     return {
-        "protocol_version": DPC_PROTOCOL_VERSION,
+        "protocol_version": LEGACY_DPC_PROTOCOL_VERSION,
         "policy_uuid": _canonical_uuid(policy_uuid, "policy_uuid"),
         "revision_uuid": _canonical_uuid(revision_uuid, "revision_uuid"),
         "revision_number": _bounded_int(
@@ -347,7 +349,7 @@ def build_policy_envelope(
 
 def _validate_policy_envelope(envelope: object) -> dict[str, object]:
     data = _strict_keys(envelope, _ENVELOPE_KEYS, "policy envelope")
-    if data["protocol_version"] != DPC_PROTOCOL_VERSION:
+    if data["protocol_version"] != LEGACY_DPC_PROTOCOL_VERSION:
         raise PolicyContractError("unsupported protocol version")
     canonical = build_policy_envelope(
         policy_uuid=data["policy_uuid"],
@@ -405,8 +407,8 @@ def verify_policy_envelope(
 
 
 __all__ = [
-    "DPC_PROTOCOL_VERSION",
-    "POLICY_SCHEMA_VERSION",
+    "LEGACY_DPC_PROTOCOL_VERSION",
+    "LEGACY_POLICY_SCHEMA_VERSION",
     "PolicyContractError",
     "build_policy_envelope",
     "canonical_json_bytes",

@@ -3,17 +3,19 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from sqlalchemy import select
 
 from app.extensions import db
+from app.models import TranslationCacheEntry
 from app.services import sunbird_translation
 from app.services.sunbird_translation import (
+    TranslationConfigurationError,
     TranslationProviderError,
     clear_translation_cache,
     translate_text,
 )
 from app.translation import SUPPORTED_TRANSLATION_LANGUAGES, normalize_language
 from tests.test_administrator_authentication import (
-    PASSWORD,
     _authorization_header,
     _bootstrap,
     _login,
@@ -40,7 +42,6 @@ def test_unknown_translation_language_is_rejected(value: object) -> None:
 
 
 def test_translation_service_caches_successful_provider_result(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    clear_translation_cache()
     app.config["SUNBIRD_API_TOKEN"] = "provider-secret"
     calls = 0
 
@@ -54,6 +55,7 @@ def test_translation_service_caches_successful_provider_result(app: Any, monkeyp
 
     monkeypatch.setattr(sunbird_translation, "_call_sunbird", fake_provider)
     with app.app_context():
+        clear_translation_cache()
         first = translate_text(text="Hello", source_language="eng", target_language="lug")
         second = translate_text(text="Hello", source_language="eng", target_language="lug")
 
@@ -61,10 +63,20 @@ def test_translation_service_caches_successful_provider_result(app: Any, monkeyp
     assert first.cached is False
     assert second.cached is True
     assert calls == 1
+    with app.app_context():
+        cached_row = db.session.execute(select(TranslationCacheEntry)).scalar_one()
+        assert cached_row.source_hash == sunbird_translation._source_hash("Hello")
+        assert cached_row.provider == "sunbird"
+        assert cached_row.quality_status == "machine"
+
+
+def test_translation_requires_provider_token(app: Any) -> None:
+    app.config["SUNBIRD_API_TOKEN"] = None
+    with app.app_context(), pytest.raises(TranslationConfigurationError):
+        translate_text(text="Hello", source_language="eng", target_language="lug")
 
 
 def test_provider_failure_is_not_cached(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    clear_translation_cache()
     app.config["SUNBIRD_API_TOKEN"] = "provider-secret"
     calls = 0
 
@@ -75,6 +87,7 @@ def test_provider_failure_is_not_cached(app: Any, monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr(sunbird_translation, "_call_sunbird", fail_provider)
     with app.app_context():
+        clear_translation_cache()
         with pytest.raises(TranslationProviderError):
             translate_text(text="Hello", source_language="eng", target_language="ach")
         with pytest.raises(TranslationProviderError):
@@ -122,6 +135,33 @@ def test_public_translation_accepts_only_landing_content_and_falls_back(
     assert rejected.status_code == 400
 
 
+@pytest.mark.parametrize("target_language", ["eng", "ach", "lgg", "teo", "nyn", "lug"])
+def test_public_translation_accepts_each_supported_language(
+    app: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    target_language: str,
+) -> None:
+    app.config["SUNBIRD_API_TOKEN"] = "provider-secret"
+    monkeypatch.setattr(
+        sunbird_translation,
+        "_call_sunbird",
+        lambda text, source, target: f"translated-{target}",
+    )
+    with app.app_context():
+        clear_translation_cache()
+    response = app.test_client().post(
+        "/api/v1/public/translation/translate",
+        json={"content_key": "hero.title", "target_language": target_language},
+    )
+    assert response.status_code == 200
+    body = response.get_json()
+    if target_language == "eng":
+        assert body["fallback"] is False
+        assert body["translated_text"].startswith("Keep the school day")
+    else:
+        assert body["translated_text"] == f"translated-{target_language}"
+
+
 def test_translation_route_returns_provider_result_without_secret(
     app: Any,
     monkeypatch: pytest.MonkeyPatch,
@@ -153,6 +193,7 @@ def test_translation_route_returns_provider_result_without_secret(
         "target_language": "lug",
         "cached": False,
         "content_class": "approved_dynamic",
+        "quality_status": "machine",
     }
     assert "provider-secret" not in response.get_data(as_text=True)
     with app.app_context():

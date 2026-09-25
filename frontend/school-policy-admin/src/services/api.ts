@@ -12,6 +12,7 @@ export function setUnauthorizedHandler(handler: (() => void) | undefined) {
 const api = axios.create({
   baseURL: resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.PROD),
   timeout: resolveApiTimeout(import.meta.env.VITE_API_TIMEOUT),
+  withCredentials: true,
 })
 
 api.interceptors.request.use((config) => {
@@ -20,6 +21,13 @@ api.interceptors.request.use((config) => {
   if (token) {
     const headers = config.headers ?? new AxiosHeaders()
     headers.set('Authorization', `Bearer ${token}`)
+    config.headers = headers
+  }
+
+  const csrfToken = document.cookie.split('; ').find((cookie) => cookie.startsWith('csrf_access_token='))?.split('=').slice(1).join('=')
+  if (csrfToken) {
+    const headers = config.headers ?? new AxiosHeaders()
+    headers.set('X-CSRF-TOKEN', decodeURIComponent(csrfToken))
     config.headers = headers
   }
 
@@ -36,4 +44,3 @@ api.interceptors.response.use(
 )
 
 export default api
-

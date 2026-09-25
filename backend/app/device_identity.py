@@ -23,6 +23,7 @@ SUPPORTED_ANDROID_VERSION_BY_API_LEVEL = {
     for level, version in ANDROID_VERSION_BY_API_LEVEL.items()
     if 29 <= level <= 35
 }
+SUPPORTED_ANDROID_API_LEVELS = frozenset(SUPPORTED_ANDROID_VERSION_BY_API_LEVEL)
 
 
 def parse_canonical_uuid4(value: object) -> UUID:
@@ -56,6 +57,7 @@ def validate_android_compatibility(
 __all__ = [
     "ANDROID_VERSION_BY_API_LEVEL",
     "SUPPORTED_ANDROID_VERSION_BY_API_LEVEL",
+    "SUPPORTED_ANDROID_API_LEVELS",
     "parse_canonical_uuid4",
     "validate_android_compatibility",
 ]

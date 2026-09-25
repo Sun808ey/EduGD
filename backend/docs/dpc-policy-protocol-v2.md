@@ -4,10 +4,12 @@ This document freezes the backend policy contract that the Android DPC must impl
 
 ## DPC protocol v3 foundation
 
-V2 remains unchanged for legacy clients. New DPC work uses `schema_version: 3`,
+V2 remains unchanged for legacy clients. New DPC work uses explicit protocol
+constants and `schema_version: 3`,
 which retains the v2 modes and schedules and adds `screen_time` (a daily device
-limit, Kampala-local reset minute and exhausted mode) plus an allow-by-default
-domain web filter. URLs, paths, query strings and permitted browsing history are
+limit, Kampala-local reset minute and exhausted mode) plus a configurable
+allow/block domain web filter and explicit network and telephony controls. URLs,
+paths, query strings and permitted browsing history are
 not accepted or retained.
 
 The DPC enforces daily use locally from monotonic active-use accounting and keeps
@@ -20,10 +22,10 @@ not available.
 
 ## Compatibility boundary
 
-- Protocol version: `2`.
-- Policy schema version: `2`.
+- Legacy protocol version: `2`.
+- Legacy policy schema version: `2`.
 - Minimum Android version: Android 10 / API 29.
-- DPC builds compile and target API 36.
+- Supported live DPC builds target API 29 through 35 only. API 36 is rejected.
 - The DPC advertises capabilities during enrollment. The server must not assign a policy whose required capabilities are absent.
 - Android identifiers are configured in `app/android_integration_config.py`: DPC
   `io.github.sun808ey.edugd.dpc` and the initial Classroom, Moodle, Khan Academy,
@@ -41,8 +43,8 @@ not available.
   lock-task package sets. `com.android.settings` is not an emergency package.
 - `app/device_capability_profile.py` is the fail-closed resolution contract.
   Current protocol-v1 enrollment cannot securely bind a new capability report to
-  its proof, and the current device table accepts Android API 21–29 while the new
-  check-in contract targets API 29–36. Profile persistence, authenticated v2
+  its proof, and the current device table retains historical records while the new
+  check-in contract targets API 29–35. Profile persistence, authenticated v3
   enrollment, signing-key management, and live signed-policy sync therefore remain
   required before production activation. Do not infer that a reported profile is
   verified or activate a v2 policy from the v1 enrollment response.
@@ -77,4 +79,9 @@ The DPC verifies the key ID against its pinned/rotated public-key set, verifies 
 
 ## Interoperability evidence
 
-`tests/fixtures/policy_v2_golden_vector.json` contains the public key, normalized payload, unsigned envelope, canonical UTF-8 bytes encoded as base64url, payload hash and signature for a deterministic test key. The private test key is not stored. Python and Kotlin implementations must reproduce and verify this vector byte-for-byte.
+`tests/fixtures/policy_v2_golden_vector.json` remains the legacy vector.
+`tests/fixtures/policy_v3_golden_vector.json` is the Android-facing vector and
+contains the public key, normalized payload, unsigned envelope, canonical UTF-8
+bytes encoded as base64url, payload hash and signature for a deterministic test
+key. The private test key is not stored. Python and Kotlin implementations must
+reproduce and verify the v3 vector byte-for-byte.

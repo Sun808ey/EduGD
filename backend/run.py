@@ -1,7 +1,11 @@
 import os
 
-from app import create_app
-from app.deployment_identity import validate_deployment_identity
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from app import create_app  # noqa: E402
+from app.deployment_identity import validate_deployment_identity  # noqa: E402
 
 if (
     os.getenv("APP_ENV", "development").lower() == "production"

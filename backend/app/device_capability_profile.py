@@ -141,6 +141,10 @@ def resolve_policy_for_device(
             raise PolicyContractError("invalid blocked packages")
         if set(blocked) & preserved:
             raise PolicyContractError("essential package cannot be blocked")
+    if data.get("schema_version") == 3:
+        from app.policy_contract_v3 import validate_policy_v3
+
+        return validate_policy_v3(data)
     return validate_policy_v2(data)
 
 

@@ -10,6 +10,7 @@ export const translationKeys = {
   signedInAs: 'Signed in as',
   signOut: 'Sign out',
   language: 'Language',
+  chooseLanguage: 'Choose language',
   openNavigation: 'Open navigation',
   closeNavigation: 'Close navigation',
   skipToMain: 'Skip to main content',

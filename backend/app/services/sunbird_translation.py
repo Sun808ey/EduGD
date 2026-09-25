@@ -3,18 +3,19 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
-import time
+import unicodedata
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
 from flask import current_app
+from sqlalchemy import select, text
+from sqlalchemy.engine import Connection
 
-from app.translation import (
-    normalize_language,
-    validate_translation_text,
-)
+from app.extensions import db
+from app.models import TranslationCacheEntry
+from app.translation import normalize_language, validate_translation_text
 
 
 class TranslationError(RuntimeError):
@@ -43,9 +44,9 @@ class TranslationResult:
     source_language: str | None
     target_language: str
     cached: bool
+    quality_status: str = "machine"
 
 
-_CACHE: dict[str, tuple[float, TranslationResult]] = {}
 _CACHE_LOCK = threading.Lock()
 
 
@@ -57,6 +58,8 @@ def translate_text(
 ) -> TranslationResult:
     source = normalize_language(source_language, required=False)
     target = normalize_language(target_language)
+    if not isinstance(target, str):
+        raise ValueError("target_language is required")
     value = validate_translation_text(
         text,
         current_app.config["SUNBIRD_TRANSLATION_MAX_TEXT_LENGTH"],
@@ -64,42 +67,68 @@ def translate_text(
     if source == target:
         raise ValueError("source_language and target_language must differ")
 
-    cache_key = _cache_key(value, source, target)
-    now = time.monotonic()
-    with _CACHE_LOCK:
-        cached = _CACHE.get(cache_key)
-        if cached is not None and cached[0] > now:
-            result = cached[1]
-            return TranslationResult(
-                result.translated_text,
-                result.source_language,
-                result.target_language,
-                True,
-            )
-        if cached is not None:
-            _CACHE.pop(cache_key, None)
+    canonical_text = unicodedata.normalize("NFC", value)
+    source_key = source or "auto"
+    source_hash = _source_hash(canonical_text)
+    lock_hash = hashlib.sha256(
+        (source_key + "\n" + target + "\n" + source_hash).encode("utf-8")
+    ).hexdigest()
 
-    translated = _call_sunbird(value, source, target)
-    result = TranslationResult(
+    with _CACHE_LOCK:
+        with db.engine.begin() as connection:
+            _acquire_cache_lock(connection, lock_hash)
+            cached = connection.execute(
+                select(TranslationCacheEntry.__table__).where(
+                    TranslationCacheEntry.__table__.c.source_language == source_key,
+                    TranslationCacheEntry.__table__.c.target_language == target,
+                    TranslationCacheEntry.__table__.c.source_hash == source_hash,
+                )
+            ).mappings().first()
+            if cached is not None:
+                return TranslationResult(
+                    translated_text=cached["translated_text"],
+                    source_language=source,
+                    target_language=target,
+                    cached=True,
+                    quality_status=cached["quality_status"],
+                )
+
+            translated = _call_sunbird(canonical_text, source, target)
+            connection.execute(
+                TranslationCacheEntry.__table__.insert().values(
+                    source_language=source_key,
+                    target_language=target,
+                    source_hash=source_hash,
+                    source_text=canonical_text,
+                    translated_text=translated,
+                    provider="sunbird",
+                    quality_status="machine",
+                )
+            )
+
+    return TranslationResult(
         translated_text=translated,
         source_language=source,
         target_language=target,
         cached=False,
     )
-    with _CACHE_LOCK:
-        _CACHE[cache_key] = (
-            now + current_app.config["SUNBIRD_TRANSLATION_CACHE_TTL_SECONDS"],
-            result,
-        )
-    return result
 
 
 def clear_translation_cache() -> None:
-    with _CACHE_LOCK:
-        _CACHE.clear()
+    with db.engine.begin() as connection:
+        connection.execute(TranslationCacheEntry.__table__.delete())
 
 
-def _call_sunbird(text: str, source: str | None, target: str) -> str:
+def _acquire_cache_lock(connection: Connection, source_hash: str) -> None:
+    if connection.dialect.name == "postgresql":
+        lock_key = int.from_bytes(bytes.fromhex(source_hash[:16]), "big", signed=True)
+        connection.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_key)"),
+            {"lock_key": lock_key},
+        )
+
+
+def _call_sunbird(text_value: str, source: str | None, target: str) -> str:
     base_url = current_app.config.get("SUNBIRD_API_BASE_URL")
     token = current_app.config.get("SUNBIRD_API_TOKEN")
     if not isinstance(base_url, str) or not base_url.startswith("https://"):
@@ -107,7 +136,7 @@ def _call_sunbird(text: str, source: str | None, target: str) -> str:
     if not isinstance(token, str) or not token.strip():
         raise TranslationConfigurationError("translation provider is not configured")
 
-    payload: dict[str, str] = {"target_language": target, "text": text}
+    payload: dict[str, str] = {"target_language": target, "text": text_value}
     if source is not None:
         payload["source_language"] = source
     request = Request(
@@ -143,14 +172,18 @@ def _call_sunbird(text: str, source: str | None, target: str) -> str:
         raise TranslationResponseError("translation provider response is incomplete")
     output = body.get("output")
     translated = output.get("translated_text") if isinstance(output, dict) else None
-    if not isinstance(translated, str) or not translated.strip() or not translated.isprintable():
+    if (
+        not isinstance(translated, str)
+        or not translated.strip()
+        or len(translated) > current_app.config["SUNBIRD_TRANSLATION_MAX_TEXT_LENGTH"]
+        or not translated.isprintable()
+    ):
         raise TranslationResponseError("translation provider returned empty output")
-    return translated
+    return unicodedata.normalize("NFC", translated)
 
 
-def _cache_key(text: str, source: str | None, target: str) -> str:
-    material = "sunbird-v1\n" + (source or "auto") + "\n" + target + "\n" + text
-    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+def _source_hash(text_value: str) -> str:
+    return hashlib.sha256(text_value.encode("utf-8")).hexdigest()
 
 
 __all__ = [

@@ -59,8 +59,12 @@ explicit approval; variable definitions do not authorize provisioning.
 See the [environment resource map](environment-resource-map.md) for the observed
 inventory, proposed assignments, credential boundaries and remaining controls.
 
-- `DEVELOPMENT_DATABASE_URL` is supported, but no hosted development project
-  is assigned under this plan.
+- `DEVELOPMENT_DATABASE_URL` is the interactive local-development database.
+  When `APP_ENV=development`, it may target only the dedicated local
+  PostgreSQL database `edug_local` on `localhost`, `127.0.0.1`, or `::1`.
+  Local development is the sole exception to the Supabase-project hostname
+  requirement; production, PostgreSQL testing, migration, and hosted
+  environments remain Supabase-only.
 - `POSTGRES_TEST_DATABASE_URL` identifies the isolated PostgreSQL integration
   and migration test project; leave it unset for both assigned hosted projects.
 - `POSTGRES_TEST_PURPOSE` must be exactly `backend-integration-test` so an

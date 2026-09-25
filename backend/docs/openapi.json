@@ -73,6 +73,48 @@
             "type": "boolean"
           }
         }
+      },
+      "PolicyV3Payload": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "timezone",
+          "refresh_after_seconds",
+          "default_mode",
+          "emergency_packages",
+          "required_capabilities",
+          "minimum_dpc_version",
+          "modes",
+          "schedules",
+          "screen_time",
+          "web_filter",
+          "network_controls",
+          "telephony_controls"
+        ],
+        "properties": {
+          "schema_version": {"type": "integer", "const": 3},
+          "timezone": {"type": "string", "const": "Africa/Kampala"},
+          "web_filter": {
+            "type": "object",
+            "required": ["default_action", "rules"],
+            "properties": {
+              "default_action": {"type": "string", "enum": ["allow", "block"]},
+              "rules": {"type": "array"}
+            },
+            "additionalProperties": false
+          },
+          "network_controls": {
+            "type": "object",
+            "required": ["wifi_only", "disallow_mobile_network_configuration", "disallow_tethering", "disallow_user_vpn", "always_on_filtering_vpn", "vpn_lockdown_required"],
+            "additionalProperties": {"type": "boolean"}
+          },
+          "telephony_controls": {
+            "type": "object",
+            "required": ["disallow_outgoing_calls", "disallow_sms", "preserve_emergency_calls"],
+            "additionalProperties": {"type": "boolean"}
+          }
+        },
+        "additionalProperties": false
       }
     }
   },
@@ -314,6 +356,32 @@
           "200": {
             "description": "Policy assignment cleared"
           }
+        }
+      }
+    },
+    "/public/translation/translate": {
+      "post": {
+        "summary": "Translate approved public marketing content",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["content_key", "target_language"],
+                "properties": {
+                  "content_key": {"type": "string", "pattern": "^(header|hero|capabilities|how|context|status)\\."},
+                  "target_language": {"type": "string", "enum": ["eng", "ach", "lgg", "teo", "nyn", "lug"]}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Translated marketing content or canonical English fallback"},
+          "400": {"description": "Invalid or unapproved translation request"},
+          "429": {"description": "Translation rate limit exceeded"}
         }
       }
     },
@@ -828,6 +896,21 @@
                   "enforcement_healthy",
                   "queued_event_count"
                 ],
+                "properties": {
+                  "protocol_version": {
+                    "type": "integer",
+                    "const": 3
+                  },
+                  "android_version": {
+                    "type": "string",
+                    "enum": ["10", "11", "12", "12L", "13", "14", "15"]
+                  },
+                  "api_level": {
+                    "type": "integer",
+                    "minimum": 29,
+                    "maximum": 35
+                  }
+                },
                 "additionalProperties": false
               }
             }

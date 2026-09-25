@@ -1,9 +1,10 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { ClipboardList, FileText, LayoutDashboard, LogOut, Menu, ShieldCheck, X } from 'lucide-react'
+import { ClipboardList, FileText, LayoutDashboard, LogOut, Menu, PackageCheck, ShieldCheck, X } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { LoadingState } from '@/components/ui/AsyncState'
 import { useLanguage } from '@/i18n/useLanguage'
+import { AdminLanguageSelector } from './AdminLanguageSelector'
 
 const EnrollmentTokensPanel = lazy(() => import('@/components/devices/EnrollmentTokensPanel').then((module) => ({ default: module.EnrollmentTokensPanel })))
 
@@ -11,6 +12,7 @@ const navItems = [
   { to: '/dashboard', key: 'dashboard' as const, icon: LayoutDashboard },
   { to: '/devices', key: 'devices' as const, icon: ShieldCheck },
   { to: '/policies', key: 'policies' as const, icon: FileText },
+  { to: '/applications', label: 'Applications', icon: PackageCheck },
   { to: '/logs', key: 'auditLogs' as const, icon: ClipboardList },
 ]
 
@@ -30,7 +32,7 @@ export function AdminShell() {
           </div>
           <span className="text-sm font-semibold">EduGD Admin</span>
         </div>
-        <button
+        <div className="flex items-center gap-2"><AdminLanguageSelector /><button
           type="button"
           aria-label={mobileOpen ? translate('closeNavigation') : translate('openNavigation')}
           aria-expanded={mobileOpen}
@@ -38,12 +40,12 @@ export function AdminShell() {
           className="grid size-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100"
         >
           {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-        </button>
+        </button></div>
       </header>
 
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[1600px]">
         <aside className={`${mobileOpen ? 'fixed inset-x-0 top-16 z-10 block' : 'hidden'} w-full border-b border-slate-800 bg-slate-950 p-5 text-slate-100 md:relative md:top-0 md:block md:min-h-screen md:w-64 md:shrink-0 md:border-b-0 md:border-r md:p-6`}>
-          <div className="mb-10 hidden items-center gap-3 md:flex">
+          <div className="mb-6 flex justify-end md:mb-10 md:items-center md:justify-between">
             <div className="grid size-10 place-items-center rounded-xl bg-emerald-400 text-slate-950">
               <ShieldCheck className="size-5" aria-hidden="true" />
             </div>
@@ -51,11 +53,13 @@ export function AdminShell() {
               <div className="text-sm font-bold">EduGD</div>
               <div className="text-xs text-slate-400">{translate('policyControl')}</div>
             </div>
+            <div className="md:hidden"><AdminLanguageSelector /></div>
+            <div className="hidden md:block"><AdminLanguageSelector /></div>
           </div>
 
           <nav aria-label="Primary navigation" className="space-y-1">
             <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{translate('workspace')}</p>
-            {navItems.map(({ to, key, icon: Icon }) => (
+            {navItems.map(({ to, key, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -63,7 +67,7 @@ export function AdminShell() {
                 className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${isActive ? 'bg-white text-slate-950' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
               >
                 <Icon className="size-4" aria-hidden="true" />
-                {translate(key)}
+                {label ?? (key ? translate(key) : 'Applications')}
               </NavLink>
             ))}
           </nav>

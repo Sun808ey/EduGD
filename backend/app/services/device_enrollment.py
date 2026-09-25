@@ -302,7 +302,7 @@ def enroll_device(data: DeviceEnrollmentData) -> EnrollmentResult:
 def rotate_device_credential(
     current: DeviceCredential,
     data: RotationData,
-) -> str:
+) -> tuple[str, str]:
     try:
         public_key = validate_public_key(data.public_key, data.algorithm)
         decode_base64url(data.nonce, decoded_length=16)
@@ -344,7 +344,7 @@ def rotate_device_credential(
     except SQLAlchemyError as error:
         db.session.rollback()
         raise EnrollmentDatabaseError("credential rotation failed") from error
-    return str(replacement.credential_uuid)
+    return str(replacement.credential_uuid), replacement.algorithm
 
 
 def revoke_device_credential(

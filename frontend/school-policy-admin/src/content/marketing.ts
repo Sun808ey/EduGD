@@ -12,5 +12,5 @@ export const navGroups = [
   { label: 'Product', links: [['Product overview', '/product'], ['How it works', '/how-it-works'], ['Architecture', '/architecture']] },
   { label: 'Capabilities', links: capabilities.map(({ title, slug }) => [title, `/features/${slug}`]) },
   { label: 'Context', links: [['For schools', '/schools'], ['Security', '/security'], ['About the PoC', '/about']] },
-  { label: 'Resources', links: [['Resources', '/resources'], ['Contact', '/contact']] },
+  { label: 'Resources', links: [['Resources', '/resources'], ['News', '/news'], ['Contact', '/contact']] },
 ] as const

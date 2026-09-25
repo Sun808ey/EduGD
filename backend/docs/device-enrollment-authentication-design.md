@@ -64,7 +64,7 @@ the relevant validation and cryptographic checks succeed.
 | Concurrent token consumption | Row lock and atomic consume/device/credential transaction | PostgreSQL concurrency tests are mandatory. |
 | Token replay | Single-use consumed state committed atomically | Failed transactions must leave the token unconsumed. |
 | Credential theft from server | Store only device public keys | A compromised signing service or database write path can still substitute keys; changes require audit events. |
-| Credential theft from device | Non-exportable Android Keystore key | Hardware backing is not guaranteed on every API 21–29 device; compromise of the DPC process remains residual risk. |
+| Credential theft from device | Non-exportable Android Keystore key | Hardware backing is not guaranteed on every API 29–35 device; compromise of the DPC process remains residual risk. |
 | Request replay | Signed timestamp, nonce, body hash, and unique nonce record | Clients need bounded clock correction using server time. |
 | Request tampering | Signature covers method, path, query, body hash, identity, timestamp, and nonce | Canonicalization must have one test-vector specification shared with Android. |
 | Credential enumeration | Uniform HTTP 401 response | Operational events may retain internal failure categories with restricted access. |
@@ -129,11 +129,12 @@ Token values are displayed exactly once at issuance and are never retrievable.
 
 ### Device credential
 
-The DPC generates an RSA-2048 signing key in Android Keystore and requests
-`SHA256withRSA`. RSA is selected for consistent API 21–29 support. The private
-key is non-exportable when the device implementation supports it. Hardware
-backing and key attestation may be recorded as optional evidence but cannot be
-mandatory because they are not uniformly available across the supported range.
+The new DPC generates an ECDSA P-256 signing key in Android Keystore and
+requests `SHA256withECDSA`. The private key is non-exportable when the device
+implementation supports it. RSA-2048 with `SHA256withRSA` remains an explicitly
+documented compatibility path for legacy credentials only. Hardware backing and
+key attestation may be recorded as optional evidence but cannot be mandatory
+because they are not uniformly available across the supported range.
 
 The server stores:
 
@@ -609,6 +610,6 @@ padding, and a signature produced for the other protocol domain label.
   revocation becomes stateful anyway.
 - Pairing token reused for synchronization: violates single-use separation.
 - Mandatory mTLS: certificate provisioning and proxy operations exceed this
-  proof-of-concept and API 21–29 deployment scope.
+  proof-of-concept and API 29–35 deployment scope.
 - Silent fallback to unauthenticated synchronization: defeats the enrollment
   protocol and is prohibited after the approved migration cutoff.

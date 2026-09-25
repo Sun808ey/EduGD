@@ -94,7 +94,7 @@ def _validate_android_version(
         raise DeviceRegistrationValidationError(
             "android_version and api_level must identify a supported Android "
             "version and API level"
-        )
+        ) from None
 
 
 __all__ = [

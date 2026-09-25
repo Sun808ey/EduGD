@@ -34,7 +34,7 @@ def _serialize(application: ManagedApplication) -> dict[str, object]:
     }
 
 
-def _parse_payload(payload: object) -> dict[str, object]:
+def _parse_payload(payload: object, *, require_verified_identity: bool = True) -> dict[str, object]:
     fields = {
         "display_name",
         "package_name",
@@ -47,6 +47,8 @@ def _parse_payload(payload: object) -> dict[str, object]:
     if not isinstance(payload, dict) or set(payload) != fields:
         raise ValueError("invalid managed application payload")
     digest = payload["signing_certificate_sha256"]
+    if require_verified_identity and not isinstance(digest, str):
+        raise ValueError("verified signing certificate digest is required")
     parsed_digest = None if digest is None else decode_base64url(digest, decoded_length=32)
     if not isinstance(payload["education_approved"], bool) or not isinstance(
         payload["mandatory_block"], bool

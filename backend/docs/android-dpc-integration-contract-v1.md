@@ -61,6 +61,19 @@ The v3 payload requires:
         "reason": "Approved curriculum resource"
       }
     ]
+  },
+  "network_controls": {
+    "wifi_only": true,
+    "disallow_mobile_network_configuration": true,
+    "disallow_tethering": true,
+    "disallow_user_vpn": true,
+    "always_on_filtering_vpn": true,
+    "vpn_lockdown_required": true
+  },
+  "telephony_controls": {
+    "disallow_outgoing_calls": true,
+    "disallow_sms": true,
+    "preserve_emergency_calls": true
   }
 }
 ```
@@ -99,6 +112,10 @@ The policy/capability names are:
 - `vpn_lockdown_required`
 - `DISALLOW_OUTGOING_CALLS`
 - `DISALLOW_SMS`
+
+These names are represented in the v3 `telephony_controls` object as
+`disallow_outgoing_calls`, `disallow_sms`, and the mandatory
+`preserve_emergency_calls` flag.
 
 The generic DPC does not claim universal OEM cellular-modem shutdown. Production certification requires Wi-Fi-only hardware or a verified profile with no active SIM/eSIM/mobile-data path. Emergency calling remains available.
 
@@ -141,7 +158,7 @@ All protected endpoints use DEVICE-AUTH v1:
 
 ## Golden Vectors
 
-Existing and new deterministic vectors are kept under `backend/docs/` and `backend/tests/fixtures/`. The device-auth vector file is `backend/docs/device-auth-v1-test-vectors.json`; policy v3 vectors are covered by the policy contract tests and fixtures. Vectors must be reproducible by an independent Kotlin implementation byte-for-byte.
+Existing and new deterministic vectors are kept under `backend/docs/` and `backend/tests/fixtures/`. The device-auth vector file is `backend/docs/device-auth-v1-test-vectors.json`; the policy v3 vector is `backend/tests/fixtures/policy_v3_golden_vector.json`. Vectors must be reproducible by an independent Kotlin implementation byte-for-byte.
 
 ## Administrator Portal
 

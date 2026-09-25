@@ -142,7 +142,7 @@ describe('administrator API service', () => {
   })
 
   it('uses the authenticated approved-dynamic translation route', async () => {
-    const translation = { translated_text: 'Oli otya?', source_language: 'eng', target_language: 'lug', cached: false, content_class: 'approved_dynamic' }
+    const translation = { translated_text: 'Oli otya?', source_language: 'eng', target_language: 'lug', cached: false, content_class: 'approved_dynamic', quality_status: 'machine' as const }
     vi.mocked(api.post).mockResolvedValueOnce({ data: translation })
 
     await expect(adminService.translateApprovedDynamicContent('Hello', 'lug')).resolves.toEqual(translation)

@@ -148,7 +148,9 @@ def rotate_credential(device_uuid: str) -> Response:
         return _json_no_store({"error": "authentication_failed"}, 401)
     try:
         data = validate_rotation_request(request)
-        credential_uuid = rotate_device_credential(context.credential, data)
+        credential_uuid, credential_algorithm = rotate_device_credential(
+            context.credential, data
+        )
     except EnrollmentValidationError as error:
         return _json_no_store({"error": "invalid_request"}, error.status_code)
     except EnrollmentFailed:
@@ -159,7 +161,7 @@ def rotate_credential(device_uuid: str) -> Response:
         {
             "device_uuid": device_uuid,
             "credential_uuid": credential_uuid,
-            "credential_algorithm": "RSA_2048_SHA256",
+            "credential_algorithm": credential_algorithm,
         },
         201,
     )

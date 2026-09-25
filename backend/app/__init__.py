@@ -83,6 +83,7 @@ def create_app(
         validate_migration_target(
             app.config["SQLALCHEMY_DATABASE_URI"],
             migration_database_uri,
+            allow_local_development=selected_name == "development",
         )
     _validate_startup_configuration(app)
     _configure_trusted_proxy(app)
@@ -278,7 +279,8 @@ def _configure_admin_cors(app: Flask) -> None:
         if origin not in allowed_origins:
             return response
         response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-CSRF-TOKEN"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Max-Age"] = "600"
         response.headers["Vary"] = _append_vary(response.headers.get("Vary"), "Origin")
@@ -340,7 +342,6 @@ def _load_models() -> None:
         AdministratorPermission,
         AdministratorSession,
         Device,
-        ManagedApplication,
         DeviceAuditBatch,
         DeviceAuditChainHead,
         DeviceBlockOverride,
@@ -357,6 +358,7 @@ def _load_models() -> None:
         DeviceSecurityEvent,
         DeviceUsageDaily,
         EnrollmentToken,
+        ManagedApplication,
         Policy,
         PolicyApplicationEvent,
         PolicyAssignmentChainHead,

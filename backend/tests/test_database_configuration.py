@@ -79,6 +79,43 @@ def test_development_normalizes_legacy_postgres_scheme(
     assert resolved_url.startswith("postgresql+psycopg2://")
 
 
+def test_development_accepts_only_the_dedicated_local_database(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "DEVELOPMENT_DATABASE_URL",
+        "postgresql+psycopg2://edug_local:placeholder@127.0.0.1:5432/edug_local",
+    )
+
+    assert resolve_database_uri(DevelopmentConfig).endswith("/edug_local")
+
+
+def test_non_development_rejects_local_postgres_database(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    local_url = (
+        "postgresql+psycopg2://edug_local:placeholder@127.0.0.1:5432/edug_local"
+    )
+    monkeypatch.setenv("PRODUCTION_DATABASE_URL", local_url)
+
+    with pytest.raises(RuntimeError, match="PRODUCTION_DATABASE_URL"):
+        resolve_database_uri(ProductionConfig)
+
+
+@pytest.mark.parametrize("database_name", ["postgres", "edug_other"])
+def test_local_development_requires_the_dedicated_database_name(
+    monkeypatch: pytest.MonkeyPatch,
+    database_name: str,
+) -> None:
+    monkeypatch.setenv(
+        "DEVELOPMENT_DATABASE_URL",
+        f"postgresql+psycopg2://edug_local:placeholder@127.0.0.1:5432/{database_name}",
+    )
+
+    with pytest.raises(RuntimeError, match="Supabase project"):
+        resolve_database_uri(DevelopmentConfig)
+
+
 def test_legacy_database_url_is_not_used(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

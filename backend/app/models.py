@@ -885,6 +885,51 @@ class ManagedApplication(db.Model):
             raise ValueError("invalid managed application status")
         return value
 
+
+class TranslationCacheEntry(db.Model):
+    __tablename__ = "translation_cache_entries"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_language",
+            "target_language",
+            "source_hash",
+            name="uq_translation_cache_identity",
+        ),
+        CheckConstraint(
+            "provider = 'sunbird'",
+            name="ck_translation_cache_provider",
+        ),
+        CheckConstraint(
+            "quality_status IN ('machine', 'reviewed', 'approved')",
+            name="ck_translation_cache_quality_status",
+        ),
+        Index(
+            "ix_translation_cache_lookup",
+            "source_language",
+            "target_language",
+            "source_hash",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_language: Mapped[str] = mapped_column(String(8), nullable=False)
+    target_language: Mapped[str] = mapped_column(String(3), nullable=False)
+    source_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_text: Mapped[str] = mapped_column(String(4_000), nullable=False)
+    translated_text: Mapped[str] = mapped_column(String(4_000), nullable=False)
+    provider: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="sunbird", server_default="sunbird"
+    )
+    quality_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="machine", server_default="machine"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+    )
+
 class Policy(db.Model):
     __tablename__ = "policies"
     __table_args__ = (
@@ -2015,7 +2060,7 @@ class DeviceCheckIn(db.Model):
         CheckConstraint("boot_count >= 0", name="ck_device_check_ins_boot_count"),
         CheckConstraint("dpc_version >= 1", name="ck_device_check_ins_dpc_version"),
         CheckConstraint(
-            "api_level BETWEEN 29 AND 36", name="ck_device_check_ins_api_level"
+            "api_level BETWEEN 29 AND 35", name="ck_device_check_ins_api_level"
         ),
         CheckConstraint(
             "queued_event_count >= 0", name="ck_device_check_ins_queued_events"
@@ -2080,7 +2125,7 @@ class DeviceComplianceState(db.Model):
             "dpc_version >= 1", name="ck_device_compliance_states_dpc_version"
         ),
         CheckConstraint(
-            "api_level BETWEEN 29 AND 36", name="ck_device_compliance_states_api_level"
+            "api_level BETWEEN 29 AND 35", name="ck_device_compliance_states_api_level"
         ),
         CheckConstraint(
             "queued_event_count >= 0", name="ck_device_compliance_states_queued_events"

@@ -7,8 +7,8 @@ from app.routes.dpc_controls import dpc_controls_bp
 from app.routes.enrollment import enrollment_bp
 from app.routes.health import health_bp
 from app.routes.logs import logs_bp
-from app.routes.policies import policy_bp
 from app.routes.managed_applications import managed_application_bp
+from app.routes.policies import policy_bp
 from app.routes.sync import sync_bp
 from app.routes.translation import translation_bp
 

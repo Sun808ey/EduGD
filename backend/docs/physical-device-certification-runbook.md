@@ -8,8 +8,9 @@ name pattern. It is a prerequisite for policy activation and live enrollment.
 
 Use a factory-reset, school-owned physical handset. Record manufacturer, model,
 product, Android API level, complete build fingerprint, security-patch level,
-carrier, and a SHA-256 digest for carrier configuration. API 29 through 36 are
-the only supported live range. Devices on API 21 through 28 remain suspended.
+carrier, and a SHA-256 digest for carrier configuration. API 29 through 35 are
+the only supported live range. Devices on API 21 through 28 or API 36 remain
+suspended.
 
 Migration `c7e5a9d2f4b8` suspends every active device, including devices already
 on API 29, so none bypasses the new certification gate. Downgrading the schema

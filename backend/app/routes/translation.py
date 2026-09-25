@@ -12,7 +12,11 @@ from app.services.sunbird_translation import (
     TranslationResponseError,
     translate_text,
 )
-from app.translation import LANDING_PAGE_CONTENT, TRANSLATION_CONTENT_CLASSES, normalize_language
+from app.translation import (
+    LANDING_PAGE_CONTENT,
+    TRANSLATION_CONTENT_CLASSES,
+    normalize_language,
+)
 
 translation_bp = Blueprint("translation", __name__)
 
@@ -33,13 +37,13 @@ def translate_public_landing_content() -> Response:
     source = LANDING_PAGE_CONTENT[key]
     try:
         if target == "eng":
-            return admin_json({"content_key": key, "translated_text": source, "target_language": target, "cached": False, "fallback": False})
+            return admin_json({"content_key": key, "translated_text": source, "target_language": target, "cached": False, "fallback": False, "quality_status": "canonical"})
         result = translate_text(text=source, source_language="eng", target_language=target)
     except (TypeError, ValueError):
         return admin_error("invalid_translation_request", "invalid translation request", 400)
     except (TranslationConfigurationError, TranslationRateLimitError, TranslationProviderError, TranslationResponseError):
-        return admin_json({"content_key": key, "translated_text": source, "target_language": target, "cached": False, "fallback": True})
-    return admin_json({"content_key": key, "translated_text": result.translated_text, "target_language": target, "cached": result.cached, "fallback": False})
+        return admin_json({"content_key": key, "translated_text": source, "target_language": target, "cached": False, "fallback": True, "quality_status": "canonical"})
+    return admin_json({"content_key": key, "translated_text": result.translated_text, "target_language": target, "cached": result.cached, "fallback": False, "quality_status": result.quality_status})
 
 
 @translation_bp.post("/admin/translation/translate")
@@ -77,6 +81,7 @@ def translate_admin_content() -> Response:
             "target_language": result.target_language,
             "cached": result.cached,
             "content_class": "approved_dynamic",
+            "quality_status": result.quality_status,
         }
     )
 

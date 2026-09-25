@@ -1,4 +1,5 @@
 from flask import Blueprint, Response, current_app, request
+from flask_jwt_extended import set_access_cookies, unset_jwt_cookies
 from flask_limiter.errors import RateLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -59,7 +60,7 @@ def administrator_login() -> Response:
     except AdministratorLoginDatabaseError:
         return admin_error("internal_server_error", "internal server error", 500)
 
-    return admin_json(
+    response = admin_json(
         {
             "access_token": result.access_token,
             "token_type": AUTHORIZATION_SCHEME,
@@ -72,6 +73,8 @@ def administrator_login() -> Response:
         },
         200,
     )
+    set_access_cookies(response, result.access_token)
+    return response
 
 
 @auth_bp.post("/admin/auth/logout")
@@ -81,7 +84,9 @@ def administrator_logout() -> Response:
         logout_administrator(get_administrator_request_context())
     except SQLAlchemyError:
         return admin_error("internal_server_error", "internal server error", 500)
-    return admin_json({"message": "administrator logged out"}, 200)
+    response = admin_json({"message": "administrator logged out"}, 200)
+    unset_jwt_cookies(response)
+    return response
 
 
 @auth_bp.get("/admin/auth/me")

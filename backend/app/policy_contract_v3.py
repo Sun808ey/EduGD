@@ -52,6 +52,8 @@ def validate_policy_v3(value: object) -> dict[str, object]:
         "schedules",
         "screen_time",
         "web_filter",
+        "network_controls",
+        "telephony_controls",
     }:
         raise PolicyContractError("invalid v3 policy")
     # Reuse the fully hardened v2 validation for the common policy body.
@@ -150,7 +152,42 @@ def validate_policy_v3(value: object) -> dict[str, object]:
             "default_action": default_action,
             "rules": sorted(rules, key=lambda r: r["rule_id"]),
         },
+        "network_controls": _validate_network_controls(value["network_controls"]),
+        "telephony_controls": _validate_telephony_controls(
+            value["telephony_controls"]
+        ),
     }
+
+
+def _validate_network_controls(value: object) -> dict[str, bool]:
+    keys = {
+        "wifi_only",
+        "disallow_mobile_network_configuration",
+        "disallow_tethering",
+        "disallow_user_vpn",
+        "always_on_filtering_vpn",
+        "vpn_lockdown_required",
+    }
+    if not isinstance(value, dict) or set(value) != keys:
+        raise PolicyContractError("invalid network_controls")
+    if any(not isinstance(item, bool) for item in value.values()):
+        raise PolicyContractError("network_controls must be boolean")
+    if value["vpn_lockdown_required"] and not value["always_on_filtering_vpn"]:
+        raise PolicyContractError(
+            "vpn_lockdown_required requires always_on_filtering_vpn"
+        )
+    return {key: value[key] for key in sorted(keys)}
+
+
+def _validate_telephony_controls(value: object) -> dict[str, bool]:
+    keys = {"disallow_outgoing_calls", "disallow_sms", "preserve_emergency_calls"}
+    if not isinstance(value, dict) or set(value) != keys:
+        raise PolicyContractError("invalid telephony_controls")
+    if any(not isinstance(item, bool) for item in value.values()):
+        raise PolicyContractError("telephony_controls must be boolean")
+    if value["preserve_emergency_calls"] is not True:
+        raise PolicyContractError("emergency calling must remain enabled")
+    return {key: value[key] for key in sorted(keys)}
 
 
 def policy_v3_hash(value: object) -> str:

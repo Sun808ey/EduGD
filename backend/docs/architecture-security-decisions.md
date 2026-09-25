@@ -33,9 +33,9 @@ append-only evidence; never claim all audit tables have identical controls.
 - The Android DPC creates and securely persists one canonical lowercase,
   hyphenated, non-nil version-4 UUID.
 - The server rejects uppercase, braced, URN, compact, nil, and non-v4 UUIDs.
-- Supported live devices run Android 10 through 16, API 29 through 36. Historical
-  API 21 through 28 records are retained as suspended evidence and cannot be
-  reactivated without a supported replacement.
+- Supported live devices run Android 10 through 15, API 29 through 35. Historical
+  API 21 through 28 and API 36 records are retained as suspended evidence and
+  cannot be reactivated without a supported replacement.
 - Both Android version and API level are stored; API level is authoritative.
 - Registration and synchronization accept only canonical lowercase hyphenated
   non-nil UUIDv4 text. Registration enforces exact approved Android/API pairs,

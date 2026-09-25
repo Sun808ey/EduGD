@@ -707,7 +707,9 @@ def test_credential_rotation_requires_both_current_and_new_key_proof(
     )
 
     assert response.status_code == 201
-    replacement_uuid = response.get_json()["credential_uuid"]
+    response_payload = response.get_json()
+    assert response_payload["credential_algorithm"] == "RSA_2048_SHA256"
+    replacement_uuid = response_payload["credential_uuid"]
     new_headers, _ = _signed_headers(new_private_key, replacement_uuid)
     sync_path = f"/api/v1/sync/policies/{DEVICE_UUID}"
     assert (

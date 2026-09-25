@@ -26,7 +26,7 @@ $edugAttestation = Get-Content -LiteralPath $edugEvidence -Raw | ConvertFrom-Jso
 if (
     $edugAttestation.status -ne 'PASS' -or
     $edugAttestation.project_ref -ne 'hszskxrgkptbytuquyfu' -or
-    $edugAttestation.before_revision -ne 'ab4e6f2c9d71' -or
+    $edugAttestation.before_revision -ne 'c2f8a1b4d630' -or
     -not $edugAttestation.restore_completed_at -or
     -not $edugAttestation.artifact_sha256 -or
     -not $edugAttestation.restore_inventory_sha256 -or
@@ -53,11 +53,11 @@ from sqlalchemy.pool import NullPool
 from app.extensions import db
 
 PROJECT_REF = "hszskxrgkptbytuquyfu"
-EXPECTED_START = "ab4e6f2c9d71"
-EXPECTED_HEAD = "c2f8a1b4d630"
+EXPECTED_START = "c2f8a1b4d630"
+EXPECTED_HEAD = "e2a6c8d4f0b1"
 EXPECTED_HOST = "aws-1-eu-west-1.pooler.supabase.com"
 EXPECTED_USER = "postgres.hszskxrgkptbytuquyfu"
-NEW_RELEASE_TABLES = {"device_web_filter_events"}
+NEW_RELEASE_TABLES = {"managed_applications"}
 HARDENED_FUNCTIONS = {
     "edug_reject_certification_mutation", "edug_reject_device_audit_mutation",
     "edug_reject_device_control_event_mutation",
@@ -65,7 +65,7 @@ HARDENED_FUNCTIONS = {
     "edug_reject_policy_assignment_event_mutation",
     "edug_reject_policy_revision_mutation",
     "edug_reject_policy_sync_event_mutation", "edug_valid_blocked_apps",
-    "edug_valid_policy_revision_payload",
+    "edug_valid_policy_revision_payload", "edug_reject_web_filter_event_mutation",
 }
 
 result = {"production_schema_migration": "FAIL", "stage": "local_identity"}
@@ -128,6 +128,21 @@ try:
     Migrate(app, db, compare_type=True)
     with app.app_context():
         upgrade(directory=str(Path.cwd() / "migrations"), revision=EXPECTED_HEAD)
+
+    result["stage"] = "function_hardening"
+    with engine.begin() as connection:
+        functions = connection.execute(text(
+        "SELECT format('%I.%I(%s)', n.nspname, p.proname, "
+        "pg_get_function_identity_arguments(p.oid)) FROM pg_proc p JOIN pg_namespace n "
+            "ON n.oid=p.pronamespace WHERE n.nspname='public' "
+            "AND p.proname = ANY(:names)"
+        ), {"names": list(HARDENED_FUNCTIONS)}).scalars().all()
+        require(len(functions) == len(HARDENED_FUNCTIONS), "required function is missing")
+        for function in functions:
+            connection.execute(text(f"ALTER FUNCTION {function} SET search_path TO ''"))
+            for role in ("PUBLIC", "anon", "authenticated", "service_role", "edug_runtime"):
+                connection.execute(text(f"REVOKE EXECUTE ON FUNCTION {function} FROM {role}"))
+            connection.execute(text(f"GRANT EXECUTE ON FUNCTION {function} TO edug_runtime"))
 
     result["stage"] = "post_migration_verification"
     with engine.connect() as connection:

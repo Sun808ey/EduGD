@@ -17,12 +17,13 @@ import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 
-EXPECTED_HEAD = "d8f1a3c6e9b2"
+EXPECTED_HEAD = "e2a6c8d4f0b1"
 TABLES = (
     "administrator_authentication_events",
     "administrator_permissions",
     "administrator_sessions",
     "administrators",
+    "managed_applications",
     "alembic_version",
     "device_check_ins",
     "device_compliance_states",
@@ -30,12 +31,16 @@ TABLES = (
     "device_audit_batches",
     "device_audit_chain_heads",
     "device_capability_certifications",
+    "device_block_overrides",
+    "device_control_events",
     "device_enrollment_events",
     "device_policy_assignments",
     "device_policy_states",
+    "device_usage_daily",
     "device_registration_events",
     "device_request_nonces",
     "device_security_events",
+    "device_web_filter_events",
     "devices",
     "enrollment_tokens",
     "policies",
@@ -48,6 +53,7 @@ TABLES = (
 )
 READ_WRITE = {
     "administrators",
+    "managed_applications",
     "administrator_permissions",
     "administrator_sessions",
     "devices",
@@ -60,6 +66,8 @@ READ_WRITE = {
     "device_audit_chain_heads",
     "policy_assignment_chain_heads",
     "policy_synchronization_chain_heads",
+    "device_block_overrides",
+    "device_usage_daily",
 }
 NONCE_TABLE = "device_request_nonces"
 APPEND_ONLY = {
@@ -71,12 +79,26 @@ APPEND_ONLY = {
     "device_check_ins",
     "device_capability_certifications",
     "device_security_events",
+    "device_control_events",
+    "device_web_filter_events",
     "policy_application_events",
     "policy_assignment_events",
     "policy_synchronization_events",
 }
 PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
 DATA_API_ROLES = ("anon", "authenticated", "service_role")
+HARDENED_FUNCTIONS = (
+    "edug_reject_certification_mutation",
+    "edug_reject_device_audit_mutation",
+    "edug_reject_device_control_event_mutation",
+    "edug_reject_device_status_evidence_mutation",
+    "edug_reject_policy_assignment_event_mutation",
+    "edug_reject_policy_revision_mutation",
+    "edug_reject_policy_sync_event_mutation",
+    "edug_reject_web_filter_event_mutation",
+    "edug_valid_blocked_apps",
+    "edug_valid_policy_revision_payload",
+)
 
 def expected_privileges(table):
     allowed = {"SELECT"}
@@ -170,6 +192,22 @@ try:
                 )
             )
 
+        functions = connection.execute(
+            text(
+                "SELECT format('%I.%I(%s)', n.nspname, p.proname, "
+                "pg_get_function_identity_arguments(p.oid)) FROM pg_proc p JOIN pg_namespace n "
+                "ON n.oid=p.pronamespace WHERE n.nspname='public' "
+                "AND p.proname = ANY(:names)"
+            ),
+            {"names": list(HARDENED_FUNCTIONS)},
+        ).scalars().all()
+        assert len(functions) == len(HARDENED_FUNCTIONS)
+        for function in functions:
+            connection.execute(text(f"ALTER FUNCTION {function} SET search_path TO ''"))
+            for role in ("PUBLIC", *DATA_API_ROLES, "edug_runtime"):
+                connection.execute(text(f"REVOKE EXECUTE ON FUNCTION {function} FROM {role}"))
+            connection.execute(text(f"GRANT EXECUTE ON FUNCTION {function} TO edug_runtime"))
+
         result["stage"] = "catalog_verification"
         permission_checks = 0
         for table in TABLES:
@@ -209,13 +247,29 @@ try:
         ).scalar_one()
         assert rls_tables == len(TABLES)
         assert policies == len(TABLES)
-        assert permission_checks == 182
+        assert permission_checks == len(TABLES) * len(PRIVILEGES)
+        configured_functions = set(
+            connection.execute(
+                text(
+                    "SELECT p.proname FROM pg_proc p JOIN pg_namespace n "
+                    "ON n.oid=p.pronamespace WHERE n.nspname='public' "
+                    "AND p.proname = ANY(:names) "
+                    "AND COALESCE(p.proconfig, ARRAY[]::text[]) @> ARRAY['search_path=\"\"'] "
+                    "AND has_function_privilege('edug_runtime', p.oid, 'EXECUTE') "
+                    "AND NOT has_function_privilege('anon', p.oid, 'EXECUTE') "
+                    "AND NOT has_function_privilege('authenticated', p.oid, 'EXECUTE') "
+                    "AND NOT has_function_privilege('service_role', p.oid, 'EXECUTE')"
+                ),
+                {"names": list(HARDENED_FUNCTIONS)},
+            ).scalars()
+        )
+        assert configured_functions == set(HARDENED_FUNCTIONS)
 
     result = {
         "production_runtime_security": "PASS",
-        "permission_checks": 182,
-        "rls_tables": 26,
-        "runtime_policies": 26,
+        "permission_checks": len(TABLES) * len(PRIVILEGES),
+        "rls_tables": len(TABLES),
+        "runtime_policies": len(TABLES),
         "data_api_roles": "denied",
     }
 except Exception as error:

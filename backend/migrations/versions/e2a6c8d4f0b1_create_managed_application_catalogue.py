@@ -39,6 +39,31 @@ def upgrade() -> None:
         "managed_applications",
         ["status", "category"],
     )
+    if op.get_bind().dialect.name == "postgresql":
+        # The catalogue is reachable only through the backend runtime role.
+        # Keep it inaccessible through Supabase's exposed public schema.
+        op.execute("ALTER TABLE managed_applications ENABLE ROW LEVEL SECURITY")
+        op.execute("REVOKE ALL PRIVILEGES ON TABLE managed_applications FROM PUBLIC")
+        op.execute(
+            """DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+                REVOKE ALL PRIVILEGES ON TABLE managed_applications FROM anon;
+            END IF;
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+                REVOKE ALL PRIVILEGES ON TABLE managed_applications FROM authenticated;
+            END IF;
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+                REVOKE ALL PRIVILEGES ON TABLE managed_applications FROM service_role;
+            END IF;
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
+                REVOKE ALL PRIVILEGES ON TABLE managed_applications FROM edug_runtime;
+                GRANT SELECT, INSERT, UPDATE ON TABLE managed_applications TO edug_runtime;
+                CREATE POLICY edug_backend_runtime ON managed_applications
+                AS PERMISSIVE FOR ALL TO edug_runtime USING (true) WITH CHECK (true);
+                GRANT USAGE, SELECT ON SEQUENCE managed_applications_id_seq TO edug_runtime;
+            END IF;
+            END $$"""
+        )
 
 
 def downgrade() -> None:

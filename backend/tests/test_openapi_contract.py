@@ -57,6 +57,22 @@ def test_openapi_error_and_pagination_contracts_are_machine_readable() -> None:
     assert pagination["properties"]["per_page"]["maximum"] == 100
 
 
+def test_openapi_documents_p256_enrollment_contract() -> None:
+    document = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))
+    operation = document["paths"]["/devices/register"]["post"]
+    request_schema = operation["requestBody"]["content"]["application/json"]["schema"]
+    assert request_schema["$ref"] == "#/components/schemas/DeviceEnrollmentRequest"
+    credential = document["components"]["schemas"]["DeviceEnrollmentCredential"]
+    assert credential["properties"]["algorithm"]["default"] == "ECDSA_P256_SHA256"
+    assert credential["properties"]["algorithm"]["enum"] == [
+        "ECDSA_P256_SHA256",
+        "RSA_2048_SHA256",
+    ]
+    assert operation["responses"]["201"]["content"]["application/json"]["schema"]["$ref"] == (
+        "#/components/schemas/DeviceEnrollmentResponse"
+    )
+
+
 def test_openapi_methods_parameters_and_responses_match_routes(app: Flask) -> None:
     document = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))
     routes: dict[str, set[str]] = {}

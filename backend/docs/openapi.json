@@ -74,6 +74,48 @@
           }
         }
       },
+      "DeviceEnrollmentCredential": {
+        "type": "object",
+        "description": "New DPC credentials use ECDSA P-256. RSA-2048 is compatibility-only for legacy credentials.",
+        "required": ["algorithm", "public_key", "nonce", "proof"],
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "enum": ["ECDSA_P256_SHA256", "RSA_2048_SHA256"],
+            "default": "ECDSA_P256_SHA256",
+            "description": "Use ECDSA_P256_SHA256 for new DPC enrollment; RSA_2048_SHA256 is legacy compatibility only."
+          },
+          "public_key": {"type": "string", "description": "Canonical DER SubjectPublicKeyInfo encoded as unpadded base64url."},
+          "nonce": {"type": "string", "description": "Unpadded base64url encoding of a 16-byte enrollment nonce."},
+          "proof": {"type": "string", "description": "Unpadded base64url proof-of-possession signature."}
+        },
+        "additionalProperties": false
+      },
+      "DeviceEnrollmentRequest": {
+        "type": "object",
+        "required": ["device_uuid", "android_version", "api_level", "pairing_token", "credential"],
+        "properties": {
+          "device_uuid": {"type": "string", "format": "uuid"},
+          "android_version": {"type": "string"},
+          "api_level": {"type": "integer", "minimum": 29, "maximum": 35},
+          "pairing_token": {"type": "string"},
+          "credential": {"$ref": "#/components/schemas/DeviceEnrollmentCredential"}
+        },
+        "additionalProperties": false
+      },
+      "DeviceEnrollmentResponse": {
+        "type": "object",
+        "required": ["device_uuid", "credential_uuid", "credential_algorithm", "device_status", "server_time", "enrollment_event_uuid"],
+        "properties": {
+          "device_uuid": {"type": "string", "format": "uuid"},
+          "credential_uuid": {"type": "string", "format": "uuid"},
+          "credential_algorithm": {"type": "string", "enum": ["ECDSA_P256_SHA256", "RSA_2048_SHA256"]},
+          "device_status": {"type": "string"},
+          "server_time": {"type": "string", "format": "date-time"},
+          "enrollment_event_uuid": {"type": "string", "format": "uuid"}
+        },
+        "additionalProperties": false
+      },
       "PolicyV3Payload": {
         "type": "object",
         "required": [
@@ -736,11 +778,20 @@
     },
     "/devices/register": {
       "post": {
+        "summary": "Register or enroll a device with a proof-of-possession credential",
+        "description": "New DPC enrollment uses ECDSA_P256_SHA256. RSA_2048_SHA256 is accepted only for legacy compatibility and is not the new-device default.",
         "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DeviceEnrollmentRequest"}}}
+        },
         "responses": {
-          "201": {
-            "description": "Device registered or enrolled"
-          }
+          "201": {"description": "Device registered or enrolled", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DeviceEnrollmentResponse"}}}},
+          "400": {"description": "Malformed or unsupported enrollment input"},
+          "401": {"description": "Generic enrollment failure"},
+          "409": {"description": "Already enrolled or legacy binding conflict"},
+          "413": {"description": "Request exceeds 16 KiB"},
+          "500": {"description": "Generic server failure after rollback"}
         }
       }
     },
@@ -757,6 +808,8 @@
         }
       ],
       "post": {
+        "summary": "Rotate a device credential",
+        "description": "New credentials use ECDSA_P256_SHA256. RSA_2048_SHA256 is retained only for legacy compatibility.",
         "security": [],
         "responses": {
           "201": {

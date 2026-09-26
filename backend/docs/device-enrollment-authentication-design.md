@@ -91,7 +91,12 @@ carriage return, line feed, or NUL byte.
   whitespace, non-url-safe alphabet characters, and non-canonical encodings.
 - Nonces decode to exactly 16 bytes and pairing-token secrets decode to exactly
   32 bytes.
-- `RSA_2048_SHA256` means an RSA public key with a 2048-bit modulus and public
+- `ECDSA_P256_SHA256` is the canonical new-DPC algorithm: an ECDSA public key
+  on the NIST P-256 (`secp256r1`) curve, encoded as one complete DER
+  SubjectPublicKeyInfo value with no trailing bytes. Signatures use ECDSA
+  with SHA-256 (`SHA256withECDSA`) and are encoded as canonical base64url.
+- `RSA_2048_SHA256` is a legacy compatibility algorithm. It means an RSA
+  public key with a 2048-bit modulus and public
   exponent 65537, encoded as one complete DER SubjectPublicKeyInfo value with
   no trailing bytes. Signatures use RSASSA-PKCS1-v1_5 with SHA-256 (Android
   `SHA256withRSA`) and decode to exactly 256 bytes. RSA-PSS is not accepted
@@ -177,7 +182,8 @@ authorization role for enrollment administration are separately approved.
 
 1. During first provisioning, the DPC creates and securely persists its
    canonical UUIDv4 if one does not already exist.
-2. The DPC generates the RSA key pair in Android Keystore.
+2. The DPC generates the ECDSA P-256 key pair in Android Keystore. RSA is used
+   only by explicitly identified legacy credentials.
 3. The DPC computes the SHA-256 fingerprint of the public key.
 4. The DPC creates an enrollment nonce and signs the exact enrollment canonical
    message specified below.
@@ -247,7 +253,7 @@ Proposed request, still subject to a 16 KiB endpoint limit:
   "api_level": 29,
   "pairing_token": "token-uuid.base64url-secret",
   "credential": {
-    "algorithm": "RSA_2048_SHA256",
+    "algorithm": "ECDSA_P256_SHA256",
     "public_key": "base64url-der-subject-public-key-info",
     "nonce": "base64url-random-128-bits",
     "proof": "base64url-signature"
@@ -261,7 +267,7 @@ Proposed success response:
 {
   "device_uuid": "550e8400-e29b-41d4-a716-446655440000",
   "credential_uuid": "663b7fc2-1027-4ad6-8321-128c34331bc1",
-  "credential_algorithm": "RSA_2048_SHA256",
+  "credential_algorithm": "ECDSA_P256_SHA256",
   "device_status": "active",
   "server_time": "2026-07-19T10:00:00Z",
   "enrollment_event_uuid": "bcc651b1-5271-4388-ae58-264f170b8057"
@@ -289,7 +295,7 @@ Authorization: DeviceCredential <credential_uuid>
 X-Device-Timestamp: <UTC Unix seconds>
 X-Device-Nonce: <base64url random 128 bits>
 X-Device-Body-SHA256: <lowercase hex SHA-256>
-X-Device-Signature: <base64url RSA SHA-256 signature>
+X-Device-Signature: <base64url ECDSA P-256 SHA-256 signature>
 ```
 
 The signature covers this UTF-8 canonical message, with exactly one line-feed
@@ -361,8 +367,10 @@ Authentication order is:
 
 Header bounds are: 36 ASCII characters for each UUID, 10 decimal characters
 for timestamps through year 2286, 22 base64url characters for a 16-byte nonce,
-64 lowercase hexadecimal characters for the body digest, and 342 base64url
-characters for a 256-byte RSA signature. Multiple instances, folded values,
+64 lowercase hexadecimal characters for the body digest, and an algorithm-specific
+base64url signature bound: 342 characters for the 256-byte RSA compatibility
+signature, with ECDSA signatures bounded by the DER signature validation limit.
+Multiple instances, folded values,
 leading/trailing whitespace, and non-canonical representations are rejected.
 
 Nonce insertion and the protected state change must share a transaction for
@@ -415,7 +423,8 @@ and proof of possession. Rotation atomically creates the replacement, marks the
 old credential `superseded`, and appends an event. It never returns a private
 key or bearer secret.
 
-The new-key proof uses the same normative encoding and RSA rules and signs this
+The new-key proof uses the same normative encoding and P-256 rules for new DPC
+credentials (or the documented RSA compatibility rules for legacy credentials) and signs this
 exact message:
 
 ```text

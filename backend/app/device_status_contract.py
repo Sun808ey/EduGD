@@ -4,6 +4,7 @@ import re
 from datetime import date, datetime
 from uuid import UUID
 
+from app.device_identity import validate_android_compatibility
 from app.protocol_versions import CONTROL_STATE_PROTOCOL_VERSION
 
 MAX_CAPABILITIES = 64
@@ -108,13 +109,12 @@ def validate_check_in(value: object) -> dict[str, object]:
     payload = _strict(value, _CHECK_IN_KEYS, "device check-in")
     if payload["protocol_version"] != CONTROL_STATE_PROTOCOL_VERSION:
         raise DeviceStatusContractError("unsupported protocol version")
-    android_version = payload["android_version"]
-    if (
-        not isinstance(android_version, str)
-        or not 1 <= len(android_version) <= 32
-        or not android_version.isprintable()
-    ):
-        raise DeviceStatusContractError("invalid android_version")
+    try:
+        android_version, api_level = validate_android_compatibility(
+            payload["android_version"], payload["api_level"]
+        )
+    except ValueError as error:
+        raise DeviceStatusContractError("invalid Android version/API level") from error
     patch = payload["security_patch"]
     if not isinstance(patch, str):
         raise DeviceStatusContractError("invalid security_patch")
@@ -159,7 +159,7 @@ def validate_check_in(value: object) -> dict[str, object]:
             payload["dpc_version"], "dpc_version", 1, MAX_DPC_VERSION
         ),
         "android_version": android_version,
-        "api_level": _integer(payload["api_level"], "api_level", 29, 35),
+        "api_level": api_level,
         "security_patch": patch,
         "capabilities": sorted(capabilities),
         "current_policy_uuid": policy_uuid,

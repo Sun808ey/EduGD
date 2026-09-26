@@ -121,7 +121,7 @@ def test_check_in_rejects_android_identity_drift(app: Flask) -> None:
     payload = _check_in()
     payload["api_level"] = 30
     response = _post(app, private_key, credential_uuid, "check-ins", payload)
-    assert response.status_code == 409
+    assert response.status_code == 400
     assert response.get_json()["error"]["code"] == "status_conflict"
 
 

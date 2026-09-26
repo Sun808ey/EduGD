@@ -8,6 +8,7 @@ from uuid import UUID
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from flask import Blueprint, Response, current_app, g, request
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.admin_api import (
     AdminRequestError,
@@ -18,6 +19,7 @@ from app.admin_api import (
     parse_pagination,
 )
 from app.administrator_authorization import administrator_required
+from app.device_api import device_error, device_json
 from app.device_identity import parse_canonical_uuid4
 from app.extensions import db
 from app.models import (
@@ -286,21 +288,21 @@ def dpc_summary() -> Response:
 def usage(device_uuid: str) -> Response:
     context = get_device_authentication_context()
     if str(context.device.device_uuid) != device_uuid:
-        return admin_error("authentication_failed", "device authentication failed", 401)
+        return device_error("authentication_failed", 401)
     try:
         row = report_usage(context.device, request.get_json(silent=False))
-        return admin_json(
+        return device_json(
             {
                 "usage_date": row.usage_date.isoformat(),
                 "active_minutes": row.active_minutes,
             }
         )
     except ValueError:
-        return admin_error("invalid_usage_report", "invalid usage report", 400)
-    except DeviceControlConflict as error:
-        return admin_error("usage_conflict", str(error), 409)
+        return device_error("invalid_usage_report", 400)
+    except DeviceControlConflict:
+        return device_error("usage_conflict", 409)
     except DeviceControlError:
-        return admin_error("usage_unavailable", "usage reporting unavailable", 503)
+        return device_error("usage_unavailable", 503)
 
 
 @dpc_controls_bp.post("/devices/<device_uuid>/web-filter-events")
@@ -308,7 +310,7 @@ def usage(device_uuid: str) -> Response:
 def web_filter_event(device_uuid: str) -> Response:
     context = get_device_authentication_context()
     if str(context.device.device_uuid) != device_uuid:
-        return admin_error("authentication_failed", "device authentication failed", 401)
+        return device_error("authentication_failed", 401)
     try:
         payload = request.get_json(silent=False)
         if (
@@ -333,8 +335,9 @@ def web_filter_event(device_uuid: str) -> Response:
             or not 1 <= len(payload["rule_id"]) <= 64
         ):
             raise ValueError
+        event_uuid = _uuid(str(payload["event_uuid"]))
         row = DeviceWebFilterEvent(
-            event_uuid=_uuid(str(payload["event_uuid"])),
+            event_uuid=event_uuid,
             device_id=context.device.id,
             domain_hash=domain_hash,
             rule_id=payload["rule_id"],
@@ -345,14 +348,31 @@ def web_filter_event(device_uuid: str) -> Response:
                 str(payload["observed_at"]).replace("Z", "+00:00")
             ),
         )
-        db.session.add(row)
-        db.session.commit()
-        return admin_json({"event_uuid": str(row.event_uuid)}, 201)
+        try:
+            db.session.add(row)
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            existing = db.session.scalar(
+                select(DeviceWebFilterEvent).where(
+                    DeviceWebFilterEvent.event_uuid == event_uuid
+                )
+            )
+            if existing is not None and (
+                existing.device_id == context.device.id
+                and existing.domain_hash == domain_hash
+                and existing.rule_id == payload["rule_id"]
+                and existing.outcome == "blocked"
+                and str(existing.policy_uuid) == str(payload["policy_uuid"])
+                and str(existing.revision_uuid) == str(payload["revision_uuid"])
+                and existing.observed_at == row.observed_at
+            ):
+                return device_json({"event_uuid": str(event_uuid), "replayed": True})
+            return device_error("web_filter_event_conflict", 409)
+        return device_json({"event_uuid": str(row.event_uuid), "replayed": False}, 201)
     except Exception:
         db.session.rollback()
-        return admin_error(
-            "invalid_web_filter_event", "invalid blocked-domain evidence", 400
-        )
+        return device_error("invalid_web_filter_event", 400)
 
 
 @dpc_controls_bp.get("/sync/v3/devices/<device_uuid>/state")
@@ -360,10 +380,10 @@ def web_filter_event(device_uuid: str) -> Response:
 def sync_v3(device_uuid: str) -> Response:
     context = get_device_authentication_context()
     if str(context.device.device_uuid) != device_uuid:
-        return admin_error("authentication_failed", "device authentication failed", 401)
+        return device_error("authentication_failed", 401)
     raw_key = current_app.config.get("DPC_POLICY_SIGNING_PRIVATE_KEY")
     if not isinstance(raw_key, str):
-        return admin_error("sync_unavailable", "v3 signing is not configured", 503)
+        return device_error("sync_unavailable", 503)
     try:
         private = Ed25519PrivateKey.from_private_bytes(
             base64.urlsafe_b64decode(raw_key + "=" * (-len(raw_key) % 4))
@@ -402,9 +422,17 @@ def sync_v3(device_uuid: str) -> Response:
                 DeviceBlockOverride.device_id == context.device.id
             )
         )
+        operation = "apply" if envelope is not None else "clear"
+        if override is not None and override.status == "active":
+            operation = "blocked"
         state = {
             "protocol_version": CONTROL_STATE_PROTOCOL_VERSION,
             "device_uuid": device_uuid,
+            "operation": operation,
+            "signing_key_id": current_app.config["DPC_POLICY_SIGNING_KEY_ID"],
+            "issued_at": datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "policy_uuid": envelope["policy_uuid"] if envelope else None,
+            "revision_uuid": envelope["revision_uuid"] if envelope else None,
             "override": _override(override) if override else None,
         }
         state["signature"] = (
@@ -412,6 +440,6 @@ def sync_v3(device_uuid: str) -> Response:
             .rstrip(b"=")
             .decode("ascii")
         )
-        return admin_json({"policy": envelope, "override_state": state})
+        return device_json({"policy": envelope, "state": state})
     except (ValueError, TypeError):
-        return admin_error("sync_unavailable", "v3 signing is invalid", 503)
+        return device_error("sync_unavailable", 503)

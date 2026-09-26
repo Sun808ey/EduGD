@@ -136,6 +136,11 @@ def validate_check_in(value: object) -> dict[str, object]:
         capabilities.append(capability)
     if len(capabilities) != len(set(capabilities)):
         raise DeviceStatusContractError("duplicate capabilities")
+    try:
+        from app.dpc_capability_catalogue import validate_capabilities
+        capabilities = validate_capabilities(capabilities, api_level=api_level)
+    except ValueError as error:
+        raise DeviceStatusContractError("unknown capabilities") from error
     policy_uuid, revision_uuid = _policy_identity(
         payload["current_policy_uuid"], payload["current_revision_uuid"]
     )

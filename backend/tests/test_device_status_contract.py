@@ -21,7 +21,7 @@ def check_in() -> dict[str, object]:
         "android_version": "10",
         "api_level": 29,
         "security_patch": "2026-09-01",
-        "capabilities": ["package_suspension", "lock_task"],
+        "capabilities": ["app_suspension", "lock_task"],
         "current_policy_uuid": None,
         "current_revision_uuid": None,
         "policy_status": "none",
@@ -46,8 +46,8 @@ def acknowledgement() -> dict[str, object]:
 
 def test_check_in_normalizes_capabilities() -> None:
     assert validate_check_in(check_in())["capabilities"] == [
+        "app_suspension",
         "lock_task",
-        "package_suspension",
     ]
 
 

@@ -64,7 +64,7 @@ def _check_in(observed_at: str = "2026-09-20T12:00:00Z") -> dict[str, object]:
         "android_version": "10",
         "api_level": 29,
         "security_patch": "2026-09-01",
-        "capabilities": ["package_suspension", "lock_task"],
+        "capabilities": ["app_suspension", "lock_task"],
         "current_policy_uuid": None,
         "current_revision_uuid": None,
         "policy_status": "none",
@@ -89,7 +89,7 @@ def test_check_in_updates_compliance_projection_and_is_idempotent(app: Flask) ->
         state = db.session.execute(select(DeviceComplianceState)).scalar_one()
         device = db.session.execute(select(Device)).scalar_one()
         assert state.policy_status == "none"
-        assert state.capabilities == ["lock_task", "package_suspension"]
+        assert state.capabilities == ["app_suspension", "lock_task"]
         assert state.queued_event_count == 2
         assert device.last_sync_at is not None
 
@@ -122,7 +122,7 @@ def test_check_in_rejects_android_identity_drift(app: Flask) -> None:
     payload["api_level"] = 30
     response = _post(app, private_key, credential_uuid, "check-ins", payload)
     assert response.status_code == 400
-    assert response.get_json()["error"]["code"] == "status_conflict"
+    assert response.get_json()["error"]["code"] == "invalid_status_report"
 
 
 def test_policy_acknowledgement_records_known_revision(app: Flask) -> None:

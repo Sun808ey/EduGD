@@ -38,7 +38,7 @@ if (Test-Path -LiteralPath $edugBundleRoot) {
 }
 New-Item -ItemType Directory -Path $edugBundleRoot | Out-Null
 
-foreach ($edugFile in ('requirements.txt', 'run.py', 'gunicorn.conf.py', 'railway.json', 'railpack.json')) {
+foreach ($edugFile in ('requirements.txt', 'pyproject.toml', '.python-version', 'run.py', 'gunicorn.conf.py', 'railway.json', 'railpack.json')) {
     Copy-Item -LiteralPath (Join-Path $edugBackend $edugFile) -Destination $edugBundleRoot
 }
 $edugRailpackBytes = [IO.File]::ReadAllBytes((Join-Path $edugBundleRoot 'railpack.json'))

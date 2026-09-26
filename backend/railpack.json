@@ -1,5 +1,9 @@
 {
   "$schema": "https://schema.railpack.com",
+  "provider": "python",
+  "packages": {
+    "python": "3.12.10"
+  },
   "deploy": {
     "startCommand": "gunicorn --config gunicorn.conf.py run:app"
   }

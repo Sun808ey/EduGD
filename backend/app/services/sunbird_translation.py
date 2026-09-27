@@ -4,6 +4,7 @@ import hashlib
 import json
 import threading
 import unicodedata
+from contextlib import nullcontext
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
@@ -74,8 +75,13 @@ def translate_text(
         (source_key + "\n" + target + "\n" + source_hash).encode("utf-8")
     ).hexdigest()
 
-    with _CACHE_LOCK:
-        with db.engine.begin() as connection:
+    with db.engine.begin() as connection:
+        cache_lock = (
+            nullcontext()
+            if connection.dialect.name == "postgresql"
+            else _CACHE_LOCK
+        )
+        with cache_lock:
             _acquire_cache_lock(connection, lock_hash)
             cached = (
                 connection.execute(

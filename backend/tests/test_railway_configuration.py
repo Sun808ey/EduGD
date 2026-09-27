@@ -20,7 +20,7 @@ def test_railway_keeps_migrations_explicit_and_checks_dependencies(
     ]
     assert (
         configuration["deploy"]["startCommand"]
-        == "gunicorn --config gunicorn.conf.py run:app"
+        == "gunicorn --config app/gunicorn_config.py app.wsgi:app"
     )
     assert configuration["deploy"]["healthcheckPath"] == "/api/v1/ready"
     monkeypatch.setenv("PORT", "8123")

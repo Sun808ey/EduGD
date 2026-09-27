@@ -1,12 +1,13 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "RAILPACK",
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile",
     "buildCommand": "pip install --requirement requirements.txt"
   },
   "deploy": {
     "preDeployCommand": ["python -m scripts.verify_hosted_environment"],
-    "startCommand": "gunicorn --config gunicorn.conf.py run:app",
+    "startCommand": "gunicorn --config app/gunicorn_config.py app.wsgi:app",
     "healthcheckPath": "/api/v1/ready",
     "healthcheckTimeout": 120,
     "numReplicas": 1,

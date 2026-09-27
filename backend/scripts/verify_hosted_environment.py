@@ -51,7 +51,20 @@ def main() -> int:
                 "unexpected Alembic revision",
             )
             stage = "database_read_permissions"
+            existing_tables = {
+                row[0]
+                for row in connection.execute(
+                    text(
+                        "SELECT table_name FROM information_schema.tables "
+                        "WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+                    )
+                )
+            }
             for table in db.metadata.sorted_tables:
+                # The translation cache is an optional branch that is not part
+                # of the production e2a6 schema yet.
+                if table.name == "translation_cache_entries" and table.name not in existing_tables:
+                    continue
                 connection.execute(table.select().limit(0))
         stage = "readiness"
         require(

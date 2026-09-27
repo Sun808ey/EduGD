@@ -27,6 +27,38 @@ const publicKeys: LandingKey[] = [
 ]
 type TranslationMap = Partial<Record<LandingKey, string>>
 
+const sharedKeys = [
+  'header.choose_languages', 'header.open_admin', 'common.open_admin',
+  'common.capability', 'common.explore_capability',
+] as const
+
+function keysForPath(pathname: string): LandingKey[] {
+  const prefixes = pathname === '/' || pathname === '/landing'
+    ? ['hero.', 'capabilities.', 'how.']
+    : pathname === '/product'
+      ? ['product.']
+      : pathname === '/features'
+        ? ['features.', 'feature.offline-enforcement.', 'feature.policy-management.', 'feature.device-management.', 'feature.audit-and-forensics.', 'feature.security.']
+        : pathname.startsWith('/features/')
+          ? [`feature.${pathname.split('/')[2]}.`, 'feature.detail.', 'common.scope_note_']
+          : pathname === '/how-it-works'
+            ? ['how-page.', 'common.scope_note_']
+            : pathname === '/schools'
+              ? ['schools.']
+              : pathname === '/security'
+                ? ['security.']
+                : pathname === '/architecture'
+                  ? ['architecture.']
+                  : pathname === '/resources'
+                    ? ['resources.']
+                    : pathname === '/about'
+                      ? ['about.']
+                      : pathname === '/contact'
+                        ? ['contact.']
+                        : []
+  return [...new Set([...sharedKeys, ...publicKeys.filter((key) => prefixes.some((prefix) => key.startsWith(prefix)))])]
+}
+
 function storedLanguage(): SupportedLanguage {
   const value = typeof window === 'undefined' ? null : window.localStorage.getItem(publicLanguageStorageKey)
   return isSupportedLanguage(value) ? value : defaultLanguage
@@ -35,6 +67,7 @@ function storedLanguage(): SupportedLanguage {
 export function LandingLanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<SupportedLanguage>(storedLanguage)
   const [translatedByLanguage, setTranslatedByLanguage] = useState<Partial<Record<SupportedLanguage, TranslationMap>>>({})
+  const requestedKeys = useMemo(() => keysForPath(window.location.pathname), [])
 
   const setLanguage = (next: SupportedLanguage) => {
     setLanguageState(next)
@@ -45,7 +78,7 @@ export function LandingLanguageProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = language === 'eng' ? 'en' : language
     if (language === 'eng' || translatedByLanguage[language]) return
     const controller = new AbortController()
-    Promise.all(publicKeys.map(async (content_key) => {
+    Promise.all(requestedKeys.map(async (content_key) => {
       try {
         const response = await api.post('/public/translation/translate', { content_key, target_language: language }, { signal: controller.signal })
         return [content_key, response.data.translated_text] as const
@@ -58,7 +91,7 @@ export function LandingLanguageProvider({ children }: { children: ReactNode }) {
       }
     })
     return () => controller.abort()
-  }, [language, translatedByLanguage])
+  }, [language, requestedKeys, translatedByLanguage])
 
   const value = useMemo(() => ({
     language,

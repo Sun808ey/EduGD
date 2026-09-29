@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">EduGD DPC</string>
+    <string name="device_admin_label">EduGD Device Policy Controller</string>
+    <string name="device_admin_description">Manages enterprise security policies and compliance for EduGD devices.</string>
+</resources>

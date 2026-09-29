@@ -1,0 +1,27 @@
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.railway
+.venv
+venv
+node_modules
+operator-evidence
+instance
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+.pytest_cache*
+.pytest-*
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+*.pem
+*.key
+*.crt
+
+# Only the individually reviewed public Supabase CA may enter a runtime image.
+!certs/supabase-ca.pem

@@ -1,0 +1,66 @@
+# Dependencies and build/test output
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Local environment files
+.env
+.env.local
+.env.*.local
+*.local
+
+# Logs and editor files
+*.log
+.history/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+
+# Python
+
+venv/
+
+__pycache__/
+
+.env
+
+
+# Node
+
+node_modules/
+
+dist/
+
+
+# Android
+
+.gradle/
+
+build/
+
+
+# IDE
+
+.idea/
+
+.vscode/
+
+
+# Environment variables
+
+.env.local
+.env.*.local
+coverage/
+test-results/
+.vercel

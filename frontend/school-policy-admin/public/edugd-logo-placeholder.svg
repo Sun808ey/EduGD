@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 180" role="img" aria-labelledby="title desc">
+  <title id="title">EduGD logo placeholder</title>
+  <desc id="desc">Placeholder for the official EduGD logo to be supplied later.</desc>
+  <rect width="640" height="180" rx="28" fill="#10211d"/>
+  <rect x="28" y="28" width="124" height="124" rx="28" fill="#d9f99d"/>
+  <text x="90" y="108" text-anchor="middle" font-family="Arial, sans-serif" font-size="52" font-weight="700" fill="#10211d">?</text>
+  <text x="184" y="112" font-family="Arial, sans-serif" font-size="68" font-weight="700" fill="white">EduGD</text>
+  <text x="186" y="143" font-family="Arial, sans-serif" font-size="14" fill="#d9f99d">OFFICIAL LOGO PLACEHOLDER</text>
+</svg>

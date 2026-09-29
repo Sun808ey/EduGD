@@ -1,0 +1,70 @@
+{
+  "algorithm": "Ed25519",
+  "public_key_base64url": "A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg",
+  "envelope": {
+    "protocol_version": 3,
+    "policy_uuid": "11111111-1111-4111-8111-111111111111",
+    "revision_uuid": "22222222-2222-4222-8222-222222222222",
+    "revision_number": 1,
+    "issued_at": "2026-09-20T12:00:00Z",
+    "payload_hash": "885f2062324f5555b1b6e2057a01f3b875e478ebd9c59338832dffeb0067f9bc",
+    "signing_key_id": "policy-v3-test-1",
+    "payload": {
+      "schema_version": 3,
+      "timezone": "Africa/Kampala",
+      "refresh_after_seconds": 300,
+      "default_mode": "school",
+      "emergency_packages": ["org.edug.dpc"],
+      "required_capabilities": ["screen_time", "web_filter"],
+      "minimum_dpc_version": 3,
+      "modes": [{
+        "mode_id": "school",
+        "application_mode": "allowlist",
+        "allowed_packages": ["org.edug.dpc"],
+        "blocked_packages": [],
+        "lock_task_packages": [],
+        "user_restrictions": [],
+        "device_controls": {
+          "account_changes_disabled": true,
+          "add_users_disabled": true,
+          "camera_disabled": false,
+          "factory_reset_disabled": true,
+          "safe_boot_disabled": true,
+          "screen_capture_disabled": false,
+          "unknown_sources_disabled": true,
+          "usb_file_transfer_disabled": true
+        }
+      }],
+      "schedules": [],
+      "screen_time": {
+        "daily_limit_minutes": 120,
+        "reset_minute": 0,
+        "exhausted_mode_id": "school"
+      },
+      "web_filter": {
+        "default_action": "allow",
+        "rules": [{
+          "rule_id": "social",
+          "domain": "example.com",
+          "include_subdomains": true,
+          "action": "block",
+          "reason": "focus"
+        }]
+      },
+      "network_controls": {
+        "always_on_filtering_vpn": true,
+        "disallow_mobile_network_configuration": true,
+        "disallow_tethering": true,
+        "disallow_user_vpn": true,
+        "vpn_lockdown_required": true,
+        "wifi_only": true
+      },
+      "telephony_controls": {
+        "disallow_outgoing_calls": true,
+        "disallow_sms": true,
+        "preserve_emergency_calls": true
+      }
+    },
+    "signature": "6bglMXIDPHICYiDUoUqLz89n9_jzVEl9BfEvLqW_ekAMTkqdtNLNCvVPxqLLmmEuEyh-nWHfiixZv1NkrQl8Dg"
+  }
+}

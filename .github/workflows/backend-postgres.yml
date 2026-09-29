@@ -1,0 +1,27 @@
+name: Backend PostgreSQL integration
+
+# Manual only: check Actions free quota before dispatch. No hosted DB secrets.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-postgres-integration
+  cancel-in-progress: false
+
+jobs:
+  postgres-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run isolated PostgreSQL TLS integration gate
+        run: docker compose -f compose.postgres-test.yml run --build --rm tests
+      - name: Remove only this test stack and temporary certificates
+        if: always()
+        run: docker compose -f compose.postgres-test.yml down --volumes

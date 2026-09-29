@@ -1,0 +1,9 @@
+# Keep local operational material out of Vercel CLI uploads. The project root
+# directory is configured separately as frontend/school-policy-admin.
+/.history/
+/backend/operator-evidence/
+/backend/.mypy_cache/
+/backend/.pytest-*/
+/backend/.ruff_cache/
+/frontend/school-policy-admin/coverage/
+/frontend/school-policy-admin/test-results/

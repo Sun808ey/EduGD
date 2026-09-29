@@ -1,3 +1,158 @@
+###############################################################################
+# EduG - Flask + React (Vite) + Android Studio Monorepo
+###############################################################################
+
+###############################################################################
+# Operating System
+###############################################################################
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+###############################################################################
+# Git / Editor History
+###############################################################################
+
+.history/
+
+###############################################################################
+# Environment Variables & Secrets
+###############################################################################
+
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+*.keystore
+*.pfx
+*.p8
+*.cer
+*.der
+*.p7b
+*.p7c
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+certs/
+certificates/
+
+# No automatic certificate exception. Force-add only the individually reviewed
+# public backend/certs/supabase-ca.pem described in the migration runbook.
+
+###############################################################################
+# Logs
+###############################################################################
+
+*.log
+logs/
+
+###############################################################################
+# Temporary Files
+###############################################################################
+
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+###############################################################################
+# Python / Flask
+###############################################################################
+
+backend/.venv/
+backend/venv/
+
+backend/__pycache__/
+backend/**/*.py[cod]
+
+backend/.pytest_cache/
+backend/.pytest_cache_local/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/.tox/
+backend/.nox/
+backend/.pytest-tmp-quality/
+backend/.pytest-tmp-quality-full/
+
+backend/.coverage
+backend/.coverage.*
+backend/htmlcov/
+backend/package-lock.json
+
+###############################################################################
+# Flask Local Configuration
+###############################################################################
+
+backend/instance/
+
+###############################################################################
+# Database Files (Development Only)
+###############################################################################
+
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Database exports can contain application rows and credentials.
+*.dump
+*.dump.*
+*.pgdump
+*.pgdump.*
+*.backup
+*.backup.*
+*.sql
+*.sql.*
+backups/
+database-dumps/
+pg_dumps/
+# Authored migrations remain reviewable source, not database exports.
+!/backend/migrations/**/*.sql
+
+###############################################################################
+# Flask Migrations
+# Keep migration scripts.
+# Ignore only generated cache files.
+###############################################################################
+
+backend/migrations/__pycache__/
+
+###############################################################################
+# React / Vite
+###############################################################################
+
+frontend/**/node_modules/
+frontend/**/dist/
+frontend/**/.vite/
+
+frontend/**/coverage/
+frontend/school-policy-admin/src/**/*.js
+frontend/school-policy-admin/tsconfig.tsbuildinfo
+frontend/school-policy-admin/vite.config.js
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+###############################################################################
+# Android Studio & Gradle
+###############################################################################
+
 *.iml
 .gradle
 /local.properties
@@ -7,9 +162,65 @@
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
-.DS_Store
 /build
 /captures
 .externalNativeBuild
 .cxx
 local.properties
+
+androidDPC/.gradle/
+androidDPC/**/build/
+androidDPC/local.properties
+
+android/.gradle/
+android/**/build/
+android/local.properties
+*.jar
+
+androidDPC/**/*.keystore
+androidDPC/**/*.jks
+
+androidDPC/**/*.apk
+androidDPC/**/*.aab
+
+.idea/
+
+###############################################################################
+# VS Code
+###############################################################################
+
+.vscode/
+
+###############################################################################
+# Java / Kotlin
+###############################################################################
+
+*.class
+
+###############################################################################
+# Coverage Reports
+###############################################################################
+
+coverage/
+.coverage
+
+###############################################################################
+# Miscellaneous Build Output
+###############################################################################
+
+build/
+dist/
+out/
+target/
+
+###############################################################################
+# Local editor history and ad-hoc environment files
+###############################################################################
+
+.history/
+.github/env.txt
+frontend/package-lock.json
+/11env.txt
+/secrets.txt
+operator-evidence/
+/.vercel/

@@ -42,6 +42,8 @@ id_ecdsa
 id_ed25519
 certs/
 certificates/
+keystore.properties
+*.properties
 
 # No automatic certificate exception. Force-add only the individually reviewed
 # public backend/certs/supabase-ca.pem described in the migration runbook.

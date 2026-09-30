@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import io.github.sun808ey.edugd.dpc.enrollment.EnrollmentBootstrapCoordinator
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,7 +28,11 @@ class MainActivity : ComponentActivity() {
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Attempt restricted. This application is under EduGD management.",
+                            text = when (EnrollmentBootstrapCoordinator.state(this@MainActivity)) {
+                                EnrollmentBootstrapCoordinator.STATE_QUARANTINED -> "Enrollment incomplete. This device is quarantined pending administrator recovery."
+                                EnrollmentBootstrapCoordinator.STATE_ENROLLED -> "This device is enrolled and managed by EduGD."
+                                else -> "Attempt restricted. This application is under EduGD management."
+                            },
                             style = MaterialTheme.typography.headlineSmall,
                             textAlign = TextAlign.Center
                         )

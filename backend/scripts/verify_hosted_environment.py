@@ -63,7 +63,10 @@ def main() -> int:
             for table in db.metadata.sorted_tables:
                 # The translation cache is an optional branch that is not part
                 # of the production e2a6 schema yet.
-                if table.name == "translation_cache_entries" and table.name not in existing_tables:
+                if (
+                    table.name == "translation_cache_entries"
+                    and table.name not in existing_tables
+                ):
                     continue
                 connection.execute(table.select().limit(0))
         stage = "readiness"

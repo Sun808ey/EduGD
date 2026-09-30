@@ -77,9 +77,7 @@ def translate_text(
 
     with db.engine.begin() as connection:
         cache_lock = (
-            nullcontext()
-            if connection.dialect.name == "postgresql"
-            else _CACHE_LOCK
+            nullcontext() if connection.dialect.name == "postgresql" else _CACHE_LOCK
         )
         with cache_lock:
             _acquire_cache_lock(connection, lock_hash)

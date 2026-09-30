@@ -8,10 +8,12 @@ from app.config import (
     PostgresTestingConfig,
     ProductionConfig,
     TestingConfig,
+    get_configuration,
     resolve_database_uri,
     resolve_migration_database_uri,
     resolve_production_engine_options,
     validate_database_separation,
+    validate_migration_target,
 )
 
 DEVELOPMENT_PROJECT = "abcdefghijklmnopqrst"
@@ -327,6 +329,23 @@ def test_application_keeps_direct_migration_url_separate(
 
     assert application.config["SQLALCHEMY_DATABASE_URI"] == DEVELOPMENT_URL
     assert application.config["MIGRATION_DATABASE_URI"] == MIGRATION_URL
+
+
+def test_unknown_application_environment_is_rejected() -> None:
+    with pytest.raises(ValueError, match="Unknown application environment"):
+        get_configuration("unknown")
+
+
+def test_local_migration_target_must_match_application_host() -> None:
+    application_url = "postgresql://edug_local:placeholder@127.0.0.1:5432/edug_local"
+    migration_url = "postgresql://edug_local:placeholder@localhost:5432/edug_local"
+
+    with pytest.raises(RuntimeError, match="must match the local application"):
+        validate_migration_target(
+            application_url,
+            migration_url,
+            allow_local_development=True,
+        )
 
 
 def test_migration_url_must_target_the_active_application_project(

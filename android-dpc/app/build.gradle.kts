@@ -1,5 +1,4 @@
 import java.util.Properties
-import java.io.FileInputStream
 
 plugins {
     alias(libs.plugins.android.application)
@@ -11,9 +10,21 @@ plugins {
 
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+if (keystorePropertiesFile.isFile) {
+    keystorePropertiesFile.inputStream().use { stream ->
+        keystoreProperties.load(stream)
+    }
 }
+
+val requiredSigningProperties = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+val signingProperties = requiredSigningProperties.associateWith { propertyName ->
+    keystoreProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
+}
+val signingStoreFile = signingProperties["storeFile"]?.let(rootProject::file)
+val releaseSigningConfigured =
+    keystorePropertiesFile.isFile &&
+        signingProperties.values.all { it != null } &&
+        signingStoreFile?.isFile == true
 
 android {
     namespace = "io.github.sun808ey.edugd.dpc"
@@ -30,13 +41,12 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            val storeFilePath = keystoreProperties.getProperty("storeFile")
-            if (storeFilePath != null) {
-                storeFile = file(storeFilePath)
-                storePassword = keystoreProperties.getProperty("storePassword")
-                keyAlias = keystoreProperties.getProperty("keyAlias")
-                keyPassword = keystoreProperties.getProperty("keyPassword")
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = signingStoreFile
+                storePassword = signingProperties.getValue("storePassword")
+                keyAlias = signingProperties.getValue("keyAlias")
+                keyPassword = signingProperties.getValue("keyPassword")
             }
         }
     }
@@ -47,17 +57,15 @@ android {
             isDebuggable = true
         }
         release {
-            isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
-    }
-    lint {
-        checkReleaseBuilds = false
-        abortOnError = false
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -68,6 +76,37 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+}
+
+val validateReleaseSigning = tasks.register("validateReleaseSigning") {
+    group = "verification"
+    description = "Validates the local signing configuration before packaging a release."
+
+    doLast {
+        if (!keystorePropertiesFile.isFile) {
+            throw GradleException("Missing android-dpc/keystore.properties for release packaging.")
+        }
+
+        val missingProperties = signingProperties.filterValues { it == null }.keys
+        if (missingProperties.isNotEmpty()) {
+            throw GradleException(
+                "Missing release signing properties: ${missingProperties.sorted().joinToString(", ")}"
+            )
+        }
+
+        if (signingStoreFile?.isFile != true) {
+            throw GradleException("The configured release keystore file does not exist.")
+        }
+    }
+}
+
+tasks.configureEach {
+    if (name in setOf("assembleRelease", "bundleRelease", "packageRelease")) {
+        dependsOn(validateReleaseSigning)
+    }
+    if (name != "validateReleaseSigning" && name.contains("Release")) {
+        mustRunAfter(validateReleaseSigning)
     }
 }
 

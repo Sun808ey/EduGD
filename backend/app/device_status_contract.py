@@ -138,6 +138,7 @@ def validate_check_in(value: object) -> dict[str, object]:
         raise DeviceStatusContractError("duplicate capabilities")
     try:
         from app.dpc_capability_catalogue import validate_capabilities
+
         capabilities = validate_capabilities(capabilities, api_level=api_level)
     except ValueError as error:
         raise DeviceStatusContractError("unknown capabilities") from error

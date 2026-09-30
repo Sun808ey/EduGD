@@ -68,9 +68,9 @@ def test_openapi_documents_p256_enrollment_contract() -> None:
         "ECDSA_P256_SHA256",
         "RSA_2048_SHA256",
     ]
-    assert operation["responses"]["201"]["content"]["application/json"]["schema"]["$ref"] == (
-        "#/components/schemas/DeviceEnrollmentResponse"
-    )
+    assert operation["responses"]["201"]["content"]["application/json"]["schema"][
+        "$ref"
+    ] == ("#/components/schemas/DeviceEnrollmentResponse")
 
 
 def test_openapi_methods_parameters_and_responses_match_routes(app: Flask) -> None:

@@ -115,7 +115,7 @@ def test_authorized_issuance_returns_secret_once_and_stores_only_verifier(
         assert 0 < remaining_seconds <= app.config["ENROLLMENT_TOKEN_TTL_SECONDS"]
 
 
-def test_issuance_restores_missing_database_permission(app: Flask) -> None:
+def test_issuance_rejects_missing_database_permission(app: Flask) -> None:
     access_token = _bootstrap_and_login(app)
     with app.app_context():
         administrator_id = db.session.scalar(select(Administrator.id))
@@ -129,9 +129,11 @@ def test_issuance_restores_missing_database_permission(app: Flask) -> None:
 
     response = _issue(app, access_token)
 
-    assert response.status_code == 201
+    assert response.status_code == 403
+    assert response.get_json()["error"]["code"] == "authorization_failed"
+    assert response.headers["Cache-Control"] == "no-store"
     with app.app_context():
-        assert db.session.scalar(select(func.count()).select_from(EnrollmentToken)) == 1
+        assert db.session.scalar(select(func.count()).select_from(EnrollmentToken)) == 0
         assert (
             db.session.scalar(
                 select(func.count())
@@ -140,7 +142,7 @@ def test_issuance_restores_missing_database_permission(app: Flask) -> None:
                     AdministratorAuthenticationEvent.category == "permission_granted"
                 )
             )
-            >= 1
+            == 0
         )
 
 

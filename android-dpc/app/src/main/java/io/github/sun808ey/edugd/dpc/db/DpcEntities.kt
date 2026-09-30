@@ -7,8 +7,11 @@ import androidx.room.PrimaryKey
 data class DeviceIdentityEntity(
     @PrimaryKey val deviceUuid: String,
     val credentialUuid: String,
+    val credentialAlgorithm: String,
+    val apiOrigin: String,
     val keyAlias: String,
     val enrolledAt: Long,
+    val serverTime: String,
     val state: String
 )
 
@@ -38,45 +41,7 @@ data class PolicyStateEntity(
 )
 
 @Entity(tableName = "suspension_journal", primaryKeys = ["policyRevisionUuid", "packageName"])
-data class SuspensionJournalEntity(
-    val policyRevisionUuid: String,
-    val packageName: String,
-    val suspendedByRevision: String,
-    val observedSuspended: Boolean,
-    val lastError: String?
-)
-
-@Entity(tableName = "outbox")
-data class OutboxEntity(
-    @PrimaryKey val eventUuid: String,
-    val eventType: String,
-    val bodyJson: String,
-    val idempotencyUuid: String,
-    val attemptCount: Int,
-    val nextAttemptAt: Long,
-    val status: String
-)
-
-@Entity(tableName = "audit_event")
-data class AuditEventEntity(
-    @PrimaryKey(autoGenerate = true) val sequence: Long = 0,
-    val eventUuid: String,
-    val observedAt: Long,
-    val elapsedRealtimeMs: Long,
-    val bootCount: Int,
-    val eventCode: String,
-    val metadataJson: String,
-    val previousHash: String,
-    val eventHash: String
-)
-
-@Entity(tableName = "capability_report")
-data class CapabilityReportEntity(
-    @PrimaryKey val reportUuid: String,
-    val observedAt: Long,
-    val apiLevel: Int,
-    val buildFingerprint: String,
-    val securityPatch: String,
-    val capabilitiesJson: String,
-    val reportStatus: String
-)
+data class SuspensionJournalEntity(val policyRevisionUuid: String, val packageName: String, val suspendedByRevision: String, val observedSuspended: Boolean, val lastError: String?)
+@Entity(tableName = "outbox") data class OutboxEntity(@PrimaryKey val eventUuid: String, val eventType: String, val bodyJson: String, val idempotencyUuid: String, val attemptCount: Int, val nextAttemptAt: Long, val status: String)
+@Entity(tableName = "audit_event") data class AuditEventEntity(@PrimaryKey(autoGenerate = true) val sequence: Long = 0, val eventUuid: String, val observedAt: Long, val elapsedRealtimeMs: Long, val bootCount: Int, val eventCode: String, val metadataJson: String, val previousHash: String, val eventHash: String)
+@Entity(tableName = "capability_report") data class CapabilityReportEntity(@PrimaryKey val reportUuid: String, val observedAt: Long, val apiLevel: Int, val buildFingerprint: String, val securityPatch: String, val capabilitiesJson: String, val reportStatus: String)

@@ -1,30 +1,37 @@
 package io.github.sun808ey.edugd.dpc.db
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Transaction
 
 @Dao
 interface DpcDao {
-    @Query("SELECT * FROM policy_state WHERE id = 1")
-    suspend fun getPolicyState(): PolicyStateEntity?
+    @Query("SELECT * FROM device_identity WHERE state = 'ACTIVE' LIMIT 1")
+    suspend fun getActiveDeviceIdentity(): DeviceIdentityEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertPolicyState(state: PolicyStateEntity)
+    suspend fun insertDeviceIdentity(identity: DeviceIdentityEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertPolicyEnvelope(envelope: PolicyEnvelopeEntity)
+    @Query("DELETE FROM device_identity")
+    suspend fun deleteDeviceIdentities()
 
-    @Query("SELECT * FROM policy_envelope WHERE policyUuid = :policyUuid")
-    suspend fun getPolicyEnvelope(policyUuid: String): PolicyEnvelopeEntity?
+    @Transaction
+    suspend fun replaceActiveDeviceIdentity(identity: DeviceIdentityEntity) {
+        deleteDeviceIdentities()
+        insertDeviceIdentity(identity)
+    }
 
-    @Query("UPDATE policy_state SET applyState = :applyState, desiredHash = :desiredHash WHERE id = 1")
-    suspend fun markPending(applyState: String, desiredHash: String)
+    @Query("UPDATE device_identity SET state = 'REVOKED' WHERE state = 'ACTIVE'")
+    suspend fun markIdentityRevoked()
 
-    @Query("UPDATE policy_state SET applyState = :applyState, appliedHash = :appliedHash, activePolicyUuid = :policyUuid, activeRevisionUuid = :revisionUuid WHERE id = 1")
-    suspend fun markActive(applyState: String, appliedHash: String, policyUuid: String, revisionUuid: String)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAuditEvent(event: AuditEventEntity)
-
-    @Query("SELECT * FROM audit_event ORDER BY sequence DESC LIMIT 1")
-    suspend fun getLastAuditEvent(): AuditEventEntity?
+    @Query("SELECT * FROM policy_state WHERE id = 1") suspend fun getPolicyState(): PolicyStateEntity?
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertPolicyState(state: PolicyStateEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertPolicyEnvelope(envelope: PolicyEnvelopeEntity)
+    @Query("SELECT * FROM policy_envelope WHERE policyUuid = :policyUuid") suspend fun getPolicyEnvelope(policyUuid: String): PolicyEnvelopeEntity?
+    @Query("UPDATE policy_state SET applyState = :applyState, desiredHash = :desiredHash WHERE id = 1") suspend fun markPending(applyState: String, desiredHash: String)
+    @Query("UPDATE policy_state SET applyState = :applyState, appliedHash = :appliedHash, activePolicyUuid = :policyUuid, activeRevisionUuid = :revisionUuid WHERE id = 1") suspend fun markActive(applyState: String, appliedHash: String, policyUuid: String, revisionUuid: String)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAuditEvent(event: AuditEventEntity)
+    @Query("SELECT * FROM audit_event ORDER BY sequence DESC LIMIT 1") suspend fun getLastAuditEvent(): AuditEventEntity?
 }

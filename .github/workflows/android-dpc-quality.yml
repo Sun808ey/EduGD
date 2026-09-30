@@ -4,10 +4,16 @@ on:
   push:
     paths:
       - "android-dpc/**"
+      - "gradlew"
+      - "gradlew.bat"
+      - "gradle/wrapper/**"
       - ".github/workflows/android-dpc-quality.yml"
   pull_request:
     paths:
       - "android-dpc/**"
+      - "gradlew"
+      - "gradlew.bat"
+      - "gradle/wrapper/**"
       - ".github/workflows/android-dpc-quality.yml"
 
 permissions:

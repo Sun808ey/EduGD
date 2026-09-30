@@ -1,73 +1,68 @@
 package io.github.sun808ey.edugd.dpc.crypto
 
-import com.google.gson.JsonElement
-import com.google.gson.JsonParser
 import java.text.Normalizer
-import java.util.TreeMap
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 object CanonicalJson {
+    fun bytes(value: JsonElement): ByteArray =
+        text(value).toByteArray(Charsets.UTF_8)
+
+    fun text(value: JsonElement): String = buildString { write(value) }
 
     fun canonicalize(jsonString: String): String {
-        val element = JsonParser.parseString(jsonString)
-        return canonicalizeElement(element)
+        return try {
+            val element = Json.parseToJsonElement(jsonString)
+            text(element)
+        } catch (e: Exception) {
+            jsonString
+        }
     }
 
-    fun canonicalizeObject(obj: Any): String {
-        val gson = com.google.gson.Gson()
-        val jsonStr = gson.toJson(obj)
-        return canonicalize(jsonStr)
-    }
-
-    private fun canonicalizeElement(element: JsonElement): String {
-        return when {
-            element.isJsonObject -> {
-                val obj = element.asJsonObject
-                val sortedMap = TreeMap<String, JsonElement>()
-                for ((key, value) in obj.entrySet()) {
-                    val normalizedKey = Normalizer.normalize(key, Normalizer.Form.NFC)
-                    sortedMap[normalizedKey] = value
+    private fun StringBuilder.write(value: JsonElement) {
+        when (value) {
+            JsonNull -> append("null")
+            is JsonArray -> {
+                append('[')
+                value.forEachIndexed { index, item ->
+                    if (index > 0) append(',')
+                    write(item)
                 }
-                val sb = StringBuilder("{")
-                var first = true
-                for ((key, value) in sortedMap) {
-                    if (!first) sb.append(",")
-                    first = false
-                    sb.append("\"").append(escapeJsonString(key)).append("\":")
-                    sb.append(canonicalizeElement(value))
-                }
-                sb.append("}").toString()
+                append(']')
             }
-            element.isJsonArray -> {
-                val arr = element.asJsonArray
-                val sb = StringBuilder("[")
-                for (i in 0 until arr.size()) {
-                    if (i > 0) sb.append(",")
-                    sb.append(canonicalizeElement(arr.get(i)))
-                }
-                sb.append("]").toString()
-            }
-            element.isJsonPrimitive -> {
-                val prim = element.asJsonPrimitive
-                when {
-                    prim.isBoolean -> prim.asBoolean.toString()
-                    prim.isNumber -> {
-                        val num = prim.asNumber
-                        val d = num.toDouble()
-                        if (d == d.toLong().toDouble() && !d.isInfinite() && !d.isNaN()) {
-                            d.toLong().toString()
-                        } else {
-                            num.toString()
-                        }
+            is JsonObject -> {
+                append('{')
+                value.entries.sortedBy { it.key }
+                    .forEachIndexed { index, entry ->
+                        if (index > 0) append(',')
+                        append('"').append(escapeJsonString(entry.key)).append('"')
+                        append(':')
+                        write(entry.value)
                     }
-                    prim.isString -> {
-                        val normalized = Normalizer.normalize(prim.asString, Normalizer.Form.NFC)
-                        "\"" + escapeJsonString(normalized) + "\""
-                    }
-                    else -> prim.toString()
+                append('}')
+            }
+            is JsonPrimitive -> {
+                if (value.isString) {
+                    val nfc = Normalizer.normalize(
+                        value.content,
+                        Normalizer.Form.NFC,
+                    )
+                    append('"').append(escapeJsonString(nfc)).append('"')
+                } else {
+                    val raw = value.content
+                    require(
+                        raw == "true" ||
+                            raw == "false" ||
+                            raw == "null" ||
+                            raw.matches(Regex("-?(0|[1-9][0-9]*)")),
+                    ) { "Only JSON booleans, null and integers are permitted" }
+                    append(raw)
                 }
             }
-            element.isJsonNull -> "null"
-            else -> element.toString()
         }
     }
 

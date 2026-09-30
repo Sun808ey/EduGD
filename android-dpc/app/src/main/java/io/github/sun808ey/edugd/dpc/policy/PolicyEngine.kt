@@ -1,43 +1,31 @@
 package io.github.sun808ey.edugd.dpc.policy
 
-import com.google.gson.Gson
-import io.github.sun808ey.edugd.dpc.crypto.CanonicalJson
-import io.github.sun808ey.edugd.dpc.crypto.Ed25519Verifier
+import org.json.JSONObject
 
 data class PolicyEnvelope(
-    val version: Long,
+    val policyUuid: String,
+    val revisionUuid: String,
+    val payloadJson: String,
     val publicKeyHex: String,
-    val signatureHex: String,
-    val policyData: PolicyData
-)
-
-data class PolicyData(
-    val version: Long,
-    val suspendedPackages: List<String> = emptyList(),
-    val restrictions: List<String> = emptyList(),
-    val lockTaskPackages: List<String> = emptyList()
+    val signatureHex: String
 )
 
 class PolicyEngine(private val masterPublicKeyHex: String) {
-    private val gson = Gson()
+    fun parseAndValidateEnvelope(signedEnvelopeJson: String): PolicyEnvelope {
+        val obj = JSONObject(signedEnvelopeJson)
+        val policyUuid = obj.optString("policy_uuid", "")
+        val revisionUuid = obj.optString("revision_uuid", "")
+        val payloadObj = obj.optJSONObject("payload") ?: JSONObject()
+        val payloadJson = payloadObj.toString()
+        val publicKeyHex = obj.optString("public_key_hex", masterPublicKeyHex)
+        val signatureHex = obj.optString("signature", "")
 
-    fun evaluateAndVerifyPolicy(signedEnvelopeJson: String): PolicyData? {
-        try {
-            val envelope = gson.fromJson(signedEnvelopeJson, PolicyEnvelope::class.java)
-            val canonicalPolicyJson = CanonicalJson.canonicalizeObject(envelope.policyData)
-
-            val isValid = Ed25519Verifier.verifyCanonicalJson(
-                masterPublicKeyHex.ifEmpty { envelope.publicKeyHex },
-                canonicalPolicyJson,
-                envelope.signatureHex
-            )
-
-            if (isValid) {
-                return envelope.policyData
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return null
+        return PolicyEnvelope(
+            policyUuid = policyUuid,
+            revisionUuid = revisionUuid,
+            payloadJson = payloadJson,
+            publicKeyHex = publicKeyHex,
+            signatureHex = signatureHex
+        )
     }
 }

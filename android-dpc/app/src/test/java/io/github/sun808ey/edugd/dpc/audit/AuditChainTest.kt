@@ -1,11 +1,12 @@
 package io.github.sun808ey.edugd.dpc.audit
 
-import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AuditChainTest {
     @Test
-    fun testGenesisHashConstant() {
-        assertEquals("0000000000000000000000000000000000000000000000000000000000000000", AuditChain.GENESIS_HASH)
+    fun testAllowedEventCodes() {
+        assertTrue(AuditChain.ALLOWED_EVENT_CODES.contains("policy_applied"))
+        assertTrue(AuditChain.ALLOWED_EVENT_CODES.contains("blocked_domain"))
     }
 }

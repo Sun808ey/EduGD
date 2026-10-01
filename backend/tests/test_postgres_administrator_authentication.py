@@ -246,6 +246,14 @@ def test_authorization_rechecks_postgres_permissions_for_each_request(
     assert denied.status_code == 403
     assert denied.get_json()["error"]["code"] == "authorization_failed"
     assert denied.headers["Cache-Control"] == "no-store"
+    permissions = set(
+        db.session.execute(
+            select(AdministratorPermission.permission).where(
+                AdministratorPermission.administrator_id == administrator.id
+            )
+        ).scalars()
+    )
+    assert "administrator.manage" not in permissions
     event = db.session.execute(
         select(AdministratorAuthenticationEvent).where(
             AdministratorAuthenticationEvent.category == "authorization_failed"
@@ -253,6 +261,14 @@ def test_authorization_rechecks_postgres_permissions_for_each_request(
     ).scalar_one()
     assert event.failure_class == "permission_denied"
     assert event.acting_administrator_id == administrator.id
+    assert (
+        db.session.scalar(
+            select(func.count())
+            .select_from(AdministratorAuthenticationEvent)
+            .where(AdministratorAuthenticationEvent.category == "permission_granted")
+        )
+        == 0
+    )
 
 
 def test_unique_session_failure_rolls_back_only_the_failed_login(

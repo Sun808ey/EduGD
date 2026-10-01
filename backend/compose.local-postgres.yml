@@ -1,0 +1,20 @@
+# Disposable local-development database for the host-run Flask/Vite stack.
+# The password is supplied only through the invoking process environment.
+name: edug-local-stack
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: edug_local
+      POSTGRES_PASSWORD: ${EDUG_LOCAL_POSTGRES_TOKEN:?required}
+      POSTGRES_DB: edug_local
+    ports:
+      - "127.0.0.1:${EDUG_LOCAL_POSTGRES_PORT:-55432}:5432"
+    command: [postgres, -c, fsync=off, -c, synchronous_commit=off]
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U edug_local -d edug_local]
+      interval: 2s
+      timeout: 3s
+      retries: 30

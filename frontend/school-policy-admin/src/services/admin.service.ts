@@ -7,7 +7,7 @@ import {
   policiesSchema, policyDetailSchema, revisionsSchema, blockOverrideResponseSchema,
   dpcEvidenceResponseSchema, dpcSummarySchema, policyCreateSchema,
   managedApplicationsSchema, managedApplicationSchema,
-  translationResultSchema,
+  policyLifecycleSchema, policyRevisionMutationSchema, translationResultSchema,
 } from '@/schemas/api'
 import type { PageRequest, Policy } from '@/types/api.types'
 
@@ -122,9 +122,11 @@ export const adminService = {
     return translationResultSchema.parse(response.data)
   },
   async createPolicyRevision(policyUuid: string, payload: Record<string, unknown>) {
-    return api.post(`/admin/policies/${path(policyUuid)}/revisions`, { payload })
+    const response = await api.post(`/admin/policies/${path(policyUuid)}/revisions`, { payload })
+    return policyRevisionMutationSchema.parse(response.data)
   },
   async setPolicyLifecycle(policyUuid: string, status: 'active' | 'inactive' | 'revoked', reason: string) {
-    return api.post(`/admin/policies/${path(policyUuid)}/lifecycle`, { status, reason })
+    const response = await api.post(`/admin/policies/${path(policyUuid)}/lifecycle`, { status, reason })
+    return policyLifecycleSchema.parse(response.data)
   },
 }

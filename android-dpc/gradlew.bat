@@ -36,6 +36,7 @@ if exist "%JAVA_HOME%\bin\java.exe" set JAVACMD=%JAVA_HOME%\bin\java.exe
 :gnuJavacmd
 if "%JAVACMD%" == "" set JAVACMD=java
 
+cd /d "%APP_HOME%"
 "%JAVACMD%" "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" -jar "%APP_HOME%\gradle\wrapper\gradle-wrapper.jar" %*
 
 if ERRORLEVEL 1 goto fail
@@ -47,4 +48,4 @@ exit /b 1
 :end
 if "%OS%"=="Windows_NT" endlocal
 :finish
-schangelocal
+endlocal

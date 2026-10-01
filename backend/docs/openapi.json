@@ -627,7 +627,7 @@
           "administratorBearer": []
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Create an immutable policy revision"
           },
           "400": {

@@ -18,7 +18,7 @@ const navItems = [
 ]
 
 export function AdminShell() {
-  const { user, logout } = useAuth()
+  const { user, logout, hasPermission } = useAuth()
   const { translate } = useLanguage()
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -33,6 +33,7 @@ export function AdminShell() {
         <Typography variant="overline" color="text.secondary" sx={{ display: 'block', px: 1.5, mb: 1, letterSpacing: '.12em' }}>{translate('workspace')}</Typography>
         <List disablePadding sx={{ display: 'grid', gap: .5 }}>
           {navItems.map(({ to, key, label, icon: Icon }) => <ListItem key={to} disablePadding><ListItemButton component={NavLink} to={to} onClick={() => setMobileOpen(false)} sx={{ borderRadius: 2, '&.active': { bgcolor: 'primary.main', color: 'primary.contrastText', '& .MuiListItemIcon-root': { color: 'inherit' } } }}><ListItemIcon sx={{ minWidth: 38 }}><Icon size={18} aria-hidden="true" /></ListItemIcon><ListItemText primary={<Typography sx={{ fontSize: 14, fontWeight: 650 }}>{label ?? (key ? translate(key) : 'Applications')}</Typography>} /></ListItemButton></ListItem>)}
+          {hasPermission('administrator.manage') && <ListItem disablePadding><ListItemButton component={NavLink} to="/administrators" onClick={() => setMobileOpen(false)} sx={{ borderRadius: 2, '&.active': { bgcolor: 'primary.main', color: 'primary.contrastText', '& .MuiListItemIcon-root': { color: 'inherit' } } }}><ListItemIcon sx={{ minWidth: 38 }}><ShieldCheck size={18} aria-hidden="true" /></ListItemIcon><ListItemText primary={<Typography sx={{ fontSize: 14, fontWeight: 650 }}>Administrators</Typography>} /></ListItemButton></ListItem>}
         </List>
       </Box>
       <Box sx={{ mt: 'auto' }}>

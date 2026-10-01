@@ -66,7 +66,7 @@ def _compose(
     )
 
 
-def _wait_for(url: str, process: subprocess.Popen[object], timeout: float = 60) -> None:
+def _wait_for(url: str, process: subprocess.Popen[bytes], timeout: float = 60) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if process.poll() is not None:
@@ -80,7 +80,7 @@ def _wait_for(url: str, process: subprocess.Popen[object], timeout: float = 60) 
     raise RuntimeError(f"timed out waiting for {url}")
 
 
-def _terminate(process: subprocess.Popen[object]) -> None:
+def _terminate(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is not None:
         return
     process.terminate()
@@ -130,8 +130,8 @@ def main() -> int:
         }
     )
     compose_env = env.copy()
-    flask_process: subprocess.Popen[object] | None = None
-    vite_process: subprocess.Popen[object] | None = None
+    flask_process: subprocess.Popen[bytes] | None = None
+    vite_process: subprocess.Popen[bytes] | None = None
     try:
         _compose(
             [

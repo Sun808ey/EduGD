@@ -1,5 +1,8 @@
 """Bootstrap only the guarded disposable database, then run integration tests."""
 
+import socket
+import time
+
 import pytest
 from flask_migrate import upgrade
 from sqlalchemy import create_engine, text
@@ -10,8 +13,26 @@ from test_support.postgres_safety import (
     validate_postgres_test_environment,
 )
 
+DATABASE_HOST = "db.eduglocaltest0000001.supabase.co"
+
+
+def _wait_for_internal_dns(timeout: float = 30.0) -> None:
+    deadline = time.monotonic() + timeout
+    last_error: OSError | None = None
+    while time.monotonic() < deadline:
+        try:
+            socket.gethostbyname(DATABASE_HOST)
+            return
+        except OSError as error:
+            last_error = error
+            time.sleep(0.25)
+    raise RuntimeError(
+        f"isolated Docker DNS did not resolve {DATABASE_HOST}: {last_error}"
+    )
+
 
 def main() -> int:
+    _wait_for_internal_dns()
     approved = validate_postgres_test_environment(
         require_migration=True, require_destructive=True
     )

@@ -17,6 +17,7 @@ const PolicyDetailPage = lazy(() => import('@/pages/PolicyDetailPage').then((mod
 const PolicyCreatePage = lazy(() => import('@/pages/PolicyCreatePage').then((module) => ({ default: module.PolicyCreatePage })))
 const ManagedApplicationsPage = lazy(() => import('@/pages/ManagedApplicationsPage').then((module) => ({ default: module.ManagedApplicationsPage })))
 const LogsPage = lazy(() => import('@/pages/logs').then((module) => ({ default: module.LogsPage })))
+const AdministratorsPage = lazy(() => import('@/pages/AdministratorsPage').then((module) => ({ default: module.AdministratorsPage })))
 const DeviceDetailPage = lazy(() => import('@/pages/DeviceDetailPage').then((module) => ({ default: module.DeviceDetailPage })))
 
 function App() {
@@ -44,6 +45,7 @@ function App() {
           <Route path="/policies/:policyUuid" element={<PolicyDetailPage />} />
           <Route path="/applications" element={<ManagedApplicationsPage />} />
           <Route path="/logs" element={<LogsPage />} />
+          <Route path="/administrators" element={<AdministratorsPage />} />
         </Route>
         <Route path="/" element={<MarketingShell><LandingPage /></MarketingShell>} />
         <Route path="/forbidden" element={<MessagePage title="Permission denied" message="Your account does not have permission to perform that action." />} />

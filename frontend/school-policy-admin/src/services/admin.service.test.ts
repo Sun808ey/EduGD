@@ -126,14 +126,14 @@ describe('administrator API service', () => {
       .mockResolvedValueOnce({ data: { override } })
       .mockResolvedValueOnce({ data: { override: null } })
       .mockResolvedValueOnce({ data: { policy_uuid: policyUuid, status: 'draft' } })
-      .mockResolvedValueOnce({ data: { accepted: true } })
-      .mockResolvedValueOnce({ data: { accepted: true } })
+      .mockResolvedValueOnce({ data: { revision_uuid: revisionUuid, version: 2 } })
+      .mockResolvedValueOnce({ data: { policy_uuid: policyUuid, status: 'active' } })
 
     await expect(adminService.setBlockOverride(deviceUuid, 'temporary exception')).resolves.toEqual(override)
     await expect(adminService.clearBlockOverride(deviceUuid, 'exception ended')).resolves.toBeNull()
     await expect(adminService.createPolicy('School day', { blocked_packages: [] })).resolves.toEqual({ policy_uuid: policyUuid, status: 'draft' })
-    await adminService.createPolicyRevision(policyUuid, { blocked_packages: [] })
-    await adminService.setPolicyLifecycle(policyUuid, 'active', 'approved')
+    await expect(adminService.createPolicyRevision(policyUuid, { blocked_packages: [] })).resolves.toEqual({ revision_uuid: revisionUuid, version: 2 })
+    await expect(adminService.setPolicyLifecycle(policyUuid, 'active', 'approved')).resolves.toEqual({ policy_uuid: policyUuid, status: 'active' })
 
     expect(api.post).toHaveBeenNthCalledWith(1, `/admin/devices/${deviceUuid}/block-overrides`, { reason: 'temporary exception' })
     expect(api.post).toHaveBeenNthCalledWith(2, `/admin/devices/${deviceUuid}/block-overrides/clear`, { reason: 'exception ended' })

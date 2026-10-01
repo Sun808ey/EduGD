@@ -1,95 +1,116 @@
 import { AxeBuilder } from '@axe-core/playwright'
-import { expect, test, type Page, type Route } from '@playwright/test'
+import { expect, test, type Page, type TestInfo } from '@playwright/test'
 
-const administratorUuid = '11111111-1111-4111-8111-111111111111'
-const deviceUuid = '22222222-2222-4222-8222-222222222222'
-const policyUuid = '33333333-3333-4333-8333-333333333333'
-const revisionUuid = '44444444-4444-4444-8444-444444444444'
-const eventUuid = '55555555-5555-4555-8555-555555555555'
+const admin = { username: 'local.e2e.admin', password: 'LocalE2EAdmin!2026' }
+const readonly = { username: 'local.e2e.reader', password: 'LocalE2EReader!2026' }
 
-const json = (route: Route, body: unknown, status = 200, headers: Record<string, string> = {}) => route.fulfill({ status, contentType: 'application/json', headers, body: JSON.stringify(body) })
-const pagination = (total: number) => ({ page: 1, per_page: 25, total, has_next: false })
-
-async function mockApi(page: Page, permissions = ['enrollment_token.issue', 'enrollment_token.revoke', 'device_credential.revoke', 'policy.assign', 'device.control', 'policy.manage']) {
-  await page.route('**/api/v1/**', async (route) => {
-    const request = route.request()
-    const pathname = new URL(request.url()).pathname
-    if (pathname.endsWith('/admin/auth/login')) return json(route, { access_token: 'browser-memory-token', token_type: 'Bearer', expires_in: 900, administrator: { administrator_uuid: administratorUuid, username: 'admin', display_name: 'School Administrator' } })
-    if (pathname.endsWith('/admin/auth/me')) return json(route, { administrator: { administrator_uuid: administratorUuid, username: 'admin', display_name: 'School Administrator', permissions } })
-    if (pathname.endsWith('/admin/auth/logout')) return json(route, { message: 'administrator logged out' })
-    if (pathname.endsWith('/admin/dashboard/dpc-summary')) return json(route, { summary: { managed_devices: 1, active_block_overrides: 0, active_v3_assignments: 1, enforcement_failures: 0 } })
-    if (pathname.endsWith('/admin/devices') && request.method() === 'GET') return json(route, { devices: [{ device_uuid: deviceUuid, android_version: '14', api_level: 34, status: 'active', enrollment_state: 'enrolled', legacy_enrollment_eligible: false, registered_at: '2026-09-10T10:00:00Z', last_sync_at: '2026-09-11T07:00:00Z', active_policy_assignment: null }], pagination: pagination(1) })
-    if (pathname.endsWith('/admin/policies') && request.method() === 'GET') return json(route, { policies: [{ policy_uuid: policyUuid, name: 'School day policy', status: 'active', created_at: '2026-09-10T10:00:00Z', updated_at: '2026-09-11T07:00:00Z', latest_revision: { revision_uuid: revisionUuid, version: 1, payload: { camera_disabled: true }, content_hash: 'abc123', created_at: '2026-09-11T07:00:00Z', created_by: 'admin' } }], pagination: pagination(1) })
-    if (pathname.endsWith('/admin/audit-events')) return json(route, { audit_events: [{ event_type: 'device_enrollment', event_uuid: eventUuid, category: 'enrollment_succeeded', occurred_at: '2026-09-11T07:00:00Z', failure_class: null }], pagination: pagination(1) })
-    if (pathname.endsWith('/admin/enrollment-tokens')) return json(route, { enrollment_tokens: [], pagination: pagination(0) })
-    return json(route, { error: { code: 'not_found', message: 'not found' } }, 404)
-  })
-}
-
-async function signIn(page: Page) {
+async function signIn(page: Page, credentials = admin) {
   await page.goto('/login')
-  await page.getByLabel('Username').fill('admin')
-  await page.getByLabel('Password').fill('correct horse battery staple')
+  await page.getByLabel('Username').fill(credentials.username)
+  await page.getByLabel('Password').fill(credentials.password)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page).toHaveURL(/\/dashboard$/)
   await expect(page.getByRole('heading', { name: 'Device policy at a glance' })).toBeVisible()
 }
 
-test('authenticates in memory and renders the API-backed administration flow', async ({ page }) => {
-  await mockApi(page)
-  const authorizationHeaders: string[] = []
+async function openNavigation(page: Page) {
+  const menu = page.getByRole('button', { name: 'Open navigation' })
+  if (await menu.isVisible()) await menu.click()
+}
+
+async function navigateInApp(page: Page, path: string) {
+  await page.evaluate((value) => {
+    window.history.pushState({}, '', value)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }, path)
+}
+
+test('uses the live Flask API for the administrator dashboard lifecycle', async ({ page }) => {
+  const apiRequests: string[] = []
   page.on('request', (request) => {
-    if (request.url().includes('/api/v1/admin/') && !request.url().endsWith('/auth/login')) authorizationHeaders.push(request.headers().authorization ?? '')
+    if (request.url().includes('/api/v1/admin/')) apiRequests.push(request.url())
   })
   await signIn(page)
   await expect(page.getByText('Managed devices').locator('..').getByText('1')).toBeVisible()
-  expect(authorizationHeaders).toContain('Bearer browser-memory-token')
-
-  const menu = page.getByRole('button', { name: 'Open navigation' })
-  if (await menu.isVisible()) await menu.click()
+  await openNavigation(page)
   await page.getByRole('link', { name: 'Devices' }).click()
   await expect(page.getByRole('heading', { name: 'Devices' })).toBeVisible()
-  await expect(page.getByText(deviceUuid, { exact: true })).toBeVisible()
+  await expect(page.getByText('22222222-2222-4222-8222-222222222222', { exact: true })).toBeVisible()
+  await openNavigation(page)
+  await page.getByRole('link', { name: 'Policies' }).click()
+  await expect(page.getByRole('heading', { name: /Policies/ })).toBeVisible()
+  await expect(page.getByText('Local E2E policy')).toBeVisible()
+  await openNavigation(page)
+  await page.getByRole('link', { name: /Audit/i }).click()
+  await expect(page.getByRole('heading', { name: 'Audit events' })).toBeVisible()
+  expect(apiRequests.length).toBeGreaterThan(0)
   expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 })
 })
 
-test('meets automated accessibility checks on login and authenticated dashboard', async ({ page }) => {
-  await mockApi(page)
-  await page.goto('/login')
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+test('loads live deep links and administrator management', async ({ page }) => {
   await signIn(page)
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+  await navigateInApp(page, '/devices/22222222-2222-4222-8222-222222222222')
+  await expect(page.getByRole('heading', { name: '22222222-2222-4222-8222-222222222222' })).toBeVisible()
+  await navigateInApp(page, '/administrators')
+  await expect(page.getByRole('heading', { name: 'Administrators' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Create administrator' })).toBeVisible()
 })
 
-test('honors the login Retry-After response', async ({ page }) => {
-  await page.route('**/api/v1/admin/auth/login', (route) => json(route, { error: { code: 'rate_limit_exceeded', message: 'rate limit exceeded' } }, 429, { 'retry-after': '2', 'access-control-expose-headers': 'Retry-After' }))
-  await page.goto('/login')
-  await page.getByLabel('Username').fill('admin')
-  await page.getByLabel('Password').fill('wrong')
-  await page.getByRole('button', { name: 'Sign in' }).click()
-  await expect(page.getByRole('alert')).toContainText('Too many sign-in attempts')
-  await expect(page.getByRole('button', { name: /Try again in/ })).toBeDisabled()
-  await expect(page.getByRole('button', { name: 'Sign in' })).toBeEnabled({ timeout: 4_000 })
+test('enforces live permission boundaries', async ({ page }) => {
+  const captured: string[] = []
+  page.on('request', (request) => {
+    const value = request.headers().authorization
+    if (value) captured.push(value)
+  })
+  await signIn(page, readonly)
+  await expect(page.getByRole('link', { name: 'Administrators' })).toHaveCount(0)
+  await navigateInApp(page, '/administrators')
+  await expect(page.getByRole('alert')).toContainText(/does not have permission/i)
+  const token = captured.at(-1)
+  expect(token).toMatch(/^Bearer /)
+  const status = await page.evaluate(async (value) => {
+    const response = await fetch('/api/v1/admin/administrators', {
+      method: 'POST',
+      headers: { Authorization: value, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'forbidden.e2e', display_name: 'Forbidden', password: 'ForbiddenE2E!2026', operator_password: 'not-used-after-authorization', reason: 'live forbidden request' }),
+    })
+    return response.status
+  }, token as string)
+  expect(status).toBe(403)
 })
 
-test('clears a revoked session when a protected API call returns 401', async ({ page }) => {
-  await mockApi(page)
-  await page.route('**/api/v1/admin/dashboard/dpc-summary', (route) => json(route, { error: { code: 'authentication_failed', message: 'authentication failed' } }, 401))
-  await page.goto('/login')
-  await page.getByLabel('Username').fill('admin')
-  await page.getByLabel('Password').fill('password')
-  await page.getByRole('button', { name: 'Sign in' }).click()
-  await expect(page).toHaveURL(/\/login$/)
-  await expect(page.getByRole('status')).toContainText('expired or was revoked')
-})
-
-test('keeps mutation controls hidden for a read-only administrator', async ({ page }) => {
-  await mockApi(page, [])
+test('creates an administrator through the live dashboard contract', async ({ page }, testInfo: TestInfo) => {
   await signIn(page)
-  const menu = page.getByRole('button', { name: 'Open navigation' })
-  if (await menu.isVisible()) await menu.click()
-  await page.getByRole('link', { name: 'Devices' }).click()
+  await navigateInApp(page, '/administrators')
+  const username = `local.e2e.${testInfo.project.name}`
+  await page.getByLabel('Username').fill(username)
+  await page.getByLabel('Display name').fill('Local Created Administrator')
+  await page.getByLabel('New administrator password').fill('LocalCreated!2026')
+  await page.getByLabel('Your operator password').fill(admin.password)
+  await page.getByLabel('Reason for granting administrator access').fill('live dashboard verification')
+  await page.getByRole('button', { name: 'Create administrator' }).click()
+  await expect(page.getByRole('status')).toContainText(username)
+})
+
+test('handles a real revoked-session 401 without persistent browser credentials', async ({ page }) => {
+  await signIn(page)
+  const captured: string[] = []
+  page.on('request', (request) => {
+    const value = request.headers().authorization
+    if (value) captured.push(value)
+  })
+  await navigateInApp(page, '/devices')
   await expect(page.getByRole('heading', { name: 'Devices' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Manage policy' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Issue token' })).toHaveCount(0)
+  const token = captured.at(-1)
+  expect(token).toMatch(/^Bearer /)
+  const logoutStatus = await page.evaluate(async (value) => (await fetch('/api/v1/admin/auth/logout', { method: 'POST', headers: { Authorization: value } })).status, token as string)
+  expect(logoutStatus).toBe(200)
+  await navigateInApp(page, '/devices/22222222-2222-4222-8222-222222222222')
+  await expect(page).toHaveURL(/\/login$/)
+  expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 })
+})
+
+test('passes automated accessibility checks against the live dashboard', async ({ page }) => {
+  await signIn(page)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
 })

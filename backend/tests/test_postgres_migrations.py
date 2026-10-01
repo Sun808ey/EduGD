@@ -20,7 +20,38 @@ from test_support.postgres_safety import (
 
 pytestmark = [pytest.mark.postgres, pytest.mark.migration]
 MIGRATIONS_DIRECTORY = Path(__file__).resolve().parents[1] / "migrations"
-HEAD_REVISION = "a7b8c9d0e1f2"
+HEAD_REVISION = "b6e2f9a4c7d1"
+EXPECTED_REVISION_COUNT = 28
+EXPECTED_REVISIONS = (
+    "b6e2f9a4c7d1",
+    "a7b8c9d0e1f2",
+    "f1a2b3c4d5e6",
+    "e2a6c8d4f0b1",
+    "d1f7b3c9e5a2",
+    "c2f8a1b4d630",
+    "ab4e6f2c9d71",
+    "fa3d7e1b9c42",
+    "d8f1a3c6e9b2",
+    "c7e5a9d2f4b8",
+    "a6d4e8f2b1c7",
+    "f8c2d5a7b9e1",
+    "e4a1b7c9d2f6",
+    "d9b4e7a2c6f1",
+    "c3f8a1d6e4b9",
+    "b7e1d4c9a2f6",
+    "a8d5e2f7c1b4",
+    "f4a7c9e2b6d1",
+    "d3f6a8b1c4e9",
+    "e7c4a9b2d6f1",
+    "f2a9d4c7e1b3",
+    "c6f8a2d4e7b1",
+    "b4e7c1d3f5a9",
+    "9d2f4a6c8e10",
+    "7c91b8e2d4a6",
+    "3a6f4a9eb4f2",
+    "203748fda298",
+    "a2b94c33c0a3",
+)
 
 
 def _script_directory() -> ScriptDirectory:
@@ -41,40 +72,13 @@ def _current_revision(connection: Connection) -> str | None:
     )
 
 
-def test_migration_history_is_one_linear_twenty_seven_revision_chain() -> None:
+def test_migration_history_is_one_linear_twenty_eight_revision_chain() -> None:
     script = _script_directory()
     revisions = list(script.walk_revisions())
 
     assert script.get_heads() == [HEAD_REVISION]
-    assert [revision.revision for revision in revisions] == [
-        "a7b8c9d0e1f2",
-        "f1a2b3c4d5e6",
-        "e2a6c8d4f0b1",
-        "d1f7b3c9e5a2",
-        "c2f8a1b4d630",
-        "ab4e6f2c9d71",
-        "fa3d7e1b9c42",
-        "d8f1a3c6e9b2",
-        "c7e5a9d2f4b8",
-        "a6d4e8f2b1c7",
-        "f8c2d5a7b9e1",
-        "e4a1b7c9d2f6",
-        "d9b4e7a2c6f1",
-        "c3f8a1d6e4b9",
-        "b7e1d4c9a2f6",
-        "a8d5e2f7c1b4",
-        "f4a7c9e2b6d1",
-        "d3f6a8b1c4e9",
-        "e7c4a9b2d6f1",
-        "f2a9d4c7e1b3",
-        "c6f8a2d4e7b1",
-        "b4e7c1d3f5a9",
-        "9d2f4a6c8e10",
-        "7c91b8e2d4a6",
-        "3a6f4a9eb4f2",
-        "203748fda298",
-        "a2b94c33c0a3",
-    ]
+    assert len(revisions) == EXPECTED_REVISION_COUNT
+    assert tuple(revision.revision for revision in revisions) == EXPECTED_REVISIONS
     assert revisions[-1].down_revision is None
 
 

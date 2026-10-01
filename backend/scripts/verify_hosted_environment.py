@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
@@ -11,7 +13,17 @@ from app import create_app
 from app.deployment_identity import validate_deployment_identity
 from app.extensions import db
 
-EXPECTED_MIGRATION_HEAD = "e2a6c8d4f0b1"
+MIGRATIONS_DIRECTORY = Path(__file__).resolve().parents[1] / "migrations"
+
+
+def repository_migration_head() -> str:
+    """Return the single migration head shipped with this artifact."""
+    configuration = Config(str(MIGRATIONS_DIRECTORY / "alembic.ini"))
+    configuration.set_main_option("script_location", str(MIGRATIONS_DIRECTORY))
+    heads = ScriptDirectory.from_config(configuration).get_heads()
+    if len(heads) != 1:
+        raise RuntimeError("repository must contain exactly one migration head")
+    return heads[0]
 
 
 def require(condition: bool, message: str) -> None:
@@ -23,6 +35,8 @@ def main() -> int:
     stage = "deployment_identity"
     try:
         validate_deployment_identity(os.environ)
+        stage = "migration_contract"
+        expected_migration_head = repository_migration_head()
         stage = "application_startup"
         app = create_app("production")
         stage = "database_connection"
@@ -47,7 +61,7 @@ def main() -> int:
                 connection.execute(
                     text("SELECT version_num FROM public.alembic_version")
                 ).scalar_one()
-                == EXPECTED_MIGRATION_HEAD,
+                == expected_migration_head,
                 "unexpected Alembic revision",
             )
             stage = "database_read_permissions"
@@ -61,8 +75,8 @@ def main() -> int:
                 )
             }
             for table in db.metadata.sorted_tables:
-                # The translation cache is an optional branch that is not part
-                # of the production e2a6 schema yet.
+                # The translation cache may be absent only when the hosted
+                # target predates that repository migration.
                 if (
                     table.name == "translation_cache_entries"
                     and table.name not in existing_tables

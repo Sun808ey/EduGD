@@ -92,6 +92,17 @@ def test_development_accepts_only_the_dedicated_local_database(
     assert resolve_database_uri(DevelopmentConfig).endswith("/edug_local")
 
 
+def test_development_accepts_a_nonstandard_port_for_the_dedicated_local_database(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "DEVELOPMENT_DATABASE_URL",
+        "postgresql+psycopg2://edug_local:placeholder@127.0.0.1:55432/edug_local",
+    )
+
+    assert resolve_database_uri(DevelopmentConfig).endswith("/edug_local")
+
+
 def test_non_development_rejects_local_postgres_database(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

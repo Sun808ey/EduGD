@@ -366,13 +366,13 @@ def validate_postgres_database_uri(
         raise RuntimeError(f"{variable_name} must identify a host and database")
 
     ssl_mode = parsed_url.query.get("sslmode")
-    if port not in {None, 5432}:
-        raise RuntimeError(f"{variable_name} requires direct or session port 5432")
     is_local_development = (
         allow_local_development
         and hostname in LOCAL_DEVELOPMENT_HOSTNAMES
         and parsed_url.database == "edug_local"
     )
+    if port not in {None, 5432} and not is_local_development:
+        raise RuntimeError(f"{variable_name} requires direct or session port 5432")
     if not is_local_development:
         try:
             database_project_identity(parsed_url)

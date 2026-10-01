@@ -7,6 +7,14 @@ import pytest
 from scripts import verify_hosted_environment as verification
 
 
+def test_hosted_verification_uses_the_exact_repository_migration_head():
+    assert verification.repository_migration_head() == "b6e2f9a4c7d1"
+
+
+def test_hosted_verification_keeps_database_checks_read_only():
+    assert "SET TRANSACTION READ ONLY" in verification.main.__code__.co_consts
+
+
 @pytest.mark.parametrize("stage", ["deployment_identity", "application_startup"])
 def test_hosted_verification_redacts_dependency_errors(monkeypatch, capsys, stage):
     def fail(*args, **kwargs):

@@ -18,3 +18,17 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+  redis:
+    image: redis:7.4-alpine
+    environment:
+      REDIS_PASSWORD: ${EDUG_LOCAL_REDIS_TOKEN:?required}
+    command: [redis-server, --save, "", --appendonly, "no", --requirepass, "${EDUG_LOCAL_REDIS_TOKEN:?required}"]
+    ports:
+      - "127.0.0.1:${EDUG_LOCAL_REDIS_PORT:-56379}:6379"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: [CMD-SHELL, "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

@@ -26,10 +26,19 @@ interface DpcDao {
     @Query("UPDATE device_identity SET state = 'REVOKED' WHERE state = 'ACTIVE'")
     suspend fun markIdentityRevoked()
 
+    @Query("UPDATE device_identity SET state = 'QUARANTINED' WHERE state = 'ACTIVE'")
+    suspend fun markIdentityQuarantined()
+
+    @Query("UPDATE device_identity SET lastAcceptedServerTimeEpochSeconds = :epochSeconds WHERE deviceUuid = :deviceUuid")
+    suspend fun updateAcceptedServerTime(deviceUuid: String, epochSeconds: Long)
+
     @Query("SELECT * FROM policy_state WHERE id = 1") suspend fun getPolicyState(): PolicyStateEntity?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertPolicyState(state: PolicyStateEntity)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertPolicyEnvelope(envelope: PolicyEnvelopeEntity)
     @Query("SELECT * FROM policy_envelope WHERE policyUuid = :policyUuid") suspend fun getPolicyEnvelope(policyUuid: String): PolicyEnvelopeEntity?
+    @Query("SELECT * FROM policy_envelope WHERE policyUuid != :policyUuid AND status IN ('ACTIVE', 'SUPERSEDED') ORDER BY verifiedAt DESC LIMIT 1") suspend fun getRollbackEnvelope(policyUuid: String): PolicyEnvelopeEntity?
+    @Query("UPDATE policy_envelope SET status = :status WHERE policyUuid = :policyUuid") suspend fun updatePolicyStatus(policyUuid: String, status: String)
+    @Query("SELECT * FROM policy_envelope WHERE status = 'ACTIVE' LIMIT 1") suspend fun getActivePolicyEnvelope(): PolicyEnvelopeEntity?
     @Query("UPDATE policy_state SET applyState = :applyState, desiredHash = :desiredHash WHERE id = 1") suspend fun markPending(applyState: String, desiredHash: String)
     @Query("UPDATE policy_state SET applyState = :applyState, appliedHash = :appliedHash, activePolicyUuid = :policyUuid, activeRevisionUuid = :revisionUuid WHERE id = 1") suspend fun markActive(applyState: String, appliedHash: String, policyUuid: String, revisionUuid: String)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAuditEvent(event: AuditEventEntity)

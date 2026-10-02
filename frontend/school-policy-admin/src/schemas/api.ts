@@ -38,6 +38,22 @@ export const administratorCreateSchema = z.object({
   permissions: administratorSchema.shape.permissions,
   revoked_sessions: z.number().int().nonnegative(),
 })
+export const administratorInventorySchema = administratorSchema.extend({
+  status: z.enum(['active', 'disabled', 'locked']),
+  created_at: z.string(),
+  password_changed_at: z.string(),
+  disabled_at: z.string().nullable(),
+})
+export const administratorsSchema = z.object({
+  administrators: z.array(administratorInventorySchema),
+  pagination,
+})
+export const administratorDetailSchema = z.object({ administrator: administratorInventorySchema })
+export const administratorMutationSchema = z.object({
+  administrator_uuid: uuid,
+  revoked_sessions: z.number().int().nonnegative().optional(),
+  message: z.string().optional(),
+})
 
 const assignmentSchema = z.object({
   event_uuid: uuid,

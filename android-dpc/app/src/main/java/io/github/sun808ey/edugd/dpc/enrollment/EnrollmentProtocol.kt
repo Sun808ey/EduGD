@@ -3,10 +3,17 @@ package io.github.sun808ey.edugd.dpc.enrollment
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import io.github.sun808ey.edugd.dpc.crypto.Ed25519Verifier
 import java.net.URI
 import java.util.UUID
 
-data class EnrollmentConfiguration(val apiOrigin: String, val pairingToken: String)
+data class EnrollmentConfiguration(
+    val apiOrigin: String,
+    val pairingToken: String,
+    val serverSigningKeyId: String,
+    val serverSigningPublicKey: String,
+    val serverSigningKeyFingerprint: String,
+)
 data class EnrollmentResponse(val deviceUuid: String, val credentialUuid: String, val credentialAlgorithm: String, val serverTime: String)
 
 object EnrollmentProtocol {
@@ -17,6 +24,15 @@ object EnrollmentProtocol {
         return uri.toString().removeSuffix("/")
     }
     fun generateDeviceUuid(): String = UUID.randomUUID().toString()
+
+    fun validateTrustAnchor(keyId: String, publicKeyBase64Url: String, fingerprintHex: String): Triple<String, String, String> {
+        require(keyId.matches(Regex("[A-Za-z0-9._-]{1,128}"))) { "invalid server_signing_key_id" }
+        require(fingerprintHex.matches(Regex("[0-9a-f]{64}"))) { "invalid server_signing_key_fingerprint" }
+        require(Ed25519Verifier.publicKeyFingerprintHex(publicKeyBase64Url) == fingerprintHex) {
+            "server signing key fingerprint mismatch"
+        }
+        return Triple(keyId, publicKeyBase64Url, fingerprintHex)
+    }
     fun parseEnrollmentResponse(body: String): EnrollmentResponse {
         val json = Json.parseToJsonElement(body).jsonObject
         val deviceUuid = canonicalUuid(json.getValue("device_uuid").jsonPrimitive.content)

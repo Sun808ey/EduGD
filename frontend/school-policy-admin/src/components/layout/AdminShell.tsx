@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { ClipboardList, FileText, LayoutDashboard, LogOut, Menu, PackageCheck, ShieldCheck, X } from 'lucide-react'
+import { ClipboardList, FileText, Languages, LayoutDashboard, LogOut, Menu, PackageCheck, ShieldCheck, X } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 import { AppBar, Box, Button, Divider, Drawer, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Paper, Stack, Toolbar, Typography } from '@mui/material'
 import { useAuth } from '@/hooks/useAuth'
@@ -15,6 +15,7 @@ const navItems = [
   { to: '/policies', key: 'policies' as const, icon: FileText },
   { to: '/applications', label: 'Applications', icon: PackageCheck },
   { to: '/logs', key: 'auditLogs' as const, icon: ClipboardList },
+  { to: '/translations', label: 'Translations', icon: Languages },
 ]
 
 export function AdminShell() {

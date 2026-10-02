@@ -124,6 +124,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.tink.android)
     ksp(libs.androidx.room.compiler)
 
     testImplementation(libs.junit)

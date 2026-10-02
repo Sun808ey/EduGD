@@ -14,6 +14,13 @@ export interface Administrator {
   permissions: AdministratorPermission[]
 }
 
+export interface AdministratorInventoryItem extends Administrator {
+  status: 'active' | 'disabled' | 'locked'
+  created_at: string
+  password_changed_at: string
+  disabled_at: string | null
+}
+
 export interface LoginResponse {
   access_token: string
   token_type: 'Bearer'

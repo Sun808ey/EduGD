@@ -2,6 +2,7 @@ import api from '@/services/api'
 import {
   assignmentMutationSchema, auditEventsSchema, clearMutationSchema,
   administratorCreateSchema,
+  administratorDetailSchema, administratorsSchema, administratorMutationSchema,
   currentAssignmentSchema, deviceDetailSchema, devicesSchema,
   enrollmentTokensSchema, issuedEnrollmentTokenSchema, messageSchema,
   policiesSchema, policyDetailSchema, revisionsSchema, blockOverrideResponseSchema,
@@ -18,6 +19,30 @@ export const adminService = {
   async createAdministrator(username: string, displayName: string, password: string, operatorPassword: string, reason: string) {
     const response = await api.post('/admin/administrators', { username, display_name: displayName, password, operator_password: operatorPassword, reason })
     return administratorCreateSchema.parse(response.data)
+  },
+  async listAdministrators(request: PageRequest, signal?: AbortSignal) {
+    const response = await api.get('/admin/administrators', { params: pageParams(request), signal })
+    return administratorsSchema.parse(response.data)
+  },
+  async getAdministrator(uuid: string, signal?: AbortSignal) {
+    const response = await api.get(`/admin/administrators/${path(uuid)}`, { signal })
+    return administratorDetailSchema.parse(response.data).administrator
+  },
+  async replaceAdministratorPermissions(uuid: string, permissions: import('@/types/api.types').AdministratorPermission[], operatorPassword: string, reason: string) {
+    const response = await api.patch(`/admin/administrators/${path(uuid)}/permissions`, { permissions, operator_password: operatorPassword, reason })
+    return administratorMutationSchema.parse(response.data)
+  },
+  async revokeAdministratorSessions(uuid: string, operatorPassword: string, reason: string) {
+    const response = await api.post(`/admin/administrators/${path(uuid)}/sessions/revoke`, { operator_password: operatorPassword, reason })
+    return administratorMutationSchema.parse(response.data)
+  },
+  async disableAdministrator(uuid: string, operatorPassword: string, reason: string) {
+    const response = await api.post(`/admin/administrators/${path(uuid)}/disable`, { operator_password: operatorPassword, reason })
+    return administratorMutationSchema.parse(response.data)
+  },
+  async resetAdministratorPassword(uuid: string, password: string, operatorPassword: string, reason: string) {
+    const response = await api.post(`/admin/administrators/${path(uuid)}/password/reset`, { password, operator_password: operatorPassword, reason })
+    return administratorMutationSchema.parse(response.data)
   },
   async listDevices(request: PageRequest, status?: string, signal?: AbortSignal) {
     const response = await api.get('/admin/devices', { params: { ...pageParams(request), ...(status ? { status } : {}) }, signal })

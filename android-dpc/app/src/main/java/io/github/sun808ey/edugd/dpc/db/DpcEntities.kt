@@ -12,6 +12,10 @@ data class DeviceIdentityEntity(
     val keyAlias: String,
     val enrolledAt: Long,
     val serverTime: String,
+    val serverSigningKeyId: String,
+    val serverSigningPublicKey: String,
+    val serverSigningKeyFingerprint: String,
+    val lastAcceptedServerTimeEpochSeconds: Long,
     val state: String
 )
 

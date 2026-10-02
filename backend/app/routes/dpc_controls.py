@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -402,16 +402,40 @@ def sync_v3(device_uuid: str) -> Response:
                 DeviceBlockOverride.device_id == context.device.id
             )
         )
-        state = {
+        override_state = {
             "protocol_version": CONTROL_STATE_PROTOCOL_VERSION,
             "device_uuid": device_uuid,
             "override": _override(override) if override else None,
         }
-        state["signature"] = (
-            base64.urlsafe_b64encode(private.sign(canonical_json_bytes(state)))
+        override_state["signature"] = (
+            base64.urlsafe_b64encode(private.sign(canonical_json_bytes(override_state)))
             .rstrip(b"=")
             .decode("ascii")
         )
-        return admin_json({"policy": envelope, "override_state": state})
+        operation = (
+            "blocked"
+            if override is not None and override.status == "active"
+            else "apply"
+            if envelope is not None
+            else "no_change"
+        )
+        unsigned_state = {
+            "protocol_version": CONTROL_STATE_PROTOCOL_VERSION,
+            "device_uuid": device_uuid,
+            "server_time": isoformat_utc(datetime.now(UTC)),
+            "signing_key_id": current_app.config["DPC_POLICY_SIGNING_KEY_ID"],
+            "operation": operation,
+            "policy": envelope,
+            "override_state": override_state,
+        }
+        signed_state = {
+            **unsigned_state,
+            "signature": base64.urlsafe_b64encode(
+                private.sign(canonical_json_bytes(unsigned_state))
+            )
+            .rstrip(b"=")
+            .decode("ascii"),
+        }
+        return admin_json(signed_state)
     except (ValueError, TypeError):
         return admin_error("sync_unavailable", "v3 signing is invalid", 503)

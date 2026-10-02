@@ -1,5 +1,6 @@
 import re
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from flask import Flask
@@ -23,6 +24,7 @@ POSTGRES_TEST_MARKERS = frozenset(
     }
 )
 SAFE_DEFAULT_MARK_EXPRESSION = "not postgres and not migration and not concurrency"
+MIGRATIONS_DIRECTORY = Path(__file__).resolve().parents[1] / "migrations"
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -63,7 +65,7 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 def app() -> Iterator[Flask]:
     application = create_app("testing")
     with application.app_context():
-        upgrade()
+        upgrade(directory=str(MIGRATIONS_DIRECTORY))
 
     yield application
 

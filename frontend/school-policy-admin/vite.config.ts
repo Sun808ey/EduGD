@@ -37,6 +37,12 @@ export default defineConfig(({ command, mode }) => {
       alias: [{ find: /^@\//, replacement: `${sourceDirectory}/` }],
     },
     server: {
+      headers: {
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'Referrer-Policy': 'no-referrer',
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      },
       proxy: {
         '/api': { target: 'http://127.0.0.1:5000' },
       },

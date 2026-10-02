@@ -8,6 +8,7 @@ import io.github.sun808ey.edugd.dpc.db.PolicyEnvelopeEntity
 import io.github.sun808ey.edugd.dpc.db.PolicyStateEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 data class SignedEnvelope(
     val policyUuid: String,
@@ -34,6 +35,7 @@ class AtomicPolicyActivator(private val context: Context) {
 
     suspend fun activate(envelope: SignedEnvelope): ApplyResult = withContext(Dispatchers.IO) {
         try {
+            dao.getActivePolicyEnvelope()?.let { dao.updatePolicyStatus(it.policyUuid, "SUPERSEDED") }
             dao.insertPolicyEnvelope(
                 PolicyEnvelopeEntity(
                     policyUuid = envelope.policyUuid,
@@ -80,6 +82,41 @@ class AtomicPolicyActivator(private val context: Context) {
             e.printStackTrace()
             ApplyResult.Quarantined(e.message ?: "activation_failed")
         }
+    }
+
+    suspend fun clear(): ApplyResult = withContext(Dispatchers.IO) {
+        try {
+            val active = dao.getActivePolicyEnvelope()
+            if (active != null) {
+                val payload = JSONObject(active.payloadJson)
+                val mode = payload.optJSONArray("modes")?.let { modes ->
+                    (0 until modes.length()).map { modes.getJSONObject(it) }
+                        .firstOrNull { it.optString("mode_id") == payload.optString("default_mode") }
+                }
+                val blocked = (0 until (mode?.optJSONArray("blocked_packages")?.length() ?: 0)).map { mode!!.getJSONArray("blocked_packages").getString(it) }
+                dpc.clearManagedPackages(blocked)
+                dao.updatePolicyStatus(active.policyUuid, "CLEARED")
+            } else dpc.clearManagedPackages(emptyList())
+            dao.insertPolicyState(PolicyStateEntity(currentModeId = "none", activePolicyUuid = null, activeRevisionUuid = null, desiredHash = "", appliedHash = "", applyState = "CLEARED", lastServerTime = System.currentTimeMillis()))
+            ApplyResult.Active
+        } catch (e: Exception) { ApplyResult.Quarantined(e.message ?: "clear_failed") }
+    }
+
+    suspend fun rollback(): ApplyResult = withContext(Dispatchers.IO) {
+        val active = dao.getActivePolicyEnvelope() ?: return@withContext clear()
+        val previous = dao.getRollbackEnvelope(active.policyUuid) ?: return@withContext clear()
+        activate(envelopeFrom(previous))
+    }
+
+    private fun envelopeFrom(envelope: PolicyEnvelopeEntity): SignedEnvelope {
+        val payload = JSONObject(envelope.payloadJson)
+        val mode = payload.optJSONArray("modes")?.let { modes ->
+            (0 until modes.length()).map { modes.getJSONObject(it) }
+                .firstOrNull { it.optString("mode_id") == payload.optString("default_mode") }
+        }
+        val blocked = (0 until (mode?.optJSONArray("blocked_packages")?.length() ?: 0)).map { mode!!.getJSONArray("blocked_packages").getString(it) }
+        val lockTask = (0 until (mode?.optJSONArray("lock_task_packages")?.length() ?: 0)).map { mode!!.getJSONArray("lock_task_packages").getString(it) }
+        return SignedEnvelope(envelope.policyUuid, envelope.revisionUuid, envelope.payloadJson, envelope.payloadSha256, envelope.signature, envelope.signingKeyId, envelope.issuedAt, blocked, lockTask)
     }
 
     suspend fun reconcilePendingApplyAtBoot() = withContext(Dispatchers.IO) {

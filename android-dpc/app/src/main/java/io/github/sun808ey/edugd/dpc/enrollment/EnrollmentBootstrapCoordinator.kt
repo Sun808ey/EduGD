@@ -18,9 +18,13 @@ class EnrollmentBootstrapCoordinator(private val context: Context) {
     suspend fun enroll(extras: Bundle): Boolean = withContext(Dispatchers.IO) {
         val origin = extras.getString("api_origin")
         val token = extras.getString("pairing_token")
-        if (origin.isNullOrBlank() || token.isNullOrBlank()) return@withContext quarantine("missing_provisioning_extras")
+        val keyId = extras.getString("server_signing_key_id")
+        val publicKey = extras.getString("server_signing_public_key")
+        val fingerprint = extras.getString("server_signing_key_fingerprint")
+        if (origin.isNullOrBlank() || token.isNullOrBlank() || keyId.isNullOrBlank() || publicKey.isNullOrBlank() || fingerprint.isNullOrBlank()) return@withContext quarantine("missing_provisioning_extras")
         val configuration = try {
-            EnrollmentConfiguration(EnrollmentProtocol.validateApiOrigin(origin), token)
+            val trustAnchor = EnrollmentProtocol.validateTrustAnchor(keyId, publicKey, fingerprint)
+            EnrollmentConfiguration(EnrollmentProtocol.validateApiOrigin(origin), token, trustAnchor.first, trustAnchor.second, trustAnchor.third)
         } catch (_: Exception) {
             return@withContext quarantine("invalid_provisioning_extras")
         }
@@ -34,7 +38,7 @@ class EnrollmentBootstrapCoordinator(private val context: Context) {
                 ?: return@withContext quarantine("enrollment_unavailable")
             require(response.deviceUuid == provisionalUuid) { "server identity mismatch" }
             DpcDatabase.getDatabase(context).dpcDao().replaceActiveDeviceIdentity(
-                DeviceIdentityEntity(response.deviceUuid, response.credentialUuid, response.credentialAlgorithm, configuration.apiOrigin, identity.alias, System.currentTimeMillis(), response.serverTime, "ACTIVE")
+                DeviceIdentityEntity(response.deviceUuid, response.credentialUuid, response.credentialAlgorithm, configuration.apiOrigin, identity.alias, System.currentTimeMillis(), response.serverTime, configuration.serverSigningKeyId, configuration.serverSigningPublicKey, configuration.serverSigningKeyFingerprint, 0L, "ACTIVE")
             )
             enrollmentPrefs.edit().remove(PROVISIONAL_UUID).putString(STATE, STATE_ENROLLED).remove(REASON).apply()
             SyncScheduler.schedule(context)

@@ -300,8 +300,13 @@ def test_dpc_sync_route_returns_signed_empty_state(app, monkeypatch) -> None:
     with app.test_request_context():
         response = routes.sync_v3.__wrapped__(context.device.device_uuid)
     assert response.status_code == 200
-    assert response.get_json()["policy"] is None
-    assert response.get_json()["override_state"]["protocol_version"] == 3
+    payload = response.get_json()
+    assert payload["protocol_version"] == 3
+    assert payload["device_uuid"] == context.device.device_uuid
+    assert payload["operation"] == "no_change"
+    assert payload["policy"] is None
+    assert payload["override_state"]["protocol_version"] == 3
+    assert payload["signature"]
 
 
 @pytest.mark.parametrize(

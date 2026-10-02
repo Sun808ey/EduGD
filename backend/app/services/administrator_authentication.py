@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Never
 
 from flask import current_app
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -52,6 +52,156 @@ class AdministratorNotFoundError(AdministratorOperationError):
 
 class AdministratorDatabaseError(AdministratorOperationError):
     pass
+
+
+def authorize_administrator_operator(
+    *,
+    operator_username: str,
+    operator_password: str,
+) -> Administrator:
+    """Return an active administrator that re-authenticated a sensitive action.
+
+    Route handlers already establish the bearer-token identity.  This second
+    check deliberately proves possession of the current password before an
+    account-management mutation, rather than relying on a long-lived session.
+    """
+    operator_username = _validate_username(operator_username)
+    if not isinstance(operator_password, str) or not operator_password:
+        raise AdministratorOperationError(
+            "authorized administrator credentials are required"
+        )
+    try:
+        operator = _find_administrator(operator_username)
+        if (
+            operator.status != "active"
+            or not _has_permission(operator.id, "administrator.manage")
+            or not _check_password(operator.password_verifier, operator_password)
+        ):
+            raise AdministratorOperationError(
+                "authorized administrator credentials are required"
+            )
+        return operator
+    except AdministratorOperationError:
+        db.session.rollback()
+        raise
+    except SQLAlchemyError as error:
+        _raise_database_error(error, "administrator_operator_authorization_error")
+
+
+def list_administrators(*, offset: int, limit: int) -> tuple[list[Administrator], int]:
+    """Return sanitized account records; passwords and sessions stay server-side."""
+    try:
+        total = int(db.session.scalar(select(func.count()).select_from(Administrator)) or 0)
+        rows = list(db.session.scalars(
+            select(Administrator)
+            .order_by(Administrator.username)
+            .offset(offset)
+            .limit(limit)
+        ).all())
+        return rows, total
+    except SQLAlchemyError as error:
+        _raise_database_error(error, "administrator_list_database_error")
+
+
+def get_administrator_by_uuid(administrator_uuid: str) -> Administrator:
+    try:
+        return _find_administrator_uuid(administrator_uuid)
+    except AdministratorOperationError:
+        db.session.rollback()
+        raise
+    except SQLAlchemyError as error:
+        _raise_database_error(error, "administrator_detail_database_error")
+
+
+def replace_administrator_permissions(
+    *,
+    administrator_uuid: str,
+    permissions: object,
+    operator: Administrator,
+    operator_subject: str,
+    reason: str,
+) -> AdministratorMutationResult:
+    """Replace an account's permissions without allowing management lockout."""
+    operator_subject, reason = _validate_operator_context(operator_subject, reason)
+    if not isinstance(permissions, list) or set(permissions) - ADMINISTRATOR_PERMISSIONS:
+        raise AdministratorOperationError("invalid administrator permissions")
+    if len(permissions) != len(set(permissions)) or not all(
+        isinstance(permission, str) for permission in permissions
+    ):
+        raise AdministratorOperationError("invalid administrator permissions")
+    try:
+        administrator = _find_administrator_uuid(administrator_uuid)
+        current_permissions = {permission.permission for permission in administrator.permissions}
+        requested_permissions = set(permissions)
+        if (
+            administrator.status == "active"
+            and "administrator.manage" in current_permissions
+            and "administrator.manage" not in requested_permissions
+            and _active_administrator_management_count() <= 1
+        ):
+            raise AdministratorConflictError(
+                "cannot remove the final active administrator-management capability"
+            )
+        for permission in list(administrator.permissions):
+            db.session.delete(permission)
+        db.session.flush()
+        for permission in sorted(requested_permissions):
+            db.session.add(
+                AdministratorPermission(
+                    administrator_id=administrator.id,
+                    permission=permission,
+                    granted_by_administrator_id=operator.id,
+                    reason=reason,
+                )
+            )
+        for _permission in sorted(requested_permissions - current_permissions):
+            db.session.add(
+                AdministratorAuthenticationEvent(
+                    administrator_id=administrator.id,
+                    category="permission_granted",
+                    acting_administrator_id=operator.id,
+                    reason=reason,
+                )
+            )
+        for _permission in sorted(current_permissions - requested_permissions):
+            db.session.add(
+                AdministratorAuthenticationEvent(
+                    administrator_id=administrator.id,
+                    category="permission_revoked",
+                    acting_administrator_id=operator.id,
+                    reason=reason,
+                )
+            )
+        administrator_uuid_value = str(administrator.administrator_uuid)
+        db.session.commit()
+        _log_outcome("administrator_permissions_replaced")
+        return AdministratorMutationResult(administrator_uuid=administrator_uuid_value)
+    except AdministratorOperationError:
+        db.session.rollback()
+        raise
+    except SQLAlchemyError as error:
+        _raise_database_error(error, "administrator_permission_replace_database_error")
+
+
+def assert_administrator_may_be_disabled(administrator_uuid: str) -> None:
+    """Preserve the last active administrator able to manage administrators."""
+    try:
+        administrator = _find_administrator_uuid(administrator_uuid)
+        if administrator.status == "disabled":
+            raise AdministratorConflictError("administrator is already disabled")
+        if (
+            administrator.status == "active"
+            and _has_permission(administrator.id, "administrator.manage")
+            and _active_administrator_management_count() <= 1
+        ):
+            raise AdministratorConflictError(
+                "cannot disable the final active administrator account"
+            )
+    except AdministratorOperationError:
+        db.session.rollback()
+        raise
+    except SQLAlchemyError as error:
+        _raise_database_error(error, "administrator_disable_guard_database_error")
 
 
 def bootstrap_administrator(
@@ -357,6 +507,39 @@ def _find_administrator(username: str) -> Administrator:
     return administrator
 
 
+def _find_administrator_uuid(administrator_uuid: str) -> Administrator:
+    try:
+        from uuid import UUID
+
+        parsed = UUID(administrator_uuid)
+    except (TypeError, ValueError) as error:
+        raise AdministratorOperationError("invalid administrator UUID") from error
+    administrator = db.session.execute(
+        select(Administrator).where(Administrator.administrator_uuid == parsed)
+    ).scalar_one_or_none()
+    if administrator is None:
+        raise AdministratorNotFoundError("administrator was not found")
+    return administrator
+
+
+def _active_administrator_management_count() -> int:
+    return int(
+        db.session.scalar(
+            select(func.count())
+            .select_from(Administrator)
+            .join(
+                AdministratorPermission,
+                AdministratorPermission.administrator_id == Administrator.id,
+            )
+            .where(
+                Administrator.status == "active",
+                AdministratorPermission.permission == "administrator.manage",
+            )
+        )
+        or 0
+    )
+
+
 def _has_permission(administrator_id: int, permission: str) -> bool:
     return (
         db.session.execute(
@@ -488,9 +671,14 @@ __all__ = [
     "AdministratorMutationResult",
     "AdministratorNotFoundError",
     "AdministratorOperationError",
+    "assert_administrator_may_be_disabled",
+    "authorize_administrator_operator",
     "bootstrap_administrator",
     "create_administrator",
     "disable_administrator",
+    "get_administrator_by_uuid",
+    "list_administrators",
+    "replace_administrator_permissions",
     "reset_administrator_password",
     "revoke_administrator_sessions",
 ]

@@ -40,6 +40,14 @@ class DevicePolicyController(private val context: Context) {
         dpm.setLockTaskPackages(adminComponent, pkgs)
     }
 
+    fun clearManagedPackages(packages: List<String>) {
+        if (!isDeviceOwner()) return
+        val installed = packageManager.getInstalledPackages(0).map { it.packageName }.toSet()
+        val requested = packages.toSet().intersect(installed).minus(context.packageName)
+        if (requested.isNotEmpty()) dpm.setPackagesSuspended(adminComponent, requested.toTypedArray(), false)
+        dpm.setLockTaskPackages(adminComponent, arrayOf(context.packageName))
+    }
+
     fun applyDefaultRestrictions() {
         if (!isDeviceOwner()) return
         setUserRestriction(UserManager.DISALLOW_OUTGOING_CALLS, true)

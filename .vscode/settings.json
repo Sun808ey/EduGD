@@ -1,4 +1,5 @@
 {
   "python.terminal.useEnvFile": true,
-  "todo-tree.ripgrep": "C:\\ProgramData\\chocolatey\\bin\\rg.exe"
+  "todo-tree.ripgrep": "C:\\ProgramData\\chocolatey\\bin\\rg.exe",
+  "java.configuration.updateBuildConfiguration": "interactive"
 }

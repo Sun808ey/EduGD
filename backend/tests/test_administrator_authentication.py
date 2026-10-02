@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import Mock
+from uuid import UUID
 
 import pytest
 from flask import Flask, jsonify
@@ -178,6 +179,123 @@ def test_authenticated_management_endpoint_requires_reauthentication(
     }
     with app.app_context():
         assert db.session.scalar(select(func.count()).select_from(Administrator)) == 1
+
+
+def test_administrator_inventory_is_sanitized_and_requires_management_permission(
+    app: Flask,
+) -> None:
+    _bootstrap(app)
+    access_token = _login(app).get_json()["access_token"]
+
+    response = app.test_client().get(
+        "/api/v1/admin/administrators?page=1&per_page=25",
+        headers=_authorization_header(access_token),
+    )
+
+    assert response.status_code == 200
+    administrator = response.get_json()["administrators"][0]
+    assert administrator["username"] == USERNAME
+    assert set(administrator["permissions"]) == ADMINISTRATOR_PERMISSIONS
+    assert "password" not in administrator
+    assert "session" not in administrator
+
+
+def test_administrator_permission_replacement_requires_password_and_preserves_final_manager(
+    app: Flask,
+) -> None:
+    _bootstrap(app)
+    access_token = _login(app).get_json()["access_token"]
+    with app.app_context():
+        administrator_uuid = str(_administrator().administrator_uuid)
+
+    bad_password = app.test_client().patch(
+        f"/api/v1/admin/administrators/{administrator_uuid}/permissions",
+        headers=_authorization_header(access_token),
+        json={
+            "permissions": ["policy.manage"],
+            "operator_password": WRONG_PASSWORD,
+            "reason": "permission review",
+        },
+    )
+    assert bad_password.status_code == 403
+
+    protected = app.test_client().patch(
+        f"/api/v1/admin/administrators/{administrator_uuid}/permissions",
+        headers=_authorization_header(access_token),
+        json={
+            "permissions": ["policy.manage"],
+            "operator_password": PASSWORD,
+            "reason": "permission review",
+        },
+    )
+    assert protected.status_code == 409
+    assert protected.get_json()["error"]["code"] == "administrator_conflict"
+
+
+def test_administrator_session_revoke_password_reset_and_disable_are_audited(
+    app: Flask,
+) -> None:
+    _bootstrap(app)
+    access_token = _login(app).get_json()["access_token"]
+    created = app.test_client().post(
+        "/api/v1/admin/administrators",
+        headers=_authorization_header(access_token),
+        json={
+            "username": "second.admin",
+            "display_name": "Second Administrator",
+            "password": "SecondAdministrator!2026",
+            "operator_password": PASSWORD,
+            "reason": "approved second administrator",
+        },
+    )
+    assert created.status_code == 201
+    target_uuid = created.get_json()["administrator_uuid"]
+
+    second_login = _login(
+        app,
+        username="second.admin",
+        password="SecondAdministrator!2026",
+    )
+    assert second_login.status_code == 200
+    revoked = app.test_client().post(
+        f"/api/v1/admin/administrators/{target_uuid}/sessions/revoke",
+        headers=_authorization_header(access_token),
+        json={"operator_password": PASSWORD, "reason": "scheduled session reset"},
+    )
+    assert revoked.status_code == 200
+    assert revoked.get_json()["revoked_sessions"] == 1
+
+    reset = app.test_client().post(
+        f"/api/v1/admin/administrators/{target_uuid}/password/reset",
+        headers=_authorization_header(access_token),
+        json={
+            "password": "ReplacementAdministrator!2026",
+            "operator_password": PASSWORD,
+            "reason": "approved password reset",
+        },
+    )
+    assert reset.status_code == 200
+
+    disabled = app.test_client().post(
+        f"/api/v1/admin/administrators/{target_uuid}/disable",
+        headers=_authorization_header(access_token),
+        json={"operator_password": PASSWORD, "reason": "approved account disablement"},
+    )
+    assert disabled.status_code == 200
+    with app.app_context():
+        categories = set(
+            db.session.scalars(
+                select(AdministratorAuthenticationEvent.category).where(
+                    AdministratorAuthenticationEvent.administrator_id
+                    == db.session.scalar(
+                        select(Administrator.id).where(
+                            Administrator.administrator_uuid == UUID(target_uuid)
+                        )
+                    )
+                )
+            ).all()
+        )
+        assert {"session_revoked", "password_reset", "account_disabled"} <= categories
 
 
 @pytest.mark.parametrize(

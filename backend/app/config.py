@@ -98,12 +98,7 @@ class Config:
     JWT_ALGORITHM = "HS256"
     JWT_DECODE_ALGORITHMS = ["HS256"]
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
-    JWT_TOKEN_LOCATION = ("headers", "cookies")
-    JWT_COOKIE_SECURE = os.getenv("APP_ENV", "development") == "production"
-    JWT_COOKIE_SAMESITE = "Lax"
-    JWT_COOKIE_CSRF_PROTECT = True
-    JWT_ACCESS_COOKIE_PATH = "/api/v1/admin"
-    JWT_COOKIE_CSRF_HEADER_NAME = "X-CSRF-TOKEN"
+    JWT_TOKEN_LOCATION = ("headers",)
     JWT_HEADER_TYPE = "Bearer"
     JWT_ENCODE_ISSUER = "edug-school-policy-api"
     JWT_DECODE_ISSUER = "edug-school-policy-api"
@@ -116,7 +111,11 @@ class Config:
     LOG_LEVEL = "INFO"
     RATELIMIT_DEFAULT: list[str] = []
     RATELIMIT_ENABLED = True
-    RATELIMIT_STORAGE_URI: str | None = "memory://"
+    RATELIMIT_STORAGE_URI: str | None = (
+        os.getenv("RATELIMIT_STORAGE_URI")
+        or os.getenv("REDIS_URL")
+        or "memory://"
+    )
     REDIS_URL = os.getenv("REDIS_URL")
     TRUSTED_PROXY_HOPS = 0
     SENTRY_DSN = os.getenv("SENTRY_DSN")
@@ -131,7 +130,10 @@ class Config:
     DEVICE_AUTH_MAX_HEADER_LENGTH = 512
     DEVICE_AUTH_CLOCK_SKEW_SECONDS = 300
     DEVICE_AUTH_NONCE_TTL_SECONDS = 600
-    ENROLLMENT_TOKEN_TTL_SECONDS = 600
+    ENROLLMENT_TOKEN_TTL_SECONDS = int(
+        os.getenv("ENROLLMENT_TOKEN_TTL_SECONDS", "600")
+    )
+    ADMIN_LOGIN_RATE_LIMIT = os.getenv("ADMIN_LOGIN_RATE_LIMIT", "10 per minute")
     POLICY_SYNC_RATE_LIMIT = os.getenv("POLICY_SYNC_RATE_LIMIT") or "60 per minute"
     ADMIN_FRONTEND_ORIGINS = os.getenv("ADMIN_FRONTEND_ORIGINS", "")
     DPC_POLICY_SIGNING_PRIVATE_KEY = os.getenv("DPC_POLICY_SIGNING_PRIVATE_KEY")
@@ -144,6 +146,9 @@ class Config:
 
 class DevelopmentConfig(Config):
     DEBUG = _environment_flag("FLASK_DEBUG")
+    PHYSICAL_CERTIFICATION_REQUIRED = _environment_flag(
+        "PHYSICAL_CERTIFICATION_REQUIRED", True
+    )
     DATABASE_ENV_VAR = "DEVELOPMENT_DATABASE_URL"
     SQLALCHEMY_ENGINE_OPTIONS = POSTGRES_ENGINE_OPTIONS
     LOG_LEVEL = "DEBUG" if DEBUG else "INFO"

@@ -26,6 +26,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column, relationship, validat
 
 from app.device_identity import ANDROID_VERSION_BY_API_LEVEL
 from app.extensions import db
+from app.policy_contract_v3 import normalize_domain
 
 ANDROID_PACKAGE_PATTERN = re.compile(
     r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$"
@@ -59,6 +60,7 @@ DEVICE_REGISTRATION_EVENT_TYPES = frozenset(
         "downgrade_rejected",
     }
 )
+DEVICE_ASSET_CHANGE_OPERATIONS = frozenset({"corrected", "retention_redacted"})
 ENROLLMENT_TOKEN_STATUSES = frozenset(
     {"active", "consumed", "revoked", "expired", "locked"}
 )
@@ -110,6 +112,21 @@ ADMINISTRATOR_AUTHENTICATION_EVENT_CATEGORIES = frozenset(
 )
 ADMINISTRATOR_USERNAME_PATTERN = re.compile(r"^[a-z0-9._-]{3,64}$")
 ADMINISTRATOR_FAILURE_CLASS_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+INCIDENT_TYPES = frozenset(
+    {
+        "device_missing",
+        "unauthorised_application",
+        "policy_application_failure",
+        "wrong_assignment",
+        "device_offline",
+        "device_damaged",
+        "kiosk_bypass_attempt",
+        "enrolment_token_exposed",
+        "administrator_anomaly",
+        "other",
+    }
+)
+INCIDENT_STATUSES = frozenset({"OPEN", "UNDER_REVIEW", "ACTION_TAKEN", "CLOSED"})
 
 
 def utc_now() -> datetime:
@@ -318,6 +335,121 @@ class Administrator(db.Model):
         if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 5:
             raise ValueError("administrator failed attempts must be between 0 and 5")
         return value
+
+
+class School(db.Model):
+    """The single school organisation served by a one-school EDUGD installation."""
+
+    __tablename__ = "schools"
+    __table_args__ = (
+        UniqueConstraint("school_uuid", name="uq_schools_uuid"),
+        UniqueConstraint("singleton_key", name="uq_schools_singleton"),
+        CheckConstraint("singleton_key = '1'", name="ck_schools_singleton"),
+        CheckConstraint(
+            "length(name) BETWEEN 1 AND 160", name="ck_schools_name_bounded"
+        ),
+        CheckConstraint(
+            "length(district) BETWEEN 1 AND 120", name="ck_schools_district_bounded"
+        ),
+        CheckConstraint(
+            "length(school_type) BETWEEN 1 AND 80", name="ck_schools_type_bounded"
+        ),
+        CheckConstraint(
+            "length(contact_person) BETWEEN 1 AND 120",
+            name="ck_schools_contact_bounded",
+        ),
+        CheckConstraint(
+            "length(official_telephone) BETWEEN 7 AND 32",
+            name="ck_schools_phone_bounded",
+        ),
+        CheckConstraint(
+            "official_email IS NULL OR length(official_email) BETWEEN 3 AND 254",
+            name="ck_schools_email_bounded",
+        ),
+        CheckConstraint(
+            "length(physical_location) BETWEEN 1 AND 255",
+            name="ck_schools_location_bounded",
+        ),
+        CheckConstraint(
+            "length(authorised_administrator_name) BETWEEN 1 AND 120",
+            name="ck_schools_administrator_bounded",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    school_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, default=uuid4
+    )
+    singleton_key: Mapped[str] = mapped_column(
+        String(1), nullable=False, default="1", server_default="1"
+    )
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    district: Mapped[str] = mapped_column(String(120), nullable=False)
+    school_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    contact_person: Mapped[str] = mapped_column(String(120), nullable=False)
+    official_telephone: Mapped[str] = mapped_column(String(32), nullable=False)
+    official_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
+    physical_location: Mapped[str] = mapped_column(String(255), nullable=False)
+    authorised_administrator_name: Mapped[str] = mapped_column(
+        String(120), nullable=False
+    )
+    timezone: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="Africa/Kampala",
+        server_default="Africa/Kampala",
+    )
+    registered_by_administrator_id: Mapped[int] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+    @validates(
+        "name",
+        "district",
+        "school_type",
+        "contact_person",
+        "physical_location",
+        "authorised_administrator_name",
+        "timezone",
+    )
+    def validate_school_text(self, key: str, value: object) -> str:
+        limits = {
+            "name": 160,
+            "district": 120,
+            "school_type": 80,
+            "contact_person": 120,
+            "physical_location": 255,
+            "authorised_administrator_name": 120,
+            "timezone": 64,
+        }
+        return _validate_printable_text(
+            value, key.replace("_", " "), limits[key]
+        ).strip()
+
+    @validates("official_telephone")
+    def validate_official_telephone(self, _key: str, value: object) -> str:
+        telephone = _validate_printable_text(value, "official telephone", 32).strip()
+        if (
+            not 7 <= len(telephone) <= 32
+            or re.fullmatch(r"[0-9+() -]+", telephone) is None
+        ):
+            raise ValueError("invalid official telephone")
+        return telephone
+
+    @validates("official_email")
+    def validate_official_email(self, _key: str, value: object) -> str | None:
+        if value is None:
+            return None
+        email = _validate_printable_text(value, "official email", 254).strip()
+        if email.count("@") != 1 or any(character.isspace() for character in email):
+            raise ValueError("invalid official email")
+        return email
 
 
 class AdministratorPermission(db.Model):
@@ -747,6 +879,21 @@ class Device(db.Model):
         onupdate=utc_now,
         server_default=func.now(),
     )
+    asset_number: Mapped[str | None] = mapped_column(
+        String(80), nullable=True, unique=True
+    )
+    manufacturer: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    serial_number: Mapped[str | None] = mapped_column(
+        String(160), nullable=True, unique=True
+    )
+    date_received: Mapped[date | None] = mapped_column(Date, nullable=True)
+    condition: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    department: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    asset_lifecycle_status: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )
+    asset_notes: Mapped[str | None] = mapped_column(String(512), nullable=True)
     policy_assignments: Mapped[list["DevicePolicyAssignment"]] = relationship(
         back_populates="device",
         order_by="DevicePolicyAssignment.assigned_at",
@@ -763,6 +910,10 @@ class Device(db.Model):
     synchronization_events: Mapped[list["PolicySynchronizationEvent"]] = relationship(
         back_populates="device",
         order_by="PolicySynchronizationEvent.requested_at",
+    )
+    incidents: Mapped[list["Incident"]] = relationship(
+        back_populates="device",
+        order_by="Incident.reported_at.desc()",
     )
 
     @property
@@ -795,6 +946,224 @@ class Device(db.Model):
         ):
             raise ValueError("unsupported Android API level")
         return value
+
+
+class Incident(db.Model):
+    __tablename__ = "incidents"
+    __table_args__ = (
+        UniqueConstraint("incident_uuid", name="uq_incidents_uuid"),
+        UniqueConstraint("incident_number", name="uq_incidents_number"),
+        CheckConstraint(
+            "incident_type IN ('device_missing', 'unauthorised_application', "
+            "'policy_application_failure', 'wrong_assignment', 'device_offline', "
+            "'device_damaged', 'kiosk_bypass_attempt', 'enrolment_token_exposed', "
+            "'administrator_anomaly', 'other')",
+            name="ck_incidents_type",
+        ),
+        CheckConstraint(
+            "status IN ('OPEN', 'UNDER_REVIEW', 'ACTION_TAKEN', 'CLOSED')",
+            name="ck_incidents_status",
+        ),
+        CheckConstraint(
+            "length(description) BETWEEN 1 AND 2048",
+            name="ck_incidents_description_bounded",
+        ),
+        Index("ix_incidents_reported_at", "reported_at"),
+        Index("ix_incidents_device_status", "device_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    incident_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, default=uuid4
+    )
+    incident_number: Mapped[str] = mapped_column(String(32), nullable=False)
+    device_id: Mapped[int | None] = mapped_column(
+        ForeignKey("devices.id", ondelete="SET NULL"), nullable=True
+    )
+    incident_type: Mapped[str] = mapped_column(String(48), nullable=False)
+    description: Mapped[str] = mapped_column(String(2048), nullable=False)
+    reported_by: Mapped[str] = mapped_column(String(120), nullable=False)
+    reported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="OPEN", server_default="OPEN"
+    )
+    action_taken: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    responsible_person: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by_administrator_id: Mapped[int] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"), nullable=False
+    )
+    updated_by_administrator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        onupdate=utc_now,
+        server_default=func.now(),
+    )
+
+    device: Mapped[Device | None] = relationship(back_populates="incidents")
+    created_by_administrator: Mapped[Administrator] = relationship(
+        foreign_keys=[created_by_administrator_id]
+    )
+    updated_by_administrator: Mapped[Administrator | None] = relationship(
+        foreign_keys=[updated_by_administrator_id]
+    )
+
+    @validates("incident_type")
+    def validate_incident_type(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in INCIDENT_TYPES:
+            raise ValueError("invalid incident type")
+        return value
+
+    @validates("status")
+    def validate_status(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in INCIDENT_STATUSES:
+            raise ValueError("invalid incident status")
+        return value
+
+
+class DeviceLocationAssignment(db.Model):
+    __tablename__ = "device_location_assignments"
+    __table_args__ = (
+        UniqueConstraint("assignment_uuid", name="uq_device_location_assignments_uuid"),
+        CheckConstraint(
+            "target_type IN ('class', 'department')",
+            name="ck_device_location_assignments_target_type",
+        ),
+        CheckConstraint(
+            "length(target_name) BETWEEN 1 AND 120",
+            name="ck_device_location_assignments_target_name",
+        ),
+        CheckConstraint(
+            "length(responsible_officer) BETWEEN 1 AND 120",
+            name="ck_device_location_assignments_officer",
+        ),
+        CheckConstraint(
+            "length(issue_condition) BETWEEN 1 AND 80",
+            name="ck_device_location_assignments_issue_condition",
+        ),
+        CheckConstraint(
+            "return_condition IS NULL OR length(return_condition) BETWEEN 1 AND 80",
+            name="ck_device_location_assignments_return_condition",
+        ),
+        CheckConstraint(
+            "expected_return_date IS NULL OR expected_return_date >= assigned_at",
+            name="ck_device_location_assignments_expected_return",
+        ),
+        CheckConstraint(
+            "returned_at IS NULL OR returned_at >= assigned_at",
+            name="ck_device_location_assignments_returned",
+        ),
+        Index(
+            "uq_device_location_assignments_active_device",
+            "device_id",
+            unique=True,
+            postgresql_where=text("returned_at IS NULL"),
+            sqlite_where=text("returned_at IS NULL"),
+        ),
+        Index(
+            "ix_device_location_assignments_device_assigned", "device_id", "assigned_at"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    assignment_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, default=uuid4
+    )
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"), nullable=False
+    )
+    target_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    target_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    responsible_officer: Mapped[str] = mapped_column(String(120), nullable=False)
+    assigned_at: Mapped[date] = mapped_column(Date, nullable=False)
+    expected_return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    returned_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+    issue_condition: Mapped[str] = mapped_column(String(80), nullable=False)
+    return_condition: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    recorded_by_administrator_id: Mapped[int] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"), nullable=False
+    )
+    device: Mapped[Device] = relationship()
+
+
+class DeviceAssetChangeEvent(db.Model):
+    """Minimal audit record for asset corrections and retention redaction.
+
+    Only field names are retained; old values are deliberately not copied into
+    the audit trail so a correction cannot create a second personal-data store.
+    """
+
+    __tablename__ = "device_asset_change_events"
+    __table_args__ = (
+        UniqueConstraint("event_uuid", name="uq_device_asset_change_events_uuid"),
+        CheckConstraint(
+            "operation IN ('corrected', 'retention_redacted')",
+            name="ck_device_asset_change_events_operation",
+        ),
+        CheckConstraint(
+            "length(reason) BETWEEN 1 AND 512",
+            name="ck_device_asset_change_events_reason",
+        ),
+        Index("ix_device_asset_change_events_created", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, default=uuid4
+    )
+    device_id: Mapped[int] = mapped_column(
+        ForeignKey("devices.id", ondelete="RESTRICT"), nullable=False
+    )
+    administrator_id: Mapped[int] = mapped_column(
+        ForeignKey("administrators.id", ondelete="RESTRICT"), nullable=False
+    )
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    changed_fields: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    reason: Mapped[str] = mapped_column(String(512), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+    device: Mapped[Device] = relationship()
+    administrator: Mapped[Administrator] = relationship()
+
+    @validates("operation")
+    def validate_operation(self, _key: str, value: object) -> str:
+        if not isinstance(value, str) or value not in DEVICE_ASSET_CHANGE_OPERATIONS:
+            raise ValueError("invalid device asset change operation")
+        return value
+
+    @validates("changed_fields")
+    def validate_changed_fields(self, _key: str, value: object) -> list[str]:
+        if (
+            not isinstance(value, list)
+            or not value
+            or any(not isinstance(item, str) for item in value)
+        ):
+            raise ValueError("changed fields must be a non-empty list")
+        return sorted(set(value))
+
+    @validates("reason")
+    def validate_reason(self, _key: str, value: object) -> str:
+        return _validate_printable_text(value, "asset change reason", 512)
 
 
 class ManagedApplication(db.Model):
@@ -887,6 +1256,71 @@ class ManagedApplication(db.Model):
     def validate_status(self, _key: str, value: object) -> str:
         if value not in {"enabled", "disabled"}:
             raise ValueError("invalid managed application status")
+        return value
+
+
+class ManagedDomain(db.Model):
+    __tablename__ = "managed_domains"
+    __table_args__ = (
+        UniqueConstraint("domain_uuid", name="uq_managed_domains_uuid"),
+        UniqueConstraint("domain", name="uq_managed_domains_domain"),
+        CheckConstraint(
+            "status IN ('enabled', 'disabled')",
+            name="ck_managed_domains_status",
+        ),
+        CheckConstraint(
+            "category = lower(category) AND length(category) BETWEEN 1 AND 64",
+            name="ck_managed_domains_category",
+        ),
+        Index("ix_managed_domains_status_category", "status", "category"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    domain_uuid: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), nullable=False, default=uuid4
+    )
+    domain: Mapped[str] = mapped_column(String(253), nullable=False)
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="enabled", server_default="enabled"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+    @validates("domain")
+    def validate_domain(self, _key: str, value: object) -> str:
+        if not isinstance(value, str):
+            raise ValueError("invalid managed domain")
+        try:
+            return normalize_domain(value)
+        except ValueError as error:
+            raise ValueError("invalid managed domain") from error
+
+    @validates("category")
+    def validate_category(self, _key: str, value: object) -> str:
+        if (
+            not isinstance(value, str)
+            or not 1 <= len(value) <= 64
+            or value != value.lower()
+            or not value.isprintable()
+        ):
+            raise ValueError("invalid managed domain category")
+        return value
+
+    @validates("status")
+    def validate_status(self, _key: str, value: object) -> str:
+        if value not in {"enabled", "disabled"}:
+            raise ValueError("invalid managed domain status")
         return value
 
 
@@ -1208,6 +1642,7 @@ class EnrollmentToken(db.Model):
         ),
         Index("ix_enrollment_tokens_status_expires", "status", "expires_at"),
         Index("ix_enrollment_tokens_bound_device", "bound_device_id"),
+        Index("ix_enrollment_tokens_policy_revision", "policy_revision_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -1225,6 +1660,10 @@ class EnrollmentToken(db.Model):
     )
     bound_device_id: Mapped[int | None] = mapped_column(
         ForeignKey("devices.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    policy_revision_id: Mapped[int | None] = mapped_column(
+        ForeignKey("policy_revisions.id", ondelete="RESTRICT"),
         nullable=True,
     )
     status: Mapped[str] = mapped_column(
@@ -1266,6 +1705,9 @@ class EnrollmentToken(db.Model):
     revocation_reason: Mapped[str | None] = mapped_column(
         String(512),
         nullable=True,
+    )
+    policy_revision: Mapped[PolicyRevision | None] = relationship(
+        foreign_keys=[policy_revision_id]
     )
 
     @validates("status")
@@ -2476,6 +2918,8 @@ def _reject_policy_synchronization_event_mutation(
 __all__ = [
     "ADMINISTRATOR_AUTHENTICATION_EVENT_CATEGORIES",
     "ADMINISTRATOR_PERMISSIONS",
+    "INCIDENT_TYPES",
+    "INCIDENT_STATUSES",
     "ADMINISTRATOR_STATUSES",
     "Administrator",
     "AdministratorAuthenticationEvent",
@@ -2489,6 +2933,7 @@ __all__ = [
     "DEVICE_STATUSES",
     "ENROLLMENT_TOKEN_STATUSES",
     "Device",
+    "Incident",
     "DeviceBlockOverride",
     "DeviceControlEvent",
     "DeviceUsageDaily",
@@ -2497,6 +2942,8 @@ __all__ = [
     "DeviceAuditChainHead",
     "DeviceCapabilityCertification",
     "DeviceAuditImmutableError",
+    "DeviceAssetChangeEvent",
+    "DEVICE_ASSET_CHANGE_OPERATIONS",
     "DeviceCheckIn",
     "DeviceComplianceState",
     "DeviceCredential",
@@ -2518,6 +2965,7 @@ __all__ = [
     "PolicySynchronizationChainHead",
     "PolicySynchronizationEvent",
     "PolicySynchronizationEventImmutableError",
+    "School",
     "POLICY_STATUSES",
     "POLICY_REVISION_SCHEMA_VERSION",
     "POLICY_SYNC_OPERATIONS",

@@ -61,6 +61,7 @@ def test_enrollment_token_metadata_contract() -> None:
     }
     assert _index_names(EnrollmentToken) == {
         "ix_enrollment_tokens_bound_device",
+        "ix_enrollment_tokens_policy_revision",
         "ix_enrollment_tokens_status_expires",
     }
     assert "raw_token" not in table.c

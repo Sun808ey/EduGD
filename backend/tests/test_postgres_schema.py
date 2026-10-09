@@ -124,6 +124,8 @@ def test_existing_schema_metadata_and_constraints(
         for constraint in inspector.get_unique_constraints("policies")
     }
     assert device_uniques["uq_devices_device_uuid"] == ["device_uuid"]
+    assert device_uniques["uq_devices_asset_number"] == ["asset_number"]
+    assert device_uniques["uq_devices_serial_number"] == ["serial_number"]
     assert policy_uniques["uq_policies_policy_uuid"] == ["policy_uuid"]
     revision_uniques = {
         constraint["name"]: constraint["column_names"]
@@ -211,7 +213,18 @@ def test_existing_schema_metadata_and_constraints(
         },
     }
     assert nullable_columns == {
-        "devices": {"last_sync_at"},
+        "devices": {
+            "asset_lifecycle_status",
+            "asset_notes",
+            "asset_number",
+            "condition",
+            "date_received",
+            "department",
+            "last_sync_at",
+            "manufacturer",
+            "model",
+            "serial_number",
+        },
         "policies": set(),
         "device_policy_assignments": {
             "assigned_by_administrator_id",
@@ -297,6 +310,26 @@ def test_existing_schema_metadata_and_constraints(
         "ck_device_registration_events_stored_api_level",
         "ck_device_registration_events_type",
     }
+
+    enrollment_token_columns = {
+        column["name"]: column for column in inspector.get_columns("enrollment_tokens")
+    }
+    assert enrollment_token_columns["policy_revision_id"]["nullable"] is True
+    enrollment_token_foreign_keys = {
+        tuple(foreign_key["constrained_columns"]): (
+            foreign_key["referred_table"],
+            foreign_key["options"].get("ondelete"),
+        )
+        for foreign_key in inspector.get_foreign_keys("enrollment_tokens")
+    }
+    assert enrollment_token_foreign_keys[("policy_revision_id",)] == (
+        "policy_revisions",
+        "RESTRICT",
+    )
+    enrollment_token_indexes = {
+        index["name"] for index in inspector.get_indexes("enrollment_tokens")
+    }
+    assert "ix_enrollment_tokens_policy_revision" in enrollment_token_indexes
 
     synchronization_columns = {
         column["name"]: column

@@ -91,13 +91,17 @@ def authorize_administrator_operator(
 def list_administrators(*, offset: int, limit: int) -> tuple[list[Administrator], int]:
     """Return sanitized account records; passwords and sessions stay server-side."""
     try:
-        total = int(db.session.scalar(select(func.count()).select_from(Administrator)) or 0)
-        rows = list(db.session.scalars(
-            select(Administrator)
-            .order_by(Administrator.username)
-            .offset(offset)
-            .limit(limit)
-        ).all())
+        total = int(
+            db.session.scalar(select(func.count()).select_from(Administrator)) or 0
+        )
+        rows = list(
+            db.session.scalars(
+                select(Administrator)
+                .order_by(Administrator.username)
+                .offset(offset)
+                .limit(limit)
+            ).all()
+        )
         return rows, total
     except SQLAlchemyError as error:
         _raise_database_error(error, "administrator_list_database_error")
@@ -123,7 +127,10 @@ def replace_administrator_permissions(
 ) -> AdministratorMutationResult:
     """Replace an account's permissions without allowing management lockout."""
     operator_subject, reason = _validate_operator_context(operator_subject, reason)
-    if not isinstance(permissions, list) or set(permissions) - ADMINISTRATOR_PERMISSIONS:
+    if (
+        not isinstance(permissions, list)
+        or set(permissions) - ADMINISTRATOR_PERMISSIONS
+    ):
         raise AdministratorOperationError("invalid administrator permissions")
     if len(permissions) != len(set(permissions)) or not all(
         isinstance(permission, str) for permission in permissions
@@ -131,7 +138,9 @@ def replace_administrator_permissions(
         raise AdministratorOperationError("invalid administrator permissions")
     try:
         administrator = _find_administrator_uuid(administrator_uuid)
-        current_permissions = {permission.permission for permission in administrator.permissions}
+        current_permissions = {
+            permission.permission for permission in administrator.permissions
+        }
         requested_permissions = set(permissions)
         if (
             administrator.status == "active"

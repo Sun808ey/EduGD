@@ -89,7 +89,9 @@ def _administrator_operation_error(error: AdministratorOperationError) -> Respon
     if isinstance(error, AdministratorDatabaseError):
         return admin_error("internal_server_error", "internal server error", 500)
     if str(error) == "authorized administrator credentials are required":
-        return admin_error("authorization_failed", "administrator authorization failed", 403)
+        return admin_error(
+            "authorization_failed", "administrator authorization failed", 403
+        )
     return admin_error("invalid_request", "invalid administrator request", 400)
 
 
@@ -256,7 +258,11 @@ def administrator_list() -> Response:
 def administrator_detail(administrator_uuid: str) -> Response:
     try:
         return admin_json(
-            {"administrator": _administrator_payload(get_administrator_by_uuid(administrator_uuid))}
+            {
+                "administrator": _administrator_payload(
+                    get_administrator_by_uuid(administrator_uuid)
+                )
+            }
         )
     except AdministratorOperationError as error:
         return _administrator_operation_error(error)
@@ -265,9 +271,7 @@ def administrator_detail(administrator_uuid: str) -> Response:
 @auth_bp.patch("/admin/administrators/<administrator_uuid>/permissions")
 @administrator_required("administrator.manage")
 def administrator_permissions_replace(administrator_uuid: str) -> Response:
-    payload = _sensitive_payload(
-        fields={"permissions", "operator_password", "reason"}
-    )
+    payload = _sensitive_payload(fields={"permissions", "operator_password", "reason"})
     if payload is None:
         return admin_error("invalid_request", "invalid administrator request", 400)
     try:

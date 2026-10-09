@@ -4,7 +4,7 @@ import base64
 from datetime import UTC, datetime
 from typing import Any, cast
 from unittest.mock import Mock
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from flask import Flask
@@ -19,6 +19,10 @@ from app.models import (
     Device,
     DeviceEnrollmentEvent,
     EnrollmentToken,
+    Policy,
+    PolicyRevision,
+    School,
+    policy_revision_content_hash,
 )
 from app.services.administrator_authentication import bootstrap_administrator
 
@@ -28,7 +32,7 @@ DEVICE_UUID = "550e8400-e29b-41d4-a716-446655440000"
 REASON = "Provision a school-owned examination device"
 
 
-def _bootstrap_and_login(app: Flask) -> str:
+def _bootstrap_and_login(app: Flask) -> tuple[str, str, str]:
     with app.app_context():
         bootstrap_administrator(
             username=USERNAME,
@@ -37,22 +41,55 @@ def _bootstrap_and_login(app: Flask) -> str:
             operator_subject="test-operator",
             reason="pairing-token issuance test",
         )
+        administrator = db.session.scalars(
+            select(Administrator).where(Administrator.username == USERNAME)
+        ).one()
+        school = School(
+            name="Example Secondary School",
+            district="Kampala",
+            school_type="Secondary",
+            contact_person="ICT Officer",
+            official_telephone="+256 700 000 000",
+            official_email="ict@example.edu.ug",
+            physical_location="Kampala",
+            authorised_administrator_name="Enrollment Token Issuer",
+            registered_by_administrator_id=administrator.id,
+        )
+        policy = Policy(policy_uuid=uuid4(), name="Learning Device", status="active")
+        payload = {"schema_version": 1, "blocked_apps": ["org.example.learning"]}
+        revision = PolicyRevision(
+            policy=policy,
+            version=1,
+            payload=payload,
+            content_hash=policy_revision_content_hash(payload),
+            created_by="migration:token-issuance-test",
+        )
+        db.session.add_all((school, policy, revision))
+        db.session.commit()
+        school_uuid = str(school.school_uuid)
+        revision_uuid = str(revision.revision_uuid)
     response = app.test_client().post(
         "/api/v1/admin/auth/login",
         json={"username": USERNAME, "password": PASSWORD},
     )
     assert response.status_code == 200
     payload = cast(dict[str, Any], response.get_json())
-    return cast(str, payload["access_token"])
+    return cast(str, payload["access_token"]), school_uuid, revision_uuid
 
 
 def _issue(
     app: Flask,
     access_token: str,
     *,
+    school_uuid: str,
+    policy_revision_uuid: str,
     bound_device_uuid: str | None = None,
 ) -> Any:
-    payload = {"reason": REASON}
+    payload = {
+        "reason": REASON,
+        "school_uuid": school_uuid,
+        "policy_revision_uuid": policy_revision_uuid,
+    }
     if bound_device_uuid is not None:
         payload["bound_device_uuid"] = bound_device_uuid
     return app.test_client().post(
@@ -71,12 +108,17 @@ def test_authorized_issuance_returns_secret_once_and_stores_only_verifier(
     app: Flask,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    access_token = _bootstrap_and_login(app)
+    access_token, school_uuid, policy_revision_uuid = _bootstrap_and_login(app)
     log_sink = Mock()
     for method_name in ("debug", "info", "warning", "error", "critical", "exception"):
         monkeypatch.setattr(app.logger, method_name, log_sink)
 
-    response = _issue(app, access_token)
+    response = _issue(
+        app,
+        access_token,
+        school_uuid=school_uuid,
+        policy_revision_uuid=policy_revision_uuid,
+    )
 
     assert response.status_code == 201
     assert response.headers["Cache-Control"] == "no-store"
@@ -86,6 +128,9 @@ def test_authorized_issuance_returns_secret_once_and_stores_only_verifier(
     secret = _decode_secret(pairing_token)
     assert payload["token_uuid"] == token_uuid
     assert payload["bound_device_uuid"] is None
+    assert payload["school_uuid"] == school_uuid
+    assert payload["policy_name"] == "Learning Device"
+    assert payload["policy_version"] == 1
     assert len(secret) == 32
     assert "=" not in encoded_secret
     assert response.get_data(as_text=True).count(pairing_token) == 1
@@ -101,6 +146,7 @@ def test_authorized_issuance_returns_secret_once_and_stores_only_verifier(
         assert token.status == "active"
         assert token.failed_attempts == 0
         assert token.reason == REASON
+        assert str(token.policy_revision.revision_uuid) == policy_revision_uuid
         assert token.issued_by == str(administrator.administrator_uuid)
         assert event.category == "token_issued"
         assert event.token_id == token.id
@@ -116,7 +162,7 @@ def test_authorized_issuance_returns_secret_once_and_stores_only_verifier(
 
 
 def test_issuance_rejects_missing_database_permission(app: Flask) -> None:
-    access_token = _bootstrap_and_login(app)
+    access_token, school_uuid, policy_revision_uuid = _bootstrap_and_login(app)
     with app.app_context():
         administrator_id = db.session.scalar(select(Administrator.id))
         db.session.execute(
@@ -127,7 +173,12 @@ def test_issuance_rejects_missing_database_permission(app: Flask) -> None:
         )
         db.session.commit()
 
-    response = _issue(app, access_token)
+    response = _issue(
+        app,
+        access_token,
+        school_uuid=school_uuid,
+        policy_revision_uuid=policy_revision_uuid,
+    )
 
     assert response.status_code == 403
     assert response.get_json()["error"]["code"] == "authorization_failed"
@@ -147,7 +198,7 @@ def test_issuance_rejects_missing_database_permission(app: Flask) -> None:
 
 
 def test_issuance_can_bind_token_to_an_existing_device(app: Flask) -> None:
-    access_token = _bootstrap_and_login(app)
+    access_token, school_uuid, policy_revision_uuid = _bootstrap_and_login(app)
     with app.app_context():
         device = Device(
             device_uuid=UUID(DEVICE_UUID),
@@ -159,7 +210,13 @@ def test_issuance_can_bind_token_to_an_existing_device(app: Flask) -> None:
         db.session.commit()
         device_id = device.id
 
-    response = _issue(app, access_token, bound_device_uuid=DEVICE_UUID)
+    response = _issue(
+        app,
+        access_token,
+        school_uuid=school_uuid,
+        policy_revision_uuid=policy_revision_uuid,
+        bound_device_uuid=DEVICE_UUID,
+    )
 
     assert response.status_code == 201
     assert response.get_json()["bound_device_uuid"] == DEVICE_UUID
@@ -175,7 +232,7 @@ def test_issuance_transaction_rolls_back_token_and_event_on_commit_failure(
     app: Flask,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    access_token = _bootstrap_and_login(app)
+    access_token, school_uuid, policy_revision_uuid = _bootstrap_and_login(app)
     with app.app_context():
         original_commit = db.session.commit
 
@@ -183,7 +240,12 @@ def test_issuance_transaction_rolls_back_token_and_event_on_commit_failure(
             raise SQLAlchemyError("forced issuance commit failure")
 
         monkeypatch.setattr(db.session, "commit", fail_commit)
-        response = _issue(app, access_token)
+        response = _issue(
+            app,
+            access_token,
+            school_uuid=school_uuid,
+            policy_revision_uuid=policy_revision_uuid,
+        )
         monkeypatch.setattr(db.session, "commit", original_commit)
 
         assert response.status_code == 500

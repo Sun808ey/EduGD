@@ -258,12 +258,20 @@ def _configure_trusted_proxy(app: Flask) -> None:
 
 def _configure_admin_cors(app: Flask) -> None:
     allowed_origins = _admin_frontend_origins(app)
+    public_api_paths = frozenset({"/api/v1/health", "/api/v1/ready"})
+
+    def is_browser_api_path() -> bool:
+        return (
+            request.path.startswith("/api/v1/admin/")
+            or request.path in public_api_paths
+        )
+
     if app.config["APP_ENV"] == "production" and not allowed_origins:
         raise RuntimeError("Production CORS requires ADMIN_FRONTEND_ORIGINS")
 
     @app.before_request
     def reject_disallowed_admin_preflight() -> tuple[str, int] | None:
-        if request.method != "OPTIONS" or not request.path.startswith("/api/v1/admin/"):
+        if request.method != "OPTIONS" or not is_browser_api_path():
             return None
         origin = request.headers.get("Origin")
         requested_method = request.headers.get("Access-Control-Request-Method")
@@ -275,7 +283,7 @@ def _configure_admin_cors(app: Flask) -> None:
 
     @app.after_request
     def add_admin_cors_headers(response: Response) -> Response:
-        if not request.path.startswith("/api/v1/admin/"):
+        if not is_browser_api_path():
             return response
         origin = request.headers.get("Origin")
         if origin not in allowed_origins:
@@ -362,6 +370,7 @@ def _load_models() -> None:
         DeviceSecurityEvent,
         DeviceUsageDaily,
         EnrollmentToken,
+        Incident,
         ManagedApplication,
         Policy,
         PolicyApplicationEvent,
@@ -370,6 +379,7 @@ def _load_models() -> None:
         PolicyRevision,
         PolicySynchronizationChainHead,
         PolicySynchronizationEvent,
+        School,
     )
 
     _ = (
@@ -395,6 +405,7 @@ def _load_models() -> None:
         DevicePolicyState,
         DeviceSecurityEvent,
         EnrollmentToken,
+        Incident,
         Policy,
         PolicyApplicationEvent,
         PolicyAssignmentChainHead,
@@ -402,6 +413,7 @@ def _load_models() -> None:
         PolicyRevision,
         PolicySynchronizationChainHead,
         PolicySynchronizationEvent,
+        School,
     )
 
 

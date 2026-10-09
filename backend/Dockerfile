@@ -9,6 +9,8 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir --requirement requirements.txt
 
+COPY run.py ./run.py
+COPY gunicorn.conf.py ./gunicorn.conf.py
 COPY app ./app
 COPY scripts ./scripts
 COPY migrations ./migrations

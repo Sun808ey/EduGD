@@ -135,7 +135,10 @@
         ],
         "properties": {
           "schema_version": {"type": "integer", "const": 3},
+          "policy_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$"},
+          "description": {"type": "string", "minLength": 1, "maxLength": 2048},
           "timezone": {"type": "string", "const": "Africa/Kampala"},
+          "schedules": {"type": "array", "maxItems": 0},
           "web_filter": {
             "type": "object",
             "required": ["default_action", "rules"],
@@ -154,6 +157,149 @@
             "type": "object",
             "required": ["disallow_outgoing_calls", "disallow_sms", "preserve_emergency_calls"],
             "additionalProperties": {"type": "boolean"}
+          },
+          "device_use": {
+            "type": "object",
+            "required": ["mode", "kiosk_mode_enabled", "display_school_name", "school_name", "support_message"],
+            "properties": {
+              "mode": {"type": "string", "enum": ["normal_managed", "dedicated_learning", "examination"]},
+              "kiosk_mode_enabled": {"type": "boolean"},
+              "display_school_name": {"type": "boolean"},
+              "school_name": {"type": ["string", "null"]},
+              "support_message": {"type": "string", "minLength": 1, "maxLength": 256}
+            },
+            "additionalProperties": false
+          },
+          "approved_applications": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 256,
+            "items": {
+              "type": "object",
+              "required": ["application_uuid", "display_name", "package_name", "application_type", "required", "allow_in_kiosk"],
+              "properties": {
+                "application_uuid": {"type": "string", "format": "uuid"},
+                "display_name": {"type": "string", "minLength": 1, "maxLength": 120},
+                "package_name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"},
+                "application_type": {"type": "string", "enum": ["learning_application", "digital_textbook", "pdf_reader", "calculator", "approved_browser", "accessibility_application", "other_approved_application"]},
+                "required": {"type": "boolean"},
+                "allow_in_kiosk": {"type": "boolean"}
+              },
+              "additionalProperties": false
+            }
+          },
+          "application_controls": {
+            "type": "object",
+            "required": ["allow_installation_of_other_applications", "allow_installation_from_unknown_sources", "allow_uninstall_of_approved_applications", "allow_disable_of_approved_applications", "allow_google_play_store", "allow_file_sharing_applications", "file_sharing_packages"],
+            "properties": {
+              "allow_installation_of_other_applications": {"type": "boolean"},
+              "allow_installation_from_unknown_sources": {"type": "boolean"},
+              "allow_uninstall_of_approved_applications": {"type": "boolean"},
+              "allow_disable_of_approved_applications": {"type": "boolean"},
+              "allow_google_play_store": {"type": "boolean"},
+              "allow_file_sharing_applications": {"type": "boolean"},
+              "file_sharing_packages": {"type": "array", "maxItems": 256, "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"}}
+            },
+            "additionalProperties": false
+          },
+          "device_restrictions": {
+            "type": "object",
+            "required": ["block_factory_reset", "block_safe_mode", "block_developer_options_and_debugging", "block_usb_file_transfer", "block_account_changes", "block_user_switching", "block_network_reset", "block_wifi_changes", "disable_screenshots", "disable_screen_recording", "disable_camera", "disable_microphone", "disable_location"],
+            "properties": {
+              "block_factory_reset": {"type": "boolean"},
+              "block_safe_mode": {"type": "boolean"},
+              "block_developer_options_and_debugging": {"type": "boolean"},
+              "block_usb_file_transfer": {"type": "boolean"},
+              "block_account_changes": {"type": "boolean"},
+              "block_user_switching": {"type": "boolean"},
+              "block_network_reset": {"type": "boolean"},
+              "block_wifi_changes": {"type": "boolean"},
+              "disable_screenshots": {"type": "boolean"},
+              "disable_screen_recording": {"type": "boolean"},
+              "disable_camera": {"type": "boolean"},
+              "disable_microphone": {"type": "boolean"},
+              "disable_location": {"type": "boolean"}
+            },
+            "additionalProperties": false
+          },
+          "network_settings": {
+            "type": "object",
+            "description": "Simple network permissions. Mobile-data blocking is unsupported by the standard DPC. Disabling Wi-Fi requires Android API 33+ and wifi_state_control. Must agree with legacy network_controls and device_restrictions.block_network_reset.",
+            "required": ["allow_wifi", "allow_mobile_data", "allow_bluetooth", "allow_hotspot_creation", "allow_vpn_changes", "allow_network_reset"],
+            "properties": {
+              "allow_wifi": {"type": "boolean"},
+              "allow_mobile_data": {"type": "boolean", "const": true},
+              "allow_bluetooth": {"type": "boolean"},
+              "allow_hotspot_creation": {"type": "boolean"},
+              "allow_vpn_changes": {"type": "boolean"},
+              "allow_network_reset": {"type": "boolean"}
+            },
+            "additionalProperties": false
+          },
+          "compliance_settings": {
+            "type": "object",
+            "description": "Selected device compliance checks and the connection-review threshold. Connection review is not an automatic policy failure.",
+            "required": ["device_enrolled", "dpc_active", "policy_version_current", "approved_learning_application_installed", "kiosk_mode_active", "unknown_sources_blocked", "factory_reset_restriction_active", "required_restrictions_applied", "connection_review_after_days"],
+            "properties": {
+              "device_enrolled": {"type": "boolean"},
+              "dpc_active": {"type": "boolean"},
+              "policy_version_current": {"type": "boolean"},
+              "approved_learning_application_installed": {"type": "boolean"},
+              "kiosk_mode_active": {"type": "boolean"},
+              "unknown_sources_blocked": {"type": "boolean"},
+              "factory_reset_restriction_active": {"type": "boolean"},
+              "required_restrictions_applied": {"type": "boolean"},
+              "connection_review_after_days": {"type": "integer", "minimum": 1, "maximum": 30}
+            },
+            "additionalProperties": false
+          },
+          "offline_settings": {
+            "type": "object",
+            "description": "Fail-safe offline operation. Policy expiry while offline is prohibited.",
+            "required": ["enforce_last_valid_policy_offline", "store_local_policy_copy", "queue_events_while_offline", "apply_policy_changes_after_reconnection", "expire_policy_when_offline"],
+            "properties": {
+              "enforce_last_valid_policy_offline": {"type": "boolean", "const": true},
+              "store_local_policy_copy": {"type": "boolean", "const": true},
+              "queue_events_while_offline": {"type": "boolean", "const": true},
+              "apply_policy_changes_after_reconnection": {"type": "boolean", "const": true},
+              "expire_policy_when_offline": {"type": "boolean", "const": false}
+            },
+            "additionalProperties": false
+          },
+          "administrator_notes": {
+            "type": "string",
+            "description": "Bounded staff-only policy context. It is signed with the payload and is not a learner-facing device control.",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "data_collection_settings": {
+            "type": "object",
+            "description": "Fixed management-only collection. Learner surveillance and private-content collection are unavailable.",
+            "required": ["store_device_asset_number", "store_device_policy_version", "store_last_synchronisation_time", "store_compliance_result", "store_administrative_actions", "collect_learner_location", "read_private_messages", "read_photographs", "record_microphone", "store_browsing_history"],
+            "properties": {
+              "store_device_asset_number": {"type": "boolean", "const": true},
+              "store_device_policy_version": {"type": "boolean", "const": true},
+              "store_last_synchronisation_time": {"type": "boolean", "const": true},
+              "store_compliance_result": {"type": "boolean", "const": true},
+              "store_administrative_actions": {"type": "boolean", "const": true},
+              "collect_learner_location": {"type": "boolean", "const": false},
+              "read_private_messages": {"type": "boolean", "const": false},
+              "read_photographs": {"type": "boolean", "const": false},
+              "record_microphone": {"type": "boolean", "const": false},
+              "store_browsing_history": {"type": "boolean", "const": false}
+            },
+            "additionalProperties": false
+          },
+          "screen_lock": {
+            "type": "object",
+            "required": ["require_screen_lock", "automatic_lock_after_minutes", "allow_biometric_unlock", "allow_learner_change_lock_method"],
+            "properties": {
+              "require_screen_lock": {"type": "boolean"},
+              "automatic_lock_after_minutes": {"type": "integer", "enum": [1, 5, 10, 15, 30, 60]},
+              "allow_biometric_unlock": {"type": "boolean"},
+              "allow_learner_change_lock_method": {"type": "boolean"}
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false

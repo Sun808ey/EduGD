@@ -56,6 +56,19 @@ def test_admin_cors_does_not_apply_to_device_api(app: Flask) -> None:
     assert "Access-Control-Allow-Origin" not in response.headers
 
 
+def test_admin_cors_allows_configured_origin_on_public_health_checks(
+    app: Flask,
+) -> None:
+    origin = ALLOWED_ORIGIN
+    health = app.test_client().get("/api/v1/health", headers={"Origin": origin})
+    ready = app.test_client().get("/api/v1/ready", headers={"Origin": origin})
+
+    assert health.status_code == 200
+    assert ready.status_code == 200
+    assert health.headers["Access-Control-Allow-Origin"] == origin
+    assert ready.headers["Access-Control-Allow-Origin"] == origin
+
+
 def test_admin_cors_rejects_wildcard_origin() -> None:
     try:
         create_app(

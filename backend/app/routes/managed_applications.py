@@ -10,7 +10,7 @@ from app.admin_api import admin_error, admin_json
 from app.administrator_authorization import administrator_required
 from app.device_cryptography import decode_base64url, encode_base64url
 from app.extensions import db
-from app.models import ManagedApplication, utc_now
+from app.models import ManagedApplication, ManagedDomain, utc_now
 
 managed_application_bp = Blueprint("managed_applications", __name__)
 
@@ -59,6 +59,37 @@ def _parse_payload(
     ):
         raise ValueError("invalid managed application flags")
     return {**payload, "signing_certificate_sha256": parsed_digest}
+
+
+def _serialize_domain(domain: ManagedDomain) -> dict[str, object]:
+    return {
+        "domain_uuid": str(domain.domain_uuid),
+        "domain": domain.domain,
+        "category": domain.category,
+        "status": domain.status,
+        "created_at": domain.created_at.isoformat().replace("+00:00", "Z"),
+        "updated_at": domain.updated_at.isoformat().replace("+00:00", "Z"),
+    }
+
+
+def _parse_domain_payload(payload: object) -> dict[str, object]:
+    fields = {"domain", "category", "status"}
+    if not isinstance(payload, dict) or set(payload) != fields:
+        raise ValueError("invalid managed domain payload")
+    domain = payload["domain"]
+    category = payload["category"]
+    status = payload["status"]
+    if (
+        not isinstance(domain, str)
+        or not isinstance(category, str)
+        or not isinstance(status, str)
+    ):
+        raise ValueError("invalid managed domain payload")
+    return {
+        "domain": domain,
+        "category": category.strip().lower(),
+        "status": status,
+    }
 
 
 @managed_application_bp.get("/admin/applications")
@@ -125,3 +156,65 @@ def update_managed_application(application_uuid: str) -> Response:
             "write_unavailable", "applications are temporarily unavailable", 503
         )
     return admin_json({"application": _serialize(application)})
+
+
+@managed_application_bp.get("/admin/domains")
+@administrator_required()
+def list_managed_domains() -> Response:
+    domains = db.session.execute(
+        select(ManagedDomain)
+        .where(ManagedDomain.status == "enabled")
+        .order_by(ManagedDomain.category, ManagedDomain.domain)
+    ).scalars()
+    return admin_json({"domains": [_serialize_domain(item) for item in domains]})
+
+
+@managed_application_bp.post("/admin/domains")
+@administrator_required(permission="policy.manage")
+def create_managed_domain() -> Response:
+    try:
+        domain = ManagedDomain(**_parse_domain_payload(request.get_json(silent=False)))
+        db.session.add(domain)
+        db.session.commit()
+    except (TypeError, ValueError):
+        db.session.rollback()
+        return admin_error("invalid_domain", "invalid domain entry", 400)
+    except IntegrityError:
+        db.session.rollback()
+        return admin_error("domain_conflict", "domain already exists", 409)
+    except SQLAlchemyError:
+        db.session.rollback()
+        return admin_error(
+            "write_unavailable", "domains are temporarily unavailable", 503
+        )
+    return admin_json({"domain": _serialize_domain(domain)}, 201)
+
+
+@managed_application_bp.patch("/admin/domains/<domain_uuid>")
+@administrator_required(permission="policy.manage")
+def update_managed_domain(domain_uuid: str) -> Response:
+    try:
+        parsed_uuid = UUID(domain_uuid)
+        if parsed_uuid.version != 4 or str(parsed_uuid) != domain_uuid:
+            raise ValueError
+        domain = db.session.scalar(
+            select(ManagedDomain).where(ManagedDomain.domain_uuid == parsed_uuid)
+        )
+        if domain is None:
+            return admin_error("domain_not_found", "domain not found", 404)
+        for key, value in _parse_domain_payload(request.get_json(silent=False)).items():
+            setattr(domain, key, value)
+        domain.updated_at = utc_now()
+        db.session.commit()
+    except (TypeError, ValueError):
+        db.session.rollback()
+        return admin_error("invalid_domain", "invalid domain entry", 400)
+    except IntegrityError:
+        db.session.rollback()
+        return admin_error("domain_conflict", "domain already exists", 409)
+    except SQLAlchemyError:
+        db.session.rollback()
+        return admin_error(
+            "write_unavailable", "domains are temporarily unavailable", 503
+        )
+    return admin_json({"domain": _serialize_domain(domain)})

@@ -87,7 +87,7 @@ def test_policy_v2_normalizes_set_like_lists() -> None:
     "mutation",
     [
         lambda p: p.update(schema_version=1),
-        lambda p: p.update(timezone="UTC"),
+            lambda p: p.update(timezone="Europe/London"),
         lambda p: p.update(refresh_after_seconds=299),
         lambda p: p.update(default_mode="missing"),
         lambda p: p.update(emergency_packages=[]),

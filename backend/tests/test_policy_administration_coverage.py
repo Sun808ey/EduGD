@@ -3,9 +3,16 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from test_policy_contract_v3 import policy as v3_policy
 
 from app.extensions import db
-from app.models import Administrator, Policy
+from app.models import (
+    Administrator,
+    Device,
+    DevicePolicyAssignment,
+    ManagedApplication,
+    Policy,
+)
 from app.services.policy_administration import (
     PolicyAdministrationConflict,
     PolicyAdministrationError,
@@ -53,6 +60,185 @@ def test_policy_administration_creates_and_revises_policy(app) -> None:
         )
         assert policy.status == "draft"
         assert revision.version == 2
+
+
+def test_policy_code_must_be_unique_at_creation(app) -> None:
+    with app.app_context():
+        administrator = _administrator()
+        db.session.commit()
+        first = v3_policy()
+        first["policy_code"] = "UNIQUE_POLICY"
+        first["description"] = "First policy description"
+        create_policy(
+            name="Unique policy one",
+            payload=first,
+            administrator_id=administrator.id,
+        )
+
+        second = v3_policy()
+        second["policy_code"] = "UNIQUE_POLICY"
+        second["description"] = "Second policy description"
+        with pytest.raises(PolicyAdministrationConflict, match="policy code"):
+            create_policy(
+                name="Unique policy two",
+                payload=second,
+                administrator_id=administrator.id,
+            )
+
+
+def test_policy_administration_materializes_approved_application_catalogue(app) -> None:
+    with app.app_context():
+        administrator = _administrator()
+        application_uuid = uuid4()
+        application = ManagedApplication(
+            application_uuid=application_uuid,
+            display_name="Catalogue learning app",
+            package_name="org.catalogue.learning",
+            category="learning",
+            education_approved=True,
+            mandatory_block=False,
+            status="enabled",
+        )
+        db.session.add(application)
+        db.session.commit()
+
+        payload = v3_policy()
+        payload["approved_applications"] = [
+            {
+                "application_uuid": str(application_uuid),
+                "display_name": "Untrusted browser value",
+                "package_name": "org.attacker.spoof",
+                "application_type": "learning_application",
+                "required": True,
+                "allow_in_kiosk": True,
+            }
+        ]
+        created = create_policy(
+            name="Catalogue policy",
+            payload=payload,
+            administrator_id=administrator.id,
+        )
+
+        materialized = created.revisions[0].payload["approved_applications"][0]
+        assert materialized["display_name"] == "Catalogue learning app"
+        assert materialized["package_name"] == "org.catalogue.learning"
+
+
+def test_policy_administration_materializes_file_sharing_catalogue_packages(
+    app,
+) -> None:
+    with app.app_context():
+        administrator = _administrator()
+        db.session.add(
+            ManagedApplication(
+                application_uuid=uuid4(),
+                display_name="Catalogue file sharing app",
+                package_name="org.catalogue.fileshare",
+                category="file_sharing",
+                education_approved=False,
+                mandatory_block=True,
+                status="enabled",
+            )
+        )
+        db.session.commit()
+
+        payload = v3_policy()
+        payload["application_controls"] = {
+            "allow_installation_of_other_applications": False,
+            "allow_installation_from_unknown_sources": False,
+            "allow_uninstall_of_approved_applications": False,
+            "allow_disable_of_approved_applications": False,
+            "allow_google_play_store": False,
+            "allow_file_sharing_applications": False,
+        }
+        created = create_policy(
+            name="Application controls policy",
+            payload=payload,
+            administrator_id=administrator.id,
+        )
+
+        controls = created.revisions[0].payload["application_controls"]
+        assert controls["file_sharing_packages"] == ["org.catalogue.fileshare"]
+
+
+def test_required_approved_application_cannot_be_removed_from_active_assignment(
+    app,
+) -> None:
+    with app.app_context():
+        administrator = _administrator()
+        application = ManagedApplication(
+            application_uuid=uuid4(),
+            display_name="Required learning app",
+            package_name="org.catalogue.required",
+            category="learning",
+            education_approved=True,
+            mandatory_block=False,
+            status="enabled",
+        )
+        db.session.add(application)
+        db.session.commit()
+
+        payload = v3_policy()
+        payload["approved_applications"] = [
+            {
+                "application_uuid": str(application.application_uuid),
+                "application_type": "learning_application",
+                "required": True,
+                "allow_in_kiosk": True,
+            }
+        ]
+        created = create_policy(
+            name="Assigned catalogue policy",
+            payload=payload,
+            administrator_id=administrator.id,
+        )
+        device = Device(
+            device_uuid=uuid4(),
+            android_version="10",
+            api_level=29,
+            status="active",
+        )
+        db.session.add(device)
+        db.session.flush()
+        db.session.add(
+            DevicePolicyAssignment(
+                device_id=device.id,
+                policy_revision_id=created.revisions[0].id,
+                trusted_operator_subject="test:assignment",
+                reason="required application fixture",
+                status="active",
+            )
+        )
+        db.session.commit()
+
+        replacement = v3_policy()
+        replacement["approved_applications"] = [
+            {
+                "application_uuid": str(application.application_uuid),
+                "application_type": "learning_application",
+                "required": False,
+                "allow_in_kiosk": True,
+            }
+        ]
+        with pytest.raises(
+            PolicyAdministrationConflict,
+            match="required application cannot be removed",
+        ):
+            add_revision(
+                policy_uuid=created.policy_uuid,
+                payload=replacement,
+                administrator_id=administrator.id,
+            )
+
+        with pytest.raises(
+            PolicyAdministrationConflict,
+            match="required application cannot be removed",
+        ):
+            add_revision(
+                policy_uuid=created.policy_uuid,
+                payload=v3_policy(),
+                administrator_id=administrator.id,
+            )
 
 
 @pytest.mark.parametrize("value", [None, "", "  ", "x\nname", "x" * 256])

@@ -31,8 +31,16 @@ class CapabilityCollector(private val context: Context) {
         }
 
         val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-        val mobileDataEnabled = tm.isDataEnabled
-        val simState = tm.simState
+        val mobileDataEnabled = try {
+            tm.isDataEnabled
+        } catch (_: SecurityException) {
+            false
+        }
+        val simState = try {
+            tm.simState
+        } catch (_: SecurityException) {
+            TelephonyManager.SIM_STATE_UNKNOWN
+        }
 
         val pm = context.packageManager
         val dialIntent = Intent(Intent.ACTION_DIAL)

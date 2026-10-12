@@ -11,7 +11,7 @@ import java.net.URL
 import java.security.SecureRandom
 
 class EnrollmentClient(private val serverBaseUrl: String, private val deviceUuid: String, private val identity: DeviceSigningIdentity) {
-    fun register(pairingToken: String, androidVersion: String, apiLevel: Int): EnrollmentResponse? = try {
+    fun register(pairingToken: String, androidVersion: String, apiLevel: Int, manufacturer: String = "unknown", model: String = "unknown", serialNumber: String? = null): EnrollmentResponse? = try {
         val tokenUuid = pairingToken.substringBefore('.')
         val nonceBytes = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val nonce = Base64.encodeToString(nonceBytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
@@ -19,6 +19,7 @@ class EnrollmentClient(private val serverBaseUrl: String, private val deviceUuid
         val publicKey = Base64.encodeToString(identity.publicKeySpki, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
         val body = JSONObject().apply {
             put("device_uuid", deviceUuid); put("android_version", androidVersion); put("api_level", apiLevel); put("pairing_token", pairingToken)
+            put("manufacturer", manufacturer); put("model", model); if (!serialNumber.isNullOrBlank()) put("serial_number", serialNumber)
             put("credential", JSONObject().apply { put("algorithm", "ECDSA_P256_SHA256"); put("public_key", publicKey); put("nonce", nonce); put("proof", proof) })
         }.toString()
         val connection = URL("$serverBaseUrl/api/v1/devices/register").openConnection() as HttpURLConnection

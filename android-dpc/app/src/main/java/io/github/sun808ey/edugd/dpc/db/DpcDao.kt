@@ -40,7 +40,12 @@ interface DpcDao {
     @Query("UPDATE policy_envelope SET status = :status WHERE policyUuid = :policyUuid") suspend fun updatePolicyStatus(policyUuid: String, status: String)
     @Query("SELECT * FROM policy_envelope WHERE status = 'ACTIVE' LIMIT 1") suspend fun getActivePolicyEnvelope(): PolicyEnvelopeEntity?
     @Query("UPDATE policy_state SET applyState = :applyState, desiredHash = :desiredHash WHERE id = 1") suspend fun markPending(applyState: String, desiredHash: String)
-    @Query("UPDATE policy_state SET applyState = :applyState, appliedHash = :appliedHash, activePolicyUuid = :policyUuid, activeRevisionUuid = :revisionUuid WHERE id = 1") suspend fun markActive(applyState: String, appliedHash: String, policyUuid: String, revisionUuid: String)
+    @Query("UPDATE policy_state SET applyState = :applyState, appliedHash = :appliedHash, activePolicyUuid = :policyUuid, activeRevisionUuid = :revisionUuid WHERE id = 1") suspend fun markStateActive(applyState: String, appliedHash: String, policyUuid: String, revisionUuid: String)
+    @Transaction
+    suspend fun markActive(applyState: String, appliedHash: String, policyUuid: String, revisionUuid: String) {
+        updatePolicyStatus(policyUuid, "ACTIVE")
+        markStateActive(applyState, appliedHash, policyUuid, revisionUuid)
+    }
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAuditEvent(event: AuditEventEntity)
     @Query("SELECT * FROM audit_event ORDER BY sequence DESC LIMIT 1") suspend fun getLastAuditEvent(): AuditEventEntity?
 }

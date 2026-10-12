@@ -8,6 +8,12 @@ import androidx.work.CoroutineWorker
 import androidx.work.NetworkType
 import androidx.work.WorkerParameters
 import io.github.sun808ey.edugd.dpc.crypto.DeviceKeyStore
+import io.github.sun808ey.edugd.dpc.admin.ApplicationRestrictionSettings
+import io.github.sun808ey.edugd.dpc.admin.DeviceRestrictionSettings
+import io.github.sun808ey.edugd.dpc.admin.DeviceUseSettings
+import io.github.sun808ey.edugd.dpc.admin.ScreenLockSettings
+import io.github.sun808ey.edugd.dpc.admin.NetworkSettings
+import io.github.sun808ey.edugd.dpc.admin.OfflinePolicySettings
 import io.github.sun808ey.edugd.dpc.db.DpcDatabase
 import io.github.sun808ey.edugd.dpc.policy.PolicyRepository
 import io.github.sun808ey.edugd.dpc.policy.AtomicPolicyActivator
@@ -32,7 +38,15 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
     override suspend fun doWork(): Result {
         val manager = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val caps = manager.getNetworkCapabilities(manager.activeNetwork)
-        if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) != true) return Result.retry()
+        if (caps == null) return Result.retry()
+        val activePayload = DpcDatabase.getDatabase(applicationContext).dpcDao().getActivePolicyEnvelope()?.payloadJson
+        val permitted = runCatching {
+            SyncNetworkPolicy.permits(activePayload,
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI),
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR),
+                manager.isActiveNetworkMetered)
+        }.getOrDefault(false)
+        if (!permitted) return Result.retry()
         val graph = DpcGraph.from(applicationContext) ?: return Result.success()
         return try {
             val state = graph.stateSyncClient.fetchState()
@@ -42,13 +56,13 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
                     val policy = state.policy ?: throw PermanentSyncException("missing_policy", "apply response had no policy")
                     if (policy.optString("signing_key_id") != graph.trustedSigningKeyId) throw PermanentSyncException("policy_key_mismatch", "policy signing key mismatch")
                     val payload = policy.optJSONObject("payload") ?: throw PermanentSyncException("missing_policy_payload", "apply response had no payload")
-                    val defaultMode = payload.optString("default_mode")
+                    val defaultMode = io.github.sun808ey.edugd.dpc.policy.ScheduleResolver.resolveModeId(payload)
                     val modes = payload.optJSONArray("modes") ?: throw PermanentSyncException("missing_policy_mode", "policy has no modes")
                     val mode = (0 until modes.length()).asSequence().map { modes.getJSONObject(it) }.firstOrNull { it.optString("mode_id") == defaultMode }
                         ?: throw PermanentSyncException("missing_policy_mode", "default policy mode is missing")
                     val blocked = (0 until (mode.optJSONArray("blocked_packages")?.length() ?: 0)).map { mode.getJSONArray("blocked_packages").getString(it) }
                     val lockTask = (0 until (mode.optJSONArray("lock_task_packages")?.length() ?: 0)).map { mode.getJSONArray("lock_task_packages").getString(it) }
-                    val result = AtomicPolicyActivator(applicationContext).activate(SignedEnvelope(policy.getString("policy_uuid"), policy.getString("revision_uuid"), payload.toString(), policy.getString("payload_hash"), policy.getString("signature"), policy.getString("signing_key_id"), System.currentTimeMillis(), blocked, lockTask))
+                    val result = AtomicPolicyActivator(applicationContext).activate(SignedEnvelope(policy.getString("policy_uuid"), policy.getString("revision_uuid"), payload.toString(), policy.getString("payload_hash"), policy.getString("signature"), policy.getString("signing_key_id"), System.currentTimeMillis(), blocked, lockTask, DeviceUseSettings.fromPayload(payload), ApplicationRestrictionSettings.fromPayload(payload), DeviceRestrictionSettings.fromPayload(payload), ScreenLockSettings.fromPayload(payload), NetworkSettings.fromPayload(payload), OfflinePolicySettings.fromPayload(payload)))
                     when (result) {
                         is io.github.sun808ey.edugd.dpc.policy.ApplyResult.Active -> Unit
                         is io.github.sun808ey.edugd.dpc.policy.ApplyResult.Quarantined -> throw PermanentSyncException("policy_quarantined", "policy application quarantined")
@@ -81,5 +95,5 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
         } catch (_: PermanentSyncException) { graph.repository.lastPolicyVersion = -99L; Result.failure()
         } catch (_: Exception) { Result.retry() }
     }
-    companion object { fun constraints() = Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build() }
+    companion object { fun constraints() = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build() }
 }

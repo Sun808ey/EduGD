@@ -23,10 +23,13 @@ class ProvisioningModeActivity : Activity() {
         val dpc = DevicePolicyController(this)
         if (dpc.isDeviceOwner()) {
             dpc.applyDefaultRestrictions()
-            val intent = Intent(this, PolicyComplianceActivity::class.java).apply {
+            val complianceIntent = Intent(this, PolicyComplianceActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                intent.getBundleExtra(DevicePolicyManager.EXTRA_PROVISIONING_ADMIN_EXTRAS_BUNDLE)?.let {
+                    putExtra(DevicePolicyManager.EXTRA_PROVISIONING_ADMIN_EXTRAS_BUNDLE, it)
+                }
             }
-            startActivity(intent)
+            startActivity(complianceIntent)
         } else {
             setResult(RESULT_CANCELED)
         }

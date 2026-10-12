@@ -477,6 +477,7 @@ test('shows a real browser-offline dependency failure and recovers when connecti
   await signIn(page)
   await navigateInApp(page, '/devices')
   await expect(page.getByRole('heading', { name: 'Devices' })).toBeVisible()
+  await expect(page.getByLabel('Status').first()).toBeVisible()
   await page.context().setOffline(true)
   const offlineFetchRejected = await page.evaluate(async () => {
     try {

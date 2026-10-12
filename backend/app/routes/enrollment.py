@@ -69,6 +69,10 @@ def issue_token() -> Response:
             "pairing_token": issued.pairing_token,
             "expires_at": issued.expires_at,
             "bound_device_uuid": issued.bound_device_uuid,
+            "school_uuid": issued.school_uuid,
+            "policy_revision_uuid": issued.policy_revision_uuid,
+            "policy_name": issued.policy_name,
+            "policy_version": issued.policy_version,
         },
         201,
     )

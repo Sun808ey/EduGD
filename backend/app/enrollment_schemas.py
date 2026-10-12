@@ -29,12 +29,17 @@ class DeviceEnrollmentData:
     api_level: int
     pairing_token: str
     credential: EnrollmentCredentialData
+    manufacturer: str | None = None
+    model: str | None = None
+    serial_number: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class TokenIssueData:
     reason: str
     bound_device_uuid: str | None
+    school_uuid: str | None
+    policy_revision_uuid: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +92,7 @@ def validate_enrollment_request(incoming_request: Request) -> DeviceEnrollmentDa
     _exact_fields(
         payload,
         {"device_uuid", "android_version", "api_level", "pairing_token", "credential"},
+        {"manufacturer", "model", "serial_number"},
     )
     try:
         device_uuid = str(parse_canonical_uuid4(payload["device_uuid"]))
@@ -112,20 +118,48 @@ def validate_enrollment_request(incoming_request: Request) -> DeviceEnrollmentDa
         api_level,
         pairing_token,
         credential,
+        _optional_bounded_text(payload.get("manufacturer"), 120),
+        _optional_bounded_text(payload.get("model"), 120),
+        _optional_bounded_text(payload.get("serial_number"), 160),
     )
+
+
+def _optional_bounded_text(value: object, maximum: int) -> str | None:
+    if value is None:
+        return None
+    return _bounded_text(value, maximum).strip() or None
 
 
 def validate_token_issue_request(incoming_request: Request) -> TokenIssueData:
     payload = _json_object(incoming_request)
-    _exact_fields(payload, {"reason"}, {"bound_device_uuid"})
+    _exact_fields(
+        payload,
+        {"reason"},
+        {"bound_device_uuid", "school_uuid", "policy_revision_uuid"},
+    )
     bound_value = payload.get("bound_device_uuid")
     try:
         bound_uuid = (
             None if bound_value is None else str(parse_canonical_uuid4(bound_value))
         )
+        school_value = payload.get("school_uuid")
+        policy_value = payload.get("policy_revision_uuid")
+        if (school_value is None) != (policy_value is None):
+            raise ValueError
+        school_uuid = (
+            None if school_value is None else str(parse_canonical_uuid4(school_value))
+        )
+        policy_revision_uuid = (
+            None if policy_value is None else str(parse_canonical_uuid4(policy_value))
+        )
     except ValueError as error:
         raise EnrollmentValidationError() from error
-    return TokenIssueData(_bounded_text(payload["reason"], 512), bound_uuid)
+    return TokenIssueData(
+        _bounded_text(payload["reason"], 512),
+        bound_uuid,
+        school_uuid,
+        policy_revision_uuid,
+    )
 
 
 def validate_reason_request(incoming_request: Request) -> ReasonData:

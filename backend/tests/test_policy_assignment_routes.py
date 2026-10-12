@@ -75,6 +75,14 @@ def test_assign_and_clear_create_linear_immutable_evidence(app: Flask) -> None:
     assert clearing.status_code == 200
     assert clearing.get_json()["clear_intent"]["operation"] == "clear"
     assert repeated_clear.status_code == 409
+    changes = client.get("/api/v1/admin/policy-changes", headers=headers)
+    assert changes.status_code == 200
+    assert changes.get_json()["pagination"]["total"] == 2
+    assert changes.get_json()["policy_changes"][0]["operation"] == "clear"
+    assert (
+        changes.get_json()["policy_changes"][0]["reason"]
+        == "Approved end of policy period"
+    )
     with app.app_context():
         events = db.session.scalars(
             select(PolicyAssignmentEvent).order_by(PolicyAssignmentEvent.id)

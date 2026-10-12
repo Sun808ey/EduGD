@@ -66,6 +66,7 @@ def _seed(app: Flask) -> tuple[str, str, dict[str, str]]:
             expires_at=utc_now() + timedelta(minutes=10),
             issued_by=str(administrator.administrator_uuid),
             reason="contract readiness",
+            policy_revision=revision,
         )
         db.session.add_all([active_device, suspended_device, policy, revision, token])
         db.session.flush()
@@ -115,8 +116,20 @@ def test_admin_read_endpoints_return_contract_ready_payloads(app: Flask) -> None
         "total": 2,
         "has_next": True,
     }
+    listed_device = devices.get_json()["devices"][0]
+    assert listed_device["enforcement_status"] == "NOT_REPORTED"
+    assert listed_device["connection_status"] == "OFFLINE"
+    assert listed_device["connection_review"] is True
+    assert listed_device["connection_review_after_days"] == 3
+    assert listed_device["last_compliance_check"] is None
+    assert listed_device["failed_controls"] == []
     assert device.status_code == 200
-    assert device.get_json()["device"]["device_uuid"] == device_uuid
+    detail = device.get_json()["device"]
+    assert detail["device_uuid"] == device_uuid
+    assert detail["enforcement_status"] == "NOT_REPORTED"
+    assert detail["connection_status"] == "OFFLINE"
+    assert detail["connection_review"] is True
+    assert detail["connection_review_after_days"] == 3
     assert assignment.status_code == 200
     assert assignment.get_json()["policy_assignment"]["assignment"] is None
     assert policies.status_code == 200
@@ -129,6 +142,13 @@ def test_admin_read_endpoints_return_contract_ready_payloads(app: Flask) -> None
     ]
     assert tokens.status_code == 200
     assert tokens.get_json()["enrollment_tokens"][0]["status"] == "active"
+    assert (
+        tokens.get_json()["enrollment_tokens"][0]["policy_name"] == "Readiness policy"
+    )
+    assert (
+        tokens.get_json()["enrollment_tokens"][0]["issued_by_name"]
+        == "Readiness Administrator"
+    )
     assert audit.status_code == 200
     assert audit.get_json()["audit_events"][0]["event_uuid"]
     assert all(

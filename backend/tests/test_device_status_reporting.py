@@ -19,6 +19,8 @@ from app.models import (
 )
 from tests.test_device_enrollment_authentication import (
     DEVICE_UUID,
+    PASSWORD,
+    USERNAME,
     _bootstrap_and_login,
     _enrollment_payload,
     _issue_token,
@@ -92,6 +94,21 @@ def test_check_in_updates_compliance_projection_and_is_idempotent(app: Flask) ->
         assert state.capabilities == ["app_suspension", "lock_task"]
         assert state.queued_event_count == 2
         assert device.last_sync_at is not None
+
+    admin_login = app.test_client().post(
+        "/api/v1/admin/auth/login",
+        json={"username": USERNAME, "password": PASSWORD},
+    )
+    admin_devices = app.test_client().get(
+        "/api/v1/admin/devices",
+        headers={"Authorization": f"Bearer {admin_login.get_json()['access_token']}"},
+    )
+    assert admin_devices.status_code == 200
+    summary = admin_devices.get_json()["devices"][0]
+    assert summary["enforcement_status"] == "PARTIALLY_COMPLIANT"
+    assert summary["connection_status"] == "ONLINE"
+    assert "No active policy assignment" in summary["failed_controls"]
+    assert "Policy status: none" in summary["failed_controls"]
 
 
 def test_older_check_in_is_preserved_without_regressing_projection(app: Flask) -> None:

@@ -136,8 +136,11 @@ def validate_policy_v2(value: object) -> dict[str, object]:
     policy = _strict_keys(value, _POLICY_KEYS, "policy")
     if policy["schema_version"] != LEGACY_POLICY_SCHEMA_VERSION:
         raise PolicyContractError("unsupported policy schema version")
-    if policy["timezone"] != "Africa/Kampala":
-        raise PolicyContractError("unsupported policy timezone")
+    timezone_name = policy["timezone"]
+    if not isinstance(timezone_name, str) or not timezone_name.strip():
+        raise PolicyContractError("invalid policy timezone")
+    if timezone_name not in {"Africa/Kampala", "Africa/Nairobi", "UTC"}:
+        raise PolicyContractError("invalid policy timezone")
 
     emergency_packages = _package_list(
         policy["emergency_packages"], "emergency_packages"
@@ -246,7 +249,7 @@ def validate_policy_v2(value: object) -> dict[str, object]:
 
     return {
         "schema_version": LEGACY_POLICY_SCHEMA_VERSION,
-        "timezone": "Africa/Kampala",
+        "timezone": timezone_name,
         "refresh_after_seconds": _bounded_int(
             policy["refresh_after_seconds"],
             "refresh_after_seconds",

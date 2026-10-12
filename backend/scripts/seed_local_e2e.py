@@ -19,6 +19,7 @@ from app.models import (
     EnrollmentToken,
     Policy,
     PolicyRevision,
+    School,
     policy_revision_content_hash,
     utc_now,
 )
@@ -52,6 +53,19 @@ def main() -> int:
         )
         if administrator is None:
             raise RuntimeError("administrator bootstrap did not persist")
+
+        school = School(
+            name="Local E2E School",
+            district="Kampala",
+            school_type="Secondary",
+            contact_person="Local ICT Officer",
+            official_telephone="+256 700 000 000",
+            official_email="ict@local-e2e.invalid",
+            physical_location="Kampala",
+            authorised_administrator_name="Local E2E Administrator",
+            registered_by_administrator_id=administrator.id,
+        )
+        db.session.add(school)
 
         readonly = Administrator(
             username=READONLY_USERNAME,

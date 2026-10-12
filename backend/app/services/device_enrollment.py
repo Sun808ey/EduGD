@@ -29,6 +29,9 @@ from app.models import (
     DeviceCredential,
     DeviceEnrollmentEvent,
     EnrollmentToken,
+    Policy,
+    PolicyRevision,
+    School,
     utc_now,
 )
 
@@ -55,6 +58,10 @@ class IssuedToken:
     pairing_token: str
     expires_at: str
     bound_device_uuid: str | None
+    school_uuid: str | None
+    policy_revision_uuid: str | None
+    policy_name: str | None
+    policy_version: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +109,24 @@ def issue_enrollment_token(
         ).scalar_one_or_none()
         if bound_device is None:
             raise EnrollmentNotFound("device not found")
+    school = None
+    policy_revision = None
+    if data.school_uuid is not None and data.policy_revision_uuid is not None:
+        school = db.session.execute(
+            select(School).where(School.school_uuid == UUID(data.school_uuid))
+        ).scalar_one_or_none()
+        if school is None:
+            raise EnrollmentNotFound("school not found")
+        policy_revision = db.session.execute(
+            select(PolicyRevision)
+            .join(Policy, Policy.id == PolicyRevision.policy_id)
+            .where(
+                PolicyRevision.revision_uuid == UUID(data.policy_revision_uuid),
+                Policy.status == "active",
+            )
+        ).scalar_one_or_none()
+        if policy_revision is None:
+            raise EnrollmentNotFound("active policy revision not found")
     now = utc_now()
     expires_at = now + timedelta(
         seconds=current_app.config["ENROLLMENT_TOKEN_TTL_SECONDS"]
@@ -115,6 +140,7 @@ def issue_enrollment_token(
         ),
         pepper_version=current_app.config["PAIRING_TOKEN_PEPPER_VERSION"],
         bound_device_id=bound_device.id if bound_device else None,
+        policy_revision_id=policy_revision.id if policy_revision else None,
         expires_at=expires_at,
         issued_by=str(administrator.administrator_uuid),
         reason=data.reason,
@@ -140,6 +166,10 @@ def issue_enrollment_token(
         f"{token_uuid}.{encode_base64url(secret)}",
         expires_at.isoformat().replace("+00:00", "Z"),
         str(bound_device.device_uuid) if bound_device else None,
+        str(school.school_uuid) if school else None,
+        str(policy_revision.revision_uuid) if policy_revision else None,
+        policy_revision.policy.name if policy_revision else None,
+        policy_revision.version if policy_revision else None,
     )
 
 
@@ -246,6 +276,9 @@ def enroll_device(data: DeviceEnrollmentData) -> EnrollmentResult:
                 device_uuid=device_uuid,
                 android_version=data.android_version,
                 api_level=data.api_level,
+                manufacturer=data.manufacturer,
+                model=data.model,
+                serial_number=data.serial_number,
                 status="active",
                 legacy_enrollment_eligible=False,
             )
@@ -256,6 +289,14 @@ def enroll_device(data: DeviceEnrollmentData) -> EnrollmentResult:
                 _record_failed_enrollment(token, device.id, "downgrade_rejected")
             device.android_version = data.android_version
             device.api_level = data.api_level
+            if data.manufacturer:
+                device.manufacturer = data.manufacturer
+            if data.model:
+                device.model = data.model
+            if data.serial_number:
+                device.serial_number = data.serial_number
+        if device.asset_number is not None:
+            device.asset_lifecycle_status = "ENROLLED"
 
         credential = DeviceCredential(
             device_id=device.id,

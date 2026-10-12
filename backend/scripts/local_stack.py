@@ -41,6 +41,11 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="seed disposable fixtures and keep the live stack for browser tests",
     )
+    parser.add_argument(
+        "--demo-scenario",
+        action="store_true",
+        help="seed the NDEJJE SS enrollment, policy, check-in, and violation scenario",
+    )
     return parser
 
 
@@ -122,14 +127,17 @@ def main() -> int:
     token = token_urlsafe(32)
     redis_token = token_urlsafe(32)
     pairing_token_pepper = token_urlsafe(32)
-    dpc_policy_signing_key = base64.urlsafe_b64encode(
-        Ed25519PrivateKey.generate()
-        .private_bytes(
-            serialization.Encoding.Raw,
-            serialization.PrivateFormat.Raw,
-            serialization.NoEncryption(),
+    dpc_policy_signing_key = (
+        base64.urlsafe_b64encode(
+            Ed25519PrivateKey.generate().private_bytes(
+                serialization.Encoding.Raw,
+                serialization.PrivateFormat.Raw,
+                serialization.NoEncryption(),
+            )
         )
-    ).rstrip(b"=").decode("ascii")
+        .rstrip(b"=")
+        .decode("ascii")
+    )
     env = os.environ.copy()
     env.update(
         {
@@ -148,13 +156,9 @@ def main() -> int:
             ),
             "PAIRING_TOKEN_PEPPER": pairing_token_pepper,
             "PAIRING_TOKEN_PEPPER_VERSION": "1",
-            "REDIS_URL": (
-                "redis://:"
-                f"{redis_token}@127.0.0.1:{args.redis_port}/0"
-            ),
+            "REDIS_URL": (f"redis://:{redis_token}@127.0.0.1:{args.redis_port}/0"),
             "RATELIMIT_STORAGE_URI": (
-                "redis://:"
-                f"{redis_token}@127.0.0.1:{args.redis_port}/0"
+                f"redis://:{redis_token}@127.0.0.1:{args.redis_port}/0"
             ),
             "FLASK_DEBUG": "0",
             "ADMIN_FRONTEND_ORIGINS": (
@@ -196,7 +200,13 @@ def main() -> int:
             env=env,
         )
         if args.e2e:
-            _run([sys.executable, "-m", "scripts.seed_local_e2e"], env=env)
+            seed_module = (
+                "scripts.seed_local_demo"
+                if args.demo_scenario
+                else "scripts.seed_local_e2e"
+            )
+            seed_command = [sys.executable, "-m", seed_module]
+            _run(seed_command, env=env)
         flask_process = subprocess.Popen(
             [
                 sys.executable,

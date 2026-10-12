@@ -72,6 +72,16 @@ def _environment_flag(name: str, default: bool = False) -> bool:
     return raw_value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _retention_days(name: str, default: int) -> int:
+    raw_value = os.getenv(name, str(default))
+    if not raw_value.isascii() or not raw_value.isdecimal():
+        raise RuntimeError(f"{name} must be a non-negative integer")
+    value = int(raw_value, 10)
+    if value > 3650:
+        raise RuntimeError(f"{name} must not exceed 3650")
+    return value
+
+
 def _normalize_database_uri(database_uri: str) -> str:
     if database_uri.startswith("postgres://"):
         return database_uri.replace(
@@ -112,9 +122,7 @@ class Config:
     RATELIMIT_DEFAULT: list[str] = []
     RATELIMIT_ENABLED = True
     RATELIMIT_STORAGE_URI: str | None = (
-        os.getenv("RATELIMIT_STORAGE_URI")
-        or os.getenv("REDIS_URL")
-        or "memory://"
+        os.getenv("RATELIMIT_STORAGE_URI") or os.getenv("REDIS_URL") or "memory://"
     )
     REDIS_URL = os.getenv("REDIS_URL")
     TRUSTED_PROXY_HOPS = 0
@@ -130,9 +138,9 @@ class Config:
     DEVICE_AUTH_MAX_HEADER_LENGTH = 512
     DEVICE_AUTH_CLOCK_SKEW_SECONDS = 300
     DEVICE_AUTH_NONCE_TTL_SECONDS = 600
-    ENROLLMENT_TOKEN_TTL_SECONDS = int(
-        os.getenv("ENROLLMENT_TOKEN_TTL_SECONDS", "600")
-    )
+    ENROLLMENT_TOKEN_TTL_SECONDS = int(os.getenv("ENROLLMENT_TOKEN_TTL_SECONDS", "600"))
+    DEVICE_RETENTION_DAYS = _retention_days("DEVICE_RETENTION_DAYS", 365)
+    AUDIT_RETENTION_DAYS = _retention_days("AUDIT_RETENTION_DAYS", 3650)
     ADMIN_LOGIN_RATE_LIMIT = os.getenv("ADMIN_LOGIN_RATE_LIMIT", "10 per minute")
     POLICY_SYNC_RATE_LIMIT = os.getenv("POLICY_SYNC_RATE_LIMIT") or "60 per minute"
     ADMIN_FRONTEND_ORIGINS = os.getenv("ADMIN_FRONTEND_ORIGINS", "")

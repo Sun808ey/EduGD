@@ -20,9 +20,17 @@ from test_support.postgres_safety import (
 
 pytestmark = [pytest.mark.postgres, pytest.mark.migration]
 MIGRATIONS_DIRECTORY = Path(__file__).resolve().parents[1] / "migrations"
-HEAD_REVISION = "b6e2f9a4c7d1"
-EXPECTED_REVISION_COUNT = 28
+HEAD_REVISION = "h2c3d4e5f6a7"
+EXPECTED_REVISION_COUNT = 36
 EXPECTED_REVISIONS = (
+    "h2c3d4e5f6a7",
+    "g1b2c3d4e5f6",
+    "c3f7a2d9e1b4",
+    "b1c4e7a9d2f6",
+    "a6c9e2f1d8b4",
+    "f5a9c3e1b7d2",
+    "d4e8a1c7b2f9",
+    "c8d2e7f4a1b6",
     "b6e2f9a4c7d1",
     "a7b8c9d0e1f2",
     "f1a2b3c4d5e6",
@@ -72,7 +80,7 @@ def _current_revision(connection: Connection) -> str | None:
     )
 
 
-def test_migration_history_is_one_linear_twenty_eight_revision_chain() -> None:
+def test_migration_history_is_one_linear_revision_chain() -> None:
     script = _script_directory()
     revisions = list(script.walk_revisions())
 

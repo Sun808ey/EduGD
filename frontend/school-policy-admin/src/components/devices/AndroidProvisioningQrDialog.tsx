@@ -10,8 +10,8 @@ export function AndroidProvisioningQrDialog({ issued, open, onOpenChange }: { is
 
   useEffect(() => {
     let cancelled = false
-    setResult({ loading: true })
     void (async () => {
+      if (!cancelled) setResult({ loading: true })
       try {
       const config = resolveAndroidProvisioningConfig()
       if (!config) throw new Error('QR provisioning is not configured for this deployment.')

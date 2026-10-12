@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { AdminShell } from '@/components/layout/AdminShell'
 import { LoginPage } from '@/pages/LoginPage'
@@ -17,9 +17,16 @@ const PolicyDetailPage = lazy(() => import('@/pages/PolicyDetailPage').then((mod
 const PolicyCreatePage = lazy(() => import('@/pages/PolicyCreatePage').then((module) => ({ default: module.PolicyCreatePage })))
 const ManagedApplicationsPage = lazy(() => import('@/pages/ManagedApplicationsPage').then((module) => ({ default: module.ManagedApplicationsPage })))
 const LogsPage = lazy(() => import('@/pages/logs').then((module) => ({ default: module.LogsPage })))
+const ReportsPage = lazy(() => import('@/pages/reports').then((module) => ({ default: module.ReportsPage })))
 const AdministratorsPage = lazy(() => import('@/pages/AdministratorsPage').then((module) => ({ default: module.AdministratorsPage })))
 const TranslationPage = lazy(() => import('@/pages/TranslationPage').then((module) => ({ default: module.TranslationPage })))
 const DeviceDetailPage = lazy(() => import('@/pages/DeviceDetailPage').then((module) => ({ default: module.DeviceDetailPage })))
+const SchoolRegistrationPage = lazy(() => import('@/pages/SchoolRegistrationPage').then((module) => ({ default: module.SchoolRegistrationPage })))
+const PolicyChangesPage = lazy(() => import('@/pages/policy-changes').then((module) => ({ default: module.PolicyChangesPage })))
+const ProvisioningPage = lazy(() => import('@/pages/ProvisioningPage').then((module) => ({ default: module.ProvisioningPage })))
+const AssignmentsPage = lazy(() => import('@/pages/AssignmentsPage').then((module) => ({ default: module.AssignmentsPage })))
+const DataProtectionPage = lazy(() => import('@/pages/DataProtectionPage').then((module) => ({ default: module.DataProtectionPage })))
+const SyncQueuePage = lazy(() => import('@/pages/SyncQueuePage'))
 
 function App() {
   return (
@@ -39,15 +46,26 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute><LanguageProvider><AdminShell /></LanguageProvider></ProtectedRoute>}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/school" element={<SchoolRegistrationPage />} />
+          <Route path="/settings" element={<SchoolRegistrationPage />} />
           <Route path="/devices" element={<DevicesPage />} />
+          <Route path="/assignments" element={<AssignmentsPage />} />
+          <Route path="/devices/register" element={<Navigate to="/devices" replace />} />
           <Route path="/devices/:deviceUuid" element={<DeviceDetailPage />} />
           <Route path="/policies" element={<PoliciesPage />} />
           <Route path="/policies/new" element={<PolicyCreatePage />} />
           <Route path="/policies/:policyUuid" element={<PolicyDetailPage />} />
-          <Route path="/applications" element={<ManagedApplicationsPage />} />
+          <Route path="/policies/catalogue" element={<ManagedApplicationsPage />} />
+          <Route path="/applications" element={<Navigate to="/policies/catalogue" replace />} />
           <Route path="/logs" element={<LogsPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/provisioning" element={<ProvisioningPage />} />
+          <Route path="/incidents" element={<Navigate to="/reports" replace />} />
+          <Route path="/policy-changes" element={<PolicyChangesPage />} />
+          <Route path="/sync" element={<SyncQueuePage />} />
           <Route path="/administrators" element={<AdministratorsPage />} />
           <Route path="/translations" element={<TranslationPage />} />
+          <Route path="/data-protection" element={<DataProtectionPage />} />
         </Route>
         <Route path="/" element={<MarketingShell><LandingPage /></MarketingShell>} />
         <Route path="/forbidden" element={<MessagePage title="Permission denied" message="Your account does not have permission to perform that action." />} />

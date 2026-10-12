@@ -9,6 +9,8 @@ import App from './App.tsx'
 import { AuthProvider } from '@/context/AuthContext'
 import { resolveSentryDsn } from '@/lib/environment'
 import { scrubSentryEvent } from '@/lib/observability'
+import { OfflineProvider } from '@/context/OfflineContext'
+import { ThemeModeProvider } from '@/context/ThemeModeProvider'
 
 const sentryDsn = resolveSentryDsn(import.meta.env.VITE_SENTRY_DSN)
 
@@ -23,7 +25,7 @@ createRoot(document.getElementById('root')!).render(
     <Sentry.ErrorBoundary fallback={<main className="grid min-h-screen place-items-center p-6"><div role="alert">The application encountered an unexpected error. Reload to continue.</div></main>}>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-          <AuthProvider><App /></AuthProvider>
+          <ThemeModeProvider><AuthProvider><OfflineProvider><App /></OfflineProvider></AuthProvider></ThemeModeProvider>
         </BrowserRouter>
       </QueryClientProvider>
     </Sentry.ErrorBoundary>

@@ -1,6 +1,7 @@
 name: Backend quality
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - "backend/**"

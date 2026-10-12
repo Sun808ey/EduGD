@@ -1,5 +1,6 @@
 name: Frontend quality
 on:
+  workflow_dispatch:
   push:
     paths: ["frontend/school-policy-admin/**", ".github/workflows/frontend-quality.yml"]
   pull_request:

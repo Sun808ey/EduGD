@@ -1,6 +1,7 @@
 name: Android DPC quality
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - "android-dpc/**"

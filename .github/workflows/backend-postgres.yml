@@ -20,6 +20,9 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v6
+      - name: Create disposable PostgreSQL test token
+        shell: bash
+        run: printf 'EDUG_DISPOSABLE_POSTGRES_TOKEN=%s\n' "$(openssl rand -hex 32)" >> "$GITHUB_ENV"
       - name: Run isolated PostgreSQL TLS integration gate
         run: docker compose -f compose.postgres-test.yml run --build --rm tests
       - name: Remove only this test stack and temporary certificates

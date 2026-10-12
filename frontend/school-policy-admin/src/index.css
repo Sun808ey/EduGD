@@ -5,19 +5,221 @@
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
 }
 
+:root {
+  --app-page: #f1f5f9;
+  --app-surface: #ffffff;
+  --app-surface-muted: #f8fafc;
+  --app-border: #cbd5e1;
+  --app-border-strong: #94a3b8;
+  --app-text: #0f172a;
+  --app-text-muted: #475569;
+  --app-placeholder: #64748b;
+  --app-focus: #2563eb;
+}
+
+:root[data-theme="dark"] {
+  --app-page: #090d14;
+  --app-surface: #111827;
+  --app-surface-muted: #111827;
+  --app-border: #293241;
+  --app-border-strong: #3b82f6;
+  --app-text: #eaf2ff;
+  --app-text-muted: #b8c7dc;
+  --app-placeholder: #8fa2bc;
+  --app-focus: #3b82f6;
+}
+
 @layer base {
   html {
-    @apply bg-slate-100 font-sans text-slate-950;
+    @apply font-sans;
+    background: var(--app-page);
+    color: var(--app-text);
   }
 
   body {
     @apply m-0 min-w-80;
+    background: var(--app-page);
+    color: var(--app-text);
   }
 
   button,
   select {
     @apply cursor-pointer disabled:cursor-not-allowed;
   }
+
+  input,
+  select,
+  textarea {
+    color: var(--app-text);
+    color-scheme: inherit;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--app-placeholder);
+    opacity: 1;
+  }
+}
+
+/* Shared native form treatment for screens that use either the input utility
+   or their own small Tailwind class combination. */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea,
+.input {
+  border: 1px solid var(--app-border);
+  background: var(--app-surface);
+  color: var(--app-text);
+  border-radius: 0.625rem;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):hover,
+select:hover,
+textarea:hover,
+.input:hover {
+  border-color: var(--app-border-strong);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus,
+.input:focus {
+  border-color: var(--app-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-focus) 22%, transparent);
+}
+
+/* Comfortable controls for school-admin text entry. Keep these explicit so
+   long notes, descriptions, and catalogue values remain easy to scan and edit
+   on both desktop and smaller screens. */
+.input-comfortable {
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+textarea.input-comfortable {
+  min-height: 10rem;
+  resize: vertical;
+}
+
+select.input-comfortable {
+  padding-right: 2.75rem;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--app-focus);
+}
+
+/* Existing admin pages use these utilities extensively. Keep their semantic
+   layout/status colors, while remapping structural light-mode tokens in dark
+   mode so labels, cards, menus, and table headers remain readable. */
+:root[data-theme="dark"] .bg-white {
+  background-color: var(--app-surface) !important;
+}
+
+:root[data-theme="dark"] .bg-slate-50 {
+  background-color: var(--app-surface-muted) !important;
+}
+
+:root[data-theme="dark"] .bg-slate-100 {
+  background-color: var(--app-border) !important;
+}
+
+:root[data-theme="dark"] .text-slate-950,
+:root[data-theme="dark"] .text-slate-900,
+:root[data-theme="dark"] .text-slate-800 {
+  color: var(--app-text) !important;
+}
+
+:root[data-theme="dark"] .text-slate-700,
+:root[data-theme="dark"] .text-slate-600,
+:root[data-theme="dark"] .text-slate-500 {
+  color: var(--app-text-muted) !important;
+}
+
+:root[data-theme="dark"] .text-slate-400 {
+  color: var(--app-placeholder) !important;
+}
+
+:root[data-theme="dark"] .border-slate-100,
+:root[data-theme="dark"] .border-slate-200,
+:root[data-theme="dark"] .border-slate-300,
+:root[data-theme="dark"] .border-slate-400,
+:root[data-theme="dark"] .divide-slate-100,
+:root[data-theme="dark"] .divide-slate-200 {
+  border-color: var(--app-border) !important;
+}
+
+:root[data-theme="dark"] .divide-y > :not(:first-child) {
+  border-color: var(--app-border);
+}
+
+/* Keep the long policy editor and its live summary visible together. The
+   editor is identified by its form followed by a preview aside so unrelated
+   admin sections are not affected. */
+#main-content > div > section:has(> form + aside) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2rem;
+  max-width: 80rem;
+}
+
+#main-content > div > section:has(> form + aside) > header,
+#main-content > div > section:has(> form + aside) > form,
+#main-content > div > section:has(> form + aside) > aside {
+  min-width: 0;
+  margin-top: 0;
+}
+
+#main-content > div > section:has(> form + aside) > aside {
+  grid-column: 1;
+  grid-row: 2;
+  background: #eaf4e3;
+  color: #0f172a;
+  border-color: #a7d3aa;
+}
+
+#main-content > div > section:has(> form + aside) > header {
+  grid-row: 1;
+}
+
+#main-content > div > section:has(> form + aside) > form {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+@media (min-width: 1280px) {
+  #main-content > div > section:has(> form + aside) {
+    grid-template-columns: minmax(0, 1fr) 22rem;
+    align-items: start;
+  }
+
+  #main-content > div > section:has(> form + aside) > header {
+    grid-column: 1 / -1;
+  }
+
+  #main-content > div > section:has(> form + aside) > form {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  #main-content > div > section:has(> form + aside) > aside {
+    grid-column: 2;
+    position: sticky;
+    top: 1.5rem;
+  }
+}
+
+:root[data-theme="dark"] #main-content > div > section:has(> form + aside) > aside {
+  background: var(--app-surface) !important;
+  color: var(--app-text);
+  border-color: var(--app-border) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

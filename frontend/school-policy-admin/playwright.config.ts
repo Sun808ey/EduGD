@@ -17,6 +17,11 @@ export default defineConfig({
     url: 'http://127.0.0.1:4173/login',
     reuseExistingServer: false,
     timeout: 120_000,
+    env: {
+      VITE_DPC_SERVER_SIGNING_KEY_ID: 'local-e2e-signing-key',
+      VITE_DPC_SERVER_SIGNING_PUBLIC_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      VITE_DPC_SERVER_SIGNING_KEY_FINGERPRINT: '66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925',
+    },
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },

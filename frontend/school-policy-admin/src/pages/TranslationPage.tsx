@@ -36,9 +36,9 @@ export function TranslationPage() {
     </header>
     <div role="note" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Only approved dynamic content is accepted. Do not enter learner names, credentials, device identifiers, or other personal data.</div>
     <form onSubmit={submit} className="grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
-      <label className="block text-sm font-medium">Source language<input value="English (eng)" readOnly className="input mt-2 bg-slate-50" /></label>
-      <label className="block text-sm font-medium">Target language<select value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value as SupportedLanguage)} className="input mt-2">{languages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}</select></label>
-      <label className="block text-sm font-medium">Approved text<textarea required minLength={1} maxLength={4000} value={text} onChange={(event) => setText(event.target.value)} className="input mt-2 min-h-32" /></label>
+      <label className="block text-sm font-medium">Source language<input value="English (eng)" readOnly className="input input-comfortable mt-2 bg-slate-50" /></label>
+      <label className="block text-sm font-medium">Target language<select value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value as SupportedLanguage)} className="input input-comfortable mt-2">{languages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}</select></label>
+      <label className="block text-sm font-medium">Approved text<textarea required minLength={1} maxLength={4000} value={text} onChange={(event) => setText(event.target.value)} className="input input-comfortable mt-2" /></label>
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       <button type="submit" disabled={translation.isPending || !text.trim()} className="w-fit rounded-full bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{translation.isPending ? 'Translating…' : 'Translate approved text'}</button>
     </form>

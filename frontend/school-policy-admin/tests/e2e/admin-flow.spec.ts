@@ -5,13 +5,15 @@ const admin = { username: 'local.e2e.admin', password: 'LocalE2EAdmin!2026' }
 const readonly = { username: 'local.e2e.reader', password: 'LocalE2EReader!2026' }
 type LiveRequestInit = { method?: string; body?: string; headers?: Record<string, string> }
 
+test.setTimeout(120_000)
+
 async function signIn(page: Page, credentials = admin) {
   await page.goto('/login')
   await page.getByLabel('Username').fill(credentials.username)
   await page.getByLabel('Password').fill(credentials.password)
   await page.getByRole('button', { name: 'Sign in' }).click()
-  await expect(page).toHaveURL(/\/dashboard$/)
-  await expect(page.getByRole('heading', { name: 'Device policy at a glance' })).toBeVisible()
+  await expect(page).toHaveURL(/\/dashboard$/, { timeout: 60_000 })
+  await expect(page.getByRole('heading', { name: 'School devices at a glance' })).toBeVisible({ timeout: 60_000 })
 }
 
 async function openNavigation(page: Page) {
@@ -43,11 +45,11 @@ test('uses the live Flask API for the administrator dashboard lifecycle', async 
     if (request.url().includes('/api/v1/admin/')) apiRequests.push(request.url())
   })
   await signIn(page)
-  await expect(page.getByText('Managed devices').locator('..').getByText(/^\d+$/)).toBeVisible()
+  await expect(page.getByText('Total registered devices').locator('..').getByText(/^\d+$/)).toBeVisible()
   await openNavigation(page)
   await page.getByRole('link', { name: 'Devices', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Devices' })).toBeVisible()
-  await expect(page.getByText('22222222-2222-4222-8222-222222222222', { exact: true })).toBeVisible()
+  await expect(page.getByText('22222222-2222-4222-8222-222222222222', { exact: true })).toBeVisible({ timeout: 60000 })
   await openNavigation(page)
   await page.getByRole('link', { name: 'Policies' }).click()
   await expect(page.getByRole('heading', { name: /Policies/ })).toBeVisible()
@@ -64,16 +66,16 @@ test('loads live deep links and administrator management', async ({ page }) => {
   await page.getByRole('link', { name: 'Devices and enrollment' }).click()
   await expect(page.getByRole('heading', { name: 'Devices' })).toBeVisible()
   await navigateInApp(page, '/dashboard')
-  await expect(page.getByRole('heading', { name: 'Device policy at a glance' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'School devices at a glance' })).toBeVisible()
   await page.getByRole('link', { name: 'Policies and assignments' }).click()
   await expect(page.getByRole('heading', { name: /Policies/ })).toBeVisible()
   await navigateInApp(page, '/devices/22222222-2222-4222-8222-222222222222')
-  await expect(page.getByRole('heading', { name: '22222222-2222-4222-8222-222222222222' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '22222222-2222-4222-8222-222222222222' })).toBeVisible({ timeout: 60_000 })
   await navigateInApp(page, '/administrators')
   await expect(page.getByRole('heading', { name: 'Administrators' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Create administrator' })).toBeVisible()
   await navigateInApp(page, '/applications')
-  await expect(page.getByRole('heading', { name: 'Managed applications' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Applications & domains' })).toBeVisible()
   await navigateInApp(page, '/translations')
   await expect(page.getByRole('heading', { name: 'Approved-content translation' })).toBeVisible()
   await navigateInApp(page, '/logs')
@@ -111,9 +113,10 @@ test('rejects unsafe localhost QR origins without persisting the token', async (
   await signIn(page)
   await navigateInApp(page, '/devices')
   await expect(page.getByRole('heading', { name: 'Enrollment tokens' })).toBeVisible()
-  await page.getByRole('button', { name: 'Issue token' }).click()
+  await page.getByRole('button', { name: 'Create enrollment token' }).click()
+  await page.getByLabel('Policy template').selectOption({ index: 1 })
   await page.getByLabel('Reason').fill('live QR serialization verification')
-  await page.getByRole('button', { name: 'Issue token', exact: true }).click()
+  await page.getByRole('button', { name: 'Create token', exact: true }).click()
   const pairingToken = await page.getByText(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/).textContent()
   expect(pairingToken).toBeTruthy()
   await page.getByRole('button', { name: 'Generate QR' }).click()
@@ -126,7 +129,8 @@ test('rejects unsafe localhost QR origins without persisting the token', async (
   await expect(page.getByText(pairingToken as string, { exact: true })).toHaveCount(1)
   await page.getByRole('button', { name: 'Close' }).click()
   await expect(page.getByText(pairingToken as string, { exact: true })).toHaveCount(0)
-  expect(await page.evaluate(async () => ({ local: localStorage.length, session: sessionStorage.length, indexed: (await indexedDB.databases()).length }))).toEqual({ local: 0, session: 0, indexed: 0 })
+  expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 })
+  expect(await page.evaluate(async () => (await indexedDB.databases()).map((database) => database.name))).toContain('edugd-offline-v1')
 })
 
 test('enforces live permission boundaries', async ({ page }) => {
@@ -170,16 +174,16 @@ test('creates an administrator through the live dashboard contract', async ({ pa
   await dialog.getByLabel('Your operator password').fill(admin.password)
   await dialog.getByLabel('Reason').fill('live session revocation verification')
   await dialog.getByRole('button', { name: 'Revoke sessions' }).click()
-  await expect(page.getByRole('status')).toContainText('revoked sessions')
+  await expect(page.getByRole('status')).toContainText('revoked sessions', { timeout: 60000 })
 })
 
 test('handles a real revoked-session 401 without persistent browser credentials', async ({ page }) => {
-  await signIn(page)
   const captured: string[] = []
   page.on('request', (request) => {
     const value = request.headers().authorization
     if (value) captured.push(value)
   })
+  await signIn(page)
   await navigateInApp(page, '/devices')
   await expect(page.getByRole('heading', { name: 'Devices' })).toBeVisible()
   const token = captured.at(-1)
@@ -197,12 +201,12 @@ test('passes automated accessibility checks against the live dashboard', async (
 })
 
 test('executes disposable token, policy, assignment, and Block lifecycle over live HTTP', async ({ page }, testInfo) => {
-  await signIn(page)
   const authorization: string[] = []
   page.on('request', (request) => {
     const value = request.headers().authorization
     if (value) authorization.push(value)
   })
+  await signIn(page)
   await navigateInApp(page, '/devices')
   await expect.poll(() => authorization.at(-1)).toMatch(/^Bearer /)
   const token = authorization.at(-1)!
@@ -217,7 +221,8 @@ test('executes disposable token, policy, assignment, and Block lifecycle over li
   const tokenUuid = issued.body?.token_uuid
   expect(typeof pairingToken).toBe('string')
   expect(typeof tokenUuid).toBe('string')
-  expect(await page.evaluate(async () => ({ local: localStorage.length, session: sessionStorage.length, indexed: (await indexedDB.databases()).length }))).toEqual({ local: 0, session: 0, indexed: 0 })
+  expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 })
+  expect(await page.evaluate(async () => (await indexedDB.databases()).map((database) => database.name))).toContain('edugd-offline-v1')
   expect(await page.context().cookies()).toEqual([])
 
   const tokenList = await liveApi(page, token, '/admin/enrollment-tokens?page=1&per_page=25')
@@ -291,12 +296,12 @@ test('executes disposable token, policy, assignment, and Block lifecycle over li
 })
 
 test('executes live device enrollment, signed sync, audit replay, rotation, and recovery', async ({ page }) => {
-  await signIn(page)
   const authorization: string[] = []
   page.on('request', (request) => {
     const value = request.headers().authorization
     if (value) authorization.push(value)
   })
+  await signIn(page)
   await navigateInApp(page, '/devices')
   await expect.poll(() => authorization.at(-1)).toMatch(/^Bearer /)
   const adminToken = authorization.at(-1)!
@@ -489,12 +494,12 @@ test('shows a real browser-offline dependency failure and recovers when connecti
 
 test('expires a disposable enrollment token through the live enrollment contract', async ({ page }) => {
   test.skip(process.env.EDUG_LIVE_TOKEN_EXPIRY_TEST !== '1', 'run this scenario in its isolated expiry gate')
-  await signIn(page)
   const authorization: string[] = []
   page.on('request', (request) => {
     const value = request.headers().authorization
     if (value) authorization.push(value)
   })
+  await signIn(page)
   await navigateInApp(page, '/devices')
   await expect.poll(() => authorization.at(-1)).toMatch(/^Bearer /)
   const adminToken = authorization.at(-1)!

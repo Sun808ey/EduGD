@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 from secrets import token_urlsafe
 from urllib.error import URLError
+from urllib.parse import urlparse
 from urllib.request import urlopen
 
 from cryptography.hazmat.primitives import serialization
@@ -77,12 +78,18 @@ def _compose(
 
 
 def _wait_for(url: str, process: subprocess.Popen[bytes], timeout: float = 60) -> None:
+    parsed_url = urlparse(url)
+    if parsed_url.scheme not in {"http", "https"} or parsed_url.hostname not in {
+        "127.0.0.1",
+        "localhost",
+    }:
+        raise ValueError("local stack readiness checks require a local HTTP(S) URL")
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError(f"child process exited before {url} became ready")
         try:
-            with urlopen(url, timeout=2) as response:  # noqa: S310 - local URLs only
+            with urlopen(url, timeout=2) as response:  # nosec B310 - validated local URL
                 if 200 <= response.status < 500:
                     return
         except (OSError, URLError):

@@ -110,9 +110,11 @@ def resolve_policy_for_device(
         raise PolicyContractError("invalid policy template")
     data: dict[str, Any] = deepcopy(template)
     handlers = checked_profile["handlers"]
-    assert isinstance(handlers, list)
+    if not isinstance(handlers, list):
+        raise PolicyContractError("invalid device handlers")
     dependencies = checked_profile["system_dependencies"]
-    assert isinstance(dependencies, list)
+    if not isinstance(dependencies, list):
+        raise PolicyContractError("invalid system dependencies")
     preserved = {DPC_APPLICATION_ID, *dependencies, *(h["package"] for h in handlers)}
     if not preserved <= installed_packages:
         raise PolicyContractError("required system package is not installed")

@@ -1,8 +1,11 @@
+from uuid import uuid4
+
 import pytest
 from flask import Flask
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.device_cryptography import encode_base64url
+from app.device_cryptography import decode_base64url, encode_base64url
+from app.routes.managed_applications import _parse_domain_payload, _parse_payload
 from tests.test_administrator_authentication import (
     _authorization_header,
     _bootstrap,
@@ -151,3 +154,94 @@ def test_managed_application_update_handles_database_failure(
         json=_payload(digest=encode_base64url(b"\x08" * 32)),
     )
     assert response.status_code == 503
+
+
+def test_managed_application_and_domain_payload_validation() -> None:
+    with pytest.raises(ValueError):
+        _parse_payload({})
+    with pytest.raises(ValueError):
+        _parse_payload({**_payload(digest=None), "signing_certificate_sha256": None})
+    with pytest.raises(ValueError):
+        _parse_payload(
+            {
+                **_payload(digest=encode_base64url(b"x" * 32)),
+                "education_approved": "yes",
+            }
+        )
+    parsed = _parse_payload(
+        {
+            **_payload(digest=encode_base64url(b"x" * 32)),
+            "signing_certificate_sha256": None,
+        },
+        require_verified_identity=False,
+    )
+    assert parsed["signing_certificate_sha256"] is None
+    assert decode_base64url(encode_base64url(b"x" * 32), decoded_length=32) == b"x" * 32
+    with pytest.raises(ValueError):
+        _parse_domain_payload({"domain": "example.org"})
+    with pytest.raises(ValueError):
+        _parse_domain_payload({"domain": 1, "category": "social", "status": "enabled"})
+    assert (
+        _parse_domain_payload(
+            {"domain": "example.org", "category": " Social ", "status": "enabled"}
+        )["category"]
+        == "social"
+    )
+
+
+def test_managed_domain_catalogue_crud_and_database_failures(
+    app: Flask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _bootstrap(app)
+    token = _login(app).get_json()["access_token"]
+    headers = _authorization_header(token)
+    client = app.test_client()
+    payload = {"domain": "example.org", "category": "education", "status": "enabled"}
+    created = client.post("/api/v1/admin/domains", headers=headers, json=payload)
+    assert created.status_code == 201
+    domain_uuid = created.get_json()["domain"]["domain_uuid"]
+    listed = client.get("/api/v1/admin/domains", headers=headers)
+    assert listed.status_code == 200
+    assert listed.get_json()["domains"][0]["domain"] == "example.org"
+    updated = client.patch(
+        f"/api/v1/admin/domains/{domain_uuid}",
+        headers=headers,
+        json={
+            "domain": "learning.example.org",
+            "category": "learning",
+            "status": "enabled",
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.get_json()["domain"]["domain"] == "learning.example.org"
+    assert (
+        client.patch(
+            "/api/v1/admin/domains/not-a-uuid", headers=headers, json=payload
+        ).status_code
+        == 400
+    )
+    assert (
+        client.patch(
+            f"/api/v1/admin/domains/{uuid4()}", headers=headers, json=payload
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            "/api/v1/admin/domains", headers=headers, json={"domain": "broken"}
+        ).status_code
+        == 400
+    )
+
+    monkeypatch.setattr(
+        "app.routes.managed_applications.db.session.commit",
+        lambda: (_ for _ in ()).throw(SQLAlchemyError("offline")),
+    )
+    assert (
+        client.post(
+            "/api/v1/admin/domains",
+            headers=headers,
+            json={**payload, "domain": "offline.example.org"},
+        ).status_code
+        == 503
+    )

@@ -173,7 +173,8 @@ class TestingConfig(Config):
     SQLALCHEMY_DATABASE_URI = "sqlite+pysqlite:///:memory:"
     LOG_LEVEL = "WARNING"
     RATELIMIT_ENABLED = False
-    PAIRING_TOKEN_PEPPER = "testing-pairing-token-pepper-value"
+    # This deterministic value is limited to the in-memory testing configuration.
+    PAIRING_TOKEN_PEPPER = "testing-pairing-token-pepper-value"  # nosec B105
     POLICY_SYNC_AUDIT_KEY = "testing-policy-sync-audit-key-value"
     ENROLLMENT_ADMIN_ENABLED = True
     ADMIN_FRONTEND_ORIGINS = "http://localhost:5173"

@@ -3,6 +3,7 @@ from __future__ import annotations
 from flask import Flask
 
 from app.services.administrator_authentication import bootstrap_administrator
+from app.services.school_registration import SchoolRegistrationUnavailable
 
 USERNAME = "school.admin"
 PASSWORD = "SchoolRegistration!2026"
@@ -76,4 +77,46 @@ def test_school_registration_rejects_invalid_or_unauthorised_requests(
     assert (
         client.post("/api/v1/admin/school", headers=headers, json=invalid).status_code
         == 400
+    )
+
+
+def test_school_profile_can_be_edited_and_rejects_invalid_updates(app: Flask) -> None:
+    headers = _headers(app)
+    client = app.test_client()
+    created = client.post("/api/v1/admin/school", headers=headers, json=_payload())
+    assert created.status_code == 201
+    updated_payload = {
+        **_payload(),
+        "name": "Updated Example Secondary School",
+        "timezone": "UTC",
+    }
+    updated = client.patch(
+        "/api/v1/admin/school", headers=headers, json=updated_payload
+    )
+    assert updated.status_code == 200
+    assert updated.get_json()["school"]["name"] == "Updated Example Secondary School"
+    assert updated.get_json()["school"]["timezone"] == "UTC"
+    assert (
+        client.patch(
+            "/api/v1/admin/school", headers=headers, json={"name": "incomplete"}
+        ).status_code
+        == 400
+    )
+
+
+def test_school_profile_maps_unavailable_update(app: Flask, monkeypatch) -> None:
+    headers = _headers(app)
+    client = app.test_client()
+    client.post("/api/v1/admin/school", headers=headers, json=_payload())
+    monkeypatch.setattr(
+        "app.routes.schools.update_school",
+        lambda **_: (_ for _ in ()).throw(SchoolRegistrationUnavailable()),
+    )
+    assert (
+        client.patch(
+            "/api/v1/admin/school",
+            headers=headers,
+            json={**_payload(), "timezone": "UTC"},
+        ).status_code
+        == 503
     )

@@ -108,7 +108,8 @@ def ingest_device_audit_batch(
         if not isinstance(checked_events, list):
             raise DeviceAuditContractError("invalid audit events")
         for event in checked_events:
-            assert isinstance(event, dict)
+            if not isinstance(event, dict):
+                raise DeviceAuditContractError("invalid audit event")
             db.session.add(
                 DeviceSecurityEvent(
                     event_uuid=UUID(str(event["event_uuid"])),

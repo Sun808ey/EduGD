@@ -207,7 +207,8 @@ def build_audit_event(
     if event_code == "web_filter_blocked":
         # Raw domains and URLs are intentionally not accepted into forensic evidence.
         metadata = event["metadata"]
-        assert isinstance(metadata, dict)
+        if not isinstance(metadata, dict):
+            raise DeviceAuditContractError("web filter evidence metadata is invalid")
         if set(metadata) != {"domain_hash"} or not _hash(
             metadata["domain_hash"], "domain_hash"
         ):
@@ -243,7 +244,8 @@ def build_audit_batch(
     for index, event in enumerate(checked):
         if index:
             previous_sequence = checked[index - 1]["sequence"]
-            assert isinstance(previous_sequence, int)
+            if not isinstance(previous_sequence, int):
+                raise DeviceAuditContractError("audit sequence is invalid")
             if event["sequence"] != previous_sequence + 1:
                 raise DeviceAuditContractError("audit sequence gap")
         expected_previous = None if index == 0 else checked[index - 1]["event_hash"]

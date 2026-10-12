@@ -72,7 +72,8 @@ def record_check_in(
             return DeviceStatusReceipt(str(existing.check_in_uuid), True)
         received_at = utc_now()
         capabilities = checked["capabilities"]
-        assert isinstance(capabilities, list)
+        if not isinstance(capabilities, list):
+            raise DeviceStatusContractError("invalid device capabilities")
         check_in = DeviceCheckIn(
             check_in_uuid=check_in_uuid,
             device_id=device.id,

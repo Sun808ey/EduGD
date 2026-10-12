@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+import app.policy_contract as contract
 from app.policy_contract import (
     PolicyContractError,
     build_policy_envelope,
@@ -26,6 +27,7 @@ def policy() -> dict[str, object]:
         "account_changes_disabled": True,
         "usb_file_transfer_disabled": True,
     }
+
     return {
         "schema_version": 2,
         "timezone": "Africa/Kampala",
@@ -75,6 +77,22 @@ def policy() -> dict[str, object]:
     }
 
 
+@pytest.mark.parametrize(
+    "function, value",
+    [
+        (contract._identifier, ("Bad-ID", "field")),
+        (contract._bounded_int, (True, "field", 0, 10)),
+        (contract._package_list, (["bad"], "packages")),
+        (contract._package_list, (["org.example.app", "org.example.app"], "packages")),
+        (contract._identifier_list, (["bad-id"], "identifiers", 4)),
+        (contract._strict_keys, ({"a": 1}, frozenset({"b"}), "payload")),
+    ],
+)
+def test_policy_contract_rejects_invalid_primitive_values(function, value) -> None:
+    with pytest.raises(PolicyContractError):
+        function(*value)
+
+
 def test_policy_v2_normalizes_set_like_lists() -> None:
     value = policy()
     value["required_capabilities"] = ["package_suspension", "lock_task"]
@@ -87,7 +105,7 @@ def test_policy_v2_normalizes_set_like_lists() -> None:
     "mutation",
     [
         lambda p: p.update(schema_version=1),
-            lambda p: p.update(timezone="Europe/London"),
+        lambda p: p.update(timezone="Europe/London"),
         lambda p: p.update(refresh_after_seconds=299),
         lambda p: p.update(default_mode="missing"),
         lambda p: p.update(emergency_packages=[]),

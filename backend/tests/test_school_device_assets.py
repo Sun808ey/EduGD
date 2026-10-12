@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
+import pytest
 from flask import Flask
 from sqlalchemy import select
 
 from app.extensions import db
 from app.models import Device
 from app.services.administrator_authentication import bootstrap_administrator
+from app.services.device_asset_privacy import (
+    DeviceAssetNotFound,
+    DeviceAssetPrivacyError,
+    DeviceAssetRetentionError,
+    correct_device_asset,
+    correct_location_assignment,
+    redact_retired_device,
+)
 
 USERNAME = "asset.admin"
 PASSWORD = "AssetRegistration!2026"
@@ -216,3 +225,47 @@ def test_assignment_correction_requires_reason_and_is_audited(app: Flask) -> Non
     )
     assert response.status_code == 200
     assert response.get_json()["assignment"]["target_name"] == "Senior Two"
+
+
+def test_asset_privacy_service_rejects_invalid_and_unsafe_mutations(app: Flask) -> None:
+    with app.app_context():
+        device = Device(device_uuid=uuid4(), android_version="13", api_level=33)
+        db.session.add(device)
+        db.session.commit()
+        with pytest.raises(DeviceAssetPrivacyError):
+            correct_device_asset("not-a-uuid", {}, administrator_id=1)
+        with pytest.raises(DeviceAssetPrivacyError):
+            correct_device_asset(str(device.device_uuid), {}, administrator_id=1)
+        correction = {
+            key: _payload()[key]
+            for key in (
+                "asset_number",
+                "manufacturer",
+                "model",
+                "serial_number",
+                "date_received",
+                "condition",
+                "department",
+                "asset_lifecycle_status",
+                "asset_notes",
+            )
+        }
+        correction["reason"] = "verified correction"
+        with pytest.raises(DeviceAssetNotFound):
+            correct_device_asset(str(uuid4()), correction, administrator_id=1)
+        with pytest.raises(DeviceAssetPrivacyError):
+            redact_retired_device("not-a-uuid", administrator_id=1, reason="purge")
+        with pytest.raises(DeviceAssetNotFound):
+            redact_retired_device(str(uuid4()), administrator_id=1, reason="purge")
+        with pytest.raises(DeviceAssetRetentionError):
+            redact_retired_device(
+                str(device.device_uuid), administrator_id=1, reason="purge"
+            )
+        with pytest.raises(DeviceAssetPrivacyError):
+            correct_location_assignment(
+                "not-a-uuid", str(uuid4()), {}, administrator_id=1
+            )
+        with pytest.raises(DeviceAssetNotFound):
+            correct_location_assignment(
+                str(uuid4()), str(uuid4()), {}, administrator_id=1
+            )

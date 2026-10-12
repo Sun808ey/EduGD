@@ -39,7 +39,7 @@ class BackendIntegrationClient(
 ) {
     fun fetchV3State(): V3StateResponse? {
         return try {
-            val path = "/sync/v3/devices/$deviceUuid/state"
+            val path = "/api/v1/sync/v3/devices/$deviceUuid/state"
             val url = URL("$serverBaseUrl$path")
             val bodyBytes = ByteArray(0)
             val timestamp = System.currentTimeMillis() / 1000
@@ -171,6 +171,7 @@ class BackendIntegrationClient(
             val headers = DeviceAuthSigner(identity, credentialUuid, deviceUuid).sign("POST", path, "", body, System.currentTimeMillis() / 1000)
             conn.requestMethod = "POST"
             conn.doOutput = true
+            conn.setRequestProperty("Authorization", "DeviceCredential $credentialUuid")
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("X-Device-Timestamp", headers.timestamp)
             conn.setRequestProperty("X-Device-Nonce", headers.nonce)

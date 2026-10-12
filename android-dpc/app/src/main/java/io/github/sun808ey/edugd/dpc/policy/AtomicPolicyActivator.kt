@@ -2,6 +2,12 @@ package io.github.sun808ey.edugd.dpc.policy
 
 import android.content.Context
 import io.github.sun808ey.edugd.dpc.admin.DevicePolicyController
+import io.github.sun808ey.edugd.dpc.admin.ApplicationRestrictionSettings
+import io.github.sun808ey.edugd.dpc.admin.DeviceRestrictionSettings
+import io.github.sun808ey.edugd.dpc.admin.ScreenLockSettings
+import io.github.sun808ey.edugd.dpc.admin.NetworkSettings
+import io.github.sun808ey.edugd.dpc.admin.OfflinePolicySettings
+import io.github.sun808ey.edugd.dpc.admin.DeviceUseSettings
 import io.github.sun808ey.edugd.dpc.audit.AuditChain
 import io.github.sun808ey.edugd.dpc.db.DpcDatabase
 import io.github.sun808ey.edugd.dpc.db.PolicyEnvelopeEntity
@@ -19,7 +25,13 @@ data class SignedEnvelope(
     val signingKeyId: String,
     val issuedAt: Long,
     val suspendedPackages: List<String>,
-    val lockTaskPackages: List<String>
+    val lockTaskPackages: List<String>,
+    val deviceUse: DeviceUseSettings = DeviceUseSettings(),
+    val applicationRestrictions: ApplicationRestrictionSettings? = null,
+    val deviceRestrictions: DeviceRestrictionSettings? = null,
+    val screenLock: ScreenLockSettings? = null,
+    val networkSettings: NetworkSettings? = null,
+    val offlineSettings: OfflinePolicySettings? = null,
 )
 
 sealed class ApplyResult {
@@ -35,6 +47,9 @@ class AtomicPolicyActivator(private val context: Context) {
 
     suspend fun activate(envelope: SignedEnvelope): ApplyResult = withContext(Dispatchers.IO) {
         try {
+            envelope.offlineSettings?.let { require(!it.expirePolicyWhenOffline) }
+            envelope.networkSettings?.let { dpc.validateNetworkSettings(it) }
+            val previous = dao.getActivePolicyEnvelope()
             dao.getActivePolicyEnvelope()?.let { dao.updatePolicyStatus(it.policyUuid, "SUPERSEDED") }
             dao.insertPolicyEnvelope(
                 PolicyEnvelopeEntity(
@@ -51,7 +66,7 @@ class AtomicPolicyActivator(private val context: Context) {
             )
             dao.insertPolicyState(
                 PolicyStateEntity(
-                    currentModeId = "school",
+                    currentModeId = ScheduleResolver.resolveModeId(JSONObject(envelope.payloadJson)),
                     activePolicyUuid = null,
                     activeRevisionUuid = null,
                     desiredHash = envelope.payloadSha256,
@@ -63,6 +78,17 @@ class AtomicPolicyActivator(private val context: Context) {
 
             dpc.setPackagesSuspended(envelope.suspendedPackages, true)
             dpc.setLockTaskPackages(envelope.lockTaskPackages)
+            dpc.applyDeviceUseSettings(envelope.deviceUse)
+            dpc.clearApplicationRestrictions(
+                previous?.let { ApplicationRestrictionSettings.fromPayload(JSONObject(it.payloadJson)) }
+            )
+            dpc.clearNetworkSettings()
+            dpc.clearDeviceRestrictions()
+            envelope.applicationRestrictions?.let { dpc.applyApplicationRestrictions(it) }
+            envelope.deviceRestrictions?.let { dpc.applyDeviceRestrictions(it) }
+            dpc.clearScreenLock()
+            envelope.screenLock?.let { dpc.applyScreenLock(it) }
+            envelope.networkSettings?.let { dpc.applyNetworkSettings(it) }
 
             auditChain.appendEvent(
                 eventCode = "policy_applied",
@@ -86,6 +112,7 @@ class AtomicPolicyActivator(private val context: Context) {
 
     suspend fun clear(): ApplyResult = withContext(Dispatchers.IO) {
         try {
+            dpc.clearNetworkSettings()
             val active = dao.getActivePolicyEnvelope()
             if (active != null) {
                 val payload = JSONObject(active.payloadJson)
@@ -95,8 +122,18 @@ class AtomicPolicyActivator(private val context: Context) {
                 }
                 val blocked = (0 until (mode?.optJSONArray("blocked_packages")?.length() ?: 0)).map { mode!!.getJSONArray("blocked_packages").getString(it) }
                 dpc.clearManagedPackages(blocked)
+                dpc.clearDeviceUseSettings()
+                dpc.clearApplicationRestrictions(ApplicationRestrictionSettings.fromPayload(payload))
+                dpc.clearDeviceRestrictions()
+                dpc.clearScreenLock()
                 dao.updatePolicyStatus(active.policyUuid, "CLEARED")
-            } else dpc.clearManagedPackages(emptyList())
+            } else {
+                dpc.clearManagedPackages(emptyList())
+                dpc.clearDeviceUseSettings()
+                dpc.clearApplicationRestrictions()
+                dpc.clearDeviceRestrictions()
+                dpc.clearScreenLock()
+            }
             dao.insertPolicyState(PolicyStateEntity(currentModeId = "none", activePolicyUuid = null, activeRevisionUuid = null, desiredHash = "", appliedHash = "", applyState = "CLEARED", lastServerTime = System.currentTimeMillis()))
             ApplyResult.Active
         } catch (e: Exception) { ApplyResult.Quarantined(e.message ?: "clear_failed") }
@@ -116,7 +153,23 @@ class AtomicPolicyActivator(private val context: Context) {
         }
         val blocked = (0 until (mode?.optJSONArray("blocked_packages")?.length() ?: 0)).map { mode!!.getJSONArray("blocked_packages").getString(it) }
         val lockTask = (0 until (mode?.optJSONArray("lock_task_packages")?.length() ?: 0)).map { mode!!.getJSONArray("lock_task_packages").getString(it) }
-        return SignedEnvelope(envelope.policyUuid, envelope.revisionUuid, envelope.payloadJson, envelope.payloadSha256, envelope.signature, envelope.signingKeyId, envelope.issuedAt, blocked, lockTask)
+        return SignedEnvelope(
+            envelope.policyUuid,
+            envelope.revisionUuid,
+            envelope.payloadJson,
+            envelope.payloadSha256,
+            envelope.signature,
+            envelope.signingKeyId,
+            envelope.issuedAt,
+            blocked,
+            lockTask,
+            DeviceUseSettings.fromPayload(payload),
+            ApplicationRestrictionSettings.fromPayload(payload),
+            DeviceRestrictionSettings.fromPayload(payload),
+            ScreenLockSettings.fromPayload(payload),
+            NetworkSettings.fromPayload(payload),
+            OfflinePolicySettings.fromPayload(payload),
+        )
     }
 
     suspend fun reconcilePendingApplyAtBoot() = withContext(Dispatchers.IO) {
@@ -124,5 +177,36 @@ class AtomicPolicyActivator(private val context: Context) {
         if (state != null && state.applyState == "PENDING_APPLY") {
             auditChain.appendEvent(eventCode = "check_in", metadata = mapOf("desired_hash" to state.desiredHash))
         }
+    }
+
+    suspend fun reconcileScheduledMode() = withContext(Dispatchers.IO) {
+        val active = dao.getActivePolicyEnvelope() ?: return@withContext
+        val payload = JSONObject(active.payloadJson)
+        val desiredModeId = ScheduleResolver.resolveModeId(payload)
+        val currentState = dao.getPolicyState() ?: return@withContext
+        if (currentState.currentModeId == desiredModeId) return@withContext
+        val modes = payload.optJSONArray("modes") ?: return@withContext
+        val currentMode = modeFor(modes, currentState.currentModeId)
+        val desiredMode = modeFor(modes, desiredModeId) ?: return@withContext
+        val previousBlocked = packagesFrom(currentMode, "blocked_packages")
+        val desiredBlocked = packagesFrom(desiredMode, "blocked_packages")
+        dpc.setPackagesSuspended(previousBlocked, false)
+        dpc.setPackagesSuspended(desiredBlocked, true)
+        dpc.setLockTaskPackages(packagesFrom(desiredMode, "lock_task_packages"))
+        dao.insertPolicyState(currentState.copy(currentModeId = desiredModeId, lastServerTime = System.currentTimeMillis()))
+        auditChain.appendEvent(
+            eventCode = "policy_applied",
+            policyUuid = active.policyUuid,
+            revisionUuid = active.revisionUuid,
+            metadata = mapOf("mode_id" to desiredModeId),
+        )
+    }
+
+    private fun modeFor(modes: org.json.JSONArray, modeId: String): org.json.JSONObject? =
+        (0 until modes.length()).mapNotNull { modes.optJSONObject(it) }.firstOrNull { it.optString("mode_id") == modeId }
+
+    private fun packagesFrom(mode: org.json.JSONObject?, key: String): List<String> {
+        val packages = mode?.optJSONArray(key) ?: return emptyList()
+        return (0 until packages.length()).mapNotNull { packages.optString(it).takeIf(String::isNotBlank) }
     }
 }

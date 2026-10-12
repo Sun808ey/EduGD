@@ -1,6 +1,7 @@
 package io.github.sun808ey.edugd.dpc.enrollment
 
 import android.app.admin.DevicePolicyManager
+import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
 import io.github.sun808ey.edugd.dpc.audit.AuditChain
@@ -34,7 +35,8 @@ class EnrollmentBootstrapCoordinator(private val context: Context) {
                 ?: EnrollmentProtocol.generateDeviceUuid().also {
                     enrollmentPrefs.edit().putString(PROVISIONAL_UUID, it).apply()
                 }
-            val response = EnrollmentClient(configuration.apiOrigin, provisionalUuid, identity).register(token, android.os.Build.VERSION.RELEASE, android.os.Build.VERSION.SDK_INT)
+            val serial = readDeviceSerial()
+            val response = EnrollmentClient(configuration.apiOrigin, provisionalUuid, identity).register(token, android.os.Build.VERSION.RELEASE, android.os.Build.VERSION.SDK_INT, android.os.Build.MANUFACTURER, android.os.Build.MODEL, serial)
                 ?: return@withContext quarantine("enrollment_unavailable")
             require(response.deviceUuid == provisionalUuid) { "server identity mismatch" }
             DpcDatabase.getDatabase(context).dpcDao().replaceActiveDeviceIdentity(
@@ -56,6 +58,23 @@ class EnrollmentBootstrapCoordinator(private val context: Context) {
         enrollmentPrefs.edit().putString(STATE, STATE_QUARANTINED).putString(REASON, reason).apply()
         AuditChain(context).appendEvent("quarantine_entered", metadata = mapOf("reason" to reason))
         return false
+    }
+
+    @SuppressLint("MissingPermission")
+    @Suppress("DEPRECATION")
+    private fun readDeviceSerial(): String {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) {
+            return android.os.Build.SERIAL
+        }
+        val privilegedPhoneStateGranted = context.checkSelfPermission(
+            "android.permission.READ_PRIVILEGED_PHONE_STATE"
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!privilegedPhoneStateGranted) return android.os.Build.SERIAL
+        return try {
+            android.os.Build.getSerial()
+        } catch (_: SecurityException) {
+            android.os.Build.SERIAL
+        }
     }
 
     companion object {

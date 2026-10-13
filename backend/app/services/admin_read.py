@@ -30,6 +30,7 @@ from app.models import (
     PolicyRevision,
     PolicySynchronizationEvent,
 )
+from app.policy_contract import PolicyContractError
 
 
 class AdminReadNotFoundError(LookupError):
@@ -382,10 +383,17 @@ def _policy_detail(policy: Policy) -> dict[str, object]:
 
 
 def _revision_summary(revision: PolicyRevision) -> dict[str, object]:
+    try:
+        payload = revision.payload
+    except PolicyContractError:
+        # Immutable historical revisions may predate a stricter contract. Keep
+        # their original evidence readable without treating it as a current
+        # policy that can be assigned or enforced.
+        payload = revision._payload
     return {
         "revision_uuid": str(revision.revision_uuid),
         "version": revision.version,
-        "payload": revision.payload,
+        "payload": payload,
         "content_hash": revision.content_hash.hex(),
         "created_at": isoformat_utc(revision.created_at),
         "created_by": revision.created_by,

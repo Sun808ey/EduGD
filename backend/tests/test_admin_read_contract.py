@@ -20,10 +20,35 @@ from app.models import (
     policy_revision_content_hash,
     utc_now,
 )
+from app.policy_contract import PolicyContractError
+from app.services.admin_read import _revision_summary
 from app.services.administrator_authentication import bootstrap_administrator
 
 USERNAME = "readiness.admin"
 PASSWORD = "OfflineSchool!2026"
+
+
+def test_revision_summary_keeps_legacy_invalid_payload_readable() -> None:
+    legacy_payload = {
+        "schema_version": 3,
+        "web_filter": {"default_action": "allow", "rules": []},
+    }
+
+    class LegacyRevision:
+        revision_uuid = uuid4()
+        version = 1
+        _payload = legacy_payload
+        content_hash = b"h" * 32
+        created_at = utc_now()
+        created_by = "migration:legacy"
+
+        @property
+        def payload(self):
+            raise PolicyContractError("legacy payload is not valid under the current contract")
+
+    result = _revision_summary(LegacyRevision())
+
+    assert result["payload"] == legacy_payload
 
 
 def _seed(app: Flask) -> tuple[str, str, dict[str, str]]:

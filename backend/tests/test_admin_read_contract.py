@@ -44,7 +44,9 @@ def test_revision_summary_keeps_legacy_invalid_payload_readable() -> None:
 
         @property
         def payload(self):
-            raise PolicyContractError("legacy payload is not valid under the current contract")
+            raise PolicyContractError(
+                "legacy payload is not valid under the current contract"
+            )
 
     result = _revision_summary(LegacyRevision())
 

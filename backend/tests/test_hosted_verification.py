@@ -8,7 +8,7 @@ from scripts import verify_hosted_environment as verification
 
 
 def test_hosted_verification_uses_the_exact_repository_migration_head():
-    assert verification.repository_migration_head() == "i4e5f6a7b8c9"
+    assert verification.repository_migration_head() == "k6l7m8n9o0"
 
 
 def test_hosted_verification_keeps_database_checks_read_only():

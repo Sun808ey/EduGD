@@ -18,7 +18,11 @@ from app.services.sunbird_translation import (
     clear_translation_cache,
     translate_text,
 )
-from app.translation import SUPPORTED_TRANSLATION_LANGUAGES, normalize_language
+from app.translation import (
+    SUPPORTED_TRANSLATION_LANGUAGES,
+    normalize_language,
+    validate_translation_text,
+)
 from tests.test_administrator_authentication import (
     _authorization_header,
     _bootstrap,
@@ -37,6 +41,11 @@ def test_supported_translation_languages_are_stable() -> None:
     }
     assert normalize_language(" Lug ") == "lug"
     assert normalize_language(None, required=False) is None
+
+
+def test_translation_text_rejects_non_printable_content() -> None:
+    with pytest.raises(ValueError, match="printable"):
+        validate_translation_text("Hello\nworld", 100)
 
 
 @pytest.mark.parametrize("value", ["", "fra", "English", 10])

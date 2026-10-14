@@ -126,11 +126,11 @@ class BackendIntegrationClient(
         }
     }
 
-    fun uploadAuditBatch(batchUuid: String, canonicalBatch: String, signatureBase64: String): Boolean {
+    fun uploadAuditBatch(signedBatchJson: String): Boolean {
         return try {
             val path = "/api/v1/devices/$deviceUuid/audit-batches"
             val url = URL("$serverBaseUrl$path")
-            val bodyBytes = canonicalBatch.toByteArray(Charsets.UTF_8)
+            val bodyBytes = signedBatchJson.toByteArray(Charsets.UTF_8)
             val timestamp = System.currentTimeMillis() / 1000
 
             val signer = DeviceAuthSigner(identity, credentialUuid, deviceUuid)

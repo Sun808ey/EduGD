@@ -469,6 +469,22 @@ class DevicePolicyController(private val context: Context) {
         check(rejected.isEmpty()) { "Android refused to unsuspend $rejected" }
     }
 
+    fun setScreenTimePackagesSuspended(
+        packages: Set<String>,
+        suspended: Boolean,
+        preserved: Set<String>,
+    ) {
+        if (!isDeviceOwner()) return
+        val installed = packageManager.getInstalledPackages(0).map { it.packageName }.toSet()
+        val requested = packages.intersect(installed).minus(preserved).minus(context.packageName)
+        if (requested.isEmpty()) return
+        if (suspended) {
+            suspendPackages(requested, preserved)
+        } else {
+            unsuspendPackages(requested)
+        }
+    }
+
     fun applyRestrictions(
         wifiOnly: Boolean,
         disallowOutgoingCalls: Boolean,

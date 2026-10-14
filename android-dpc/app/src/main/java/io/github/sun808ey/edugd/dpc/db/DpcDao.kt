@@ -48,4 +48,19 @@ interface DpcDao {
     }
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertAuditEvent(event: AuditEventEntity)
     @Query("SELECT * FROM audit_event ORDER BY sequence DESC LIMIT 1") suspend fun getLastAuditEvent(): AuditEventEntity?
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertScreenTimeUsage(usage: ScreenTimeUsageEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertScreenTimeState(state: ScreenTimeStateEntity)
+    @Query("SELECT * FROM screen_time_state WHERE policyRevisionUuid = :revisionUuid AND usageDate = :usageDate")
+    suspend fun getScreenTimeState(revisionUuid: String, usageDate: String): ScreenTimeStateEntity?
+    @Query("DELETE FROM screen_time_usage WHERE policyRevisionUuid = :revisionUuid")
+    suspend fun deleteScreenTimeUsage(revisionUuid: String)
+    @Query("DELETE FROM screen_time_state WHERE policyRevisionUuid = :revisionUuid")
+    suspend fun deleteScreenTimeState(revisionUuid: String)
+    @Query("SELECT * FROM outbox WHERE status = 'PENDING' AND nextAttemptAt <= :now ORDER BY nextAttemptAt ASC LIMIT 1")
+    suspend fun getDueOutbox(now: Long): OutboxEntity?
+    @Query("SELECT EXISTS(SELECT 1 FROM outbox WHERE status = 'PENDING')") suspend fun hasPendingOutbox(): Boolean
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertOutbox(outbox: OutboxEntity): Long
+    @Query("UPDATE outbox SET attemptCount = :attemptCount, nextAttemptAt = :nextAttemptAt WHERE eventUuid = :eventUuid")
+    suspend fun deferOutbox(eventUuid: String, attemptCount: Int, nextAttemptAt: Long)
+    @Query("DELETE FROM outbox WHERE eventUuid = :eventUuid") suspend fun deleteOutbox(eventUuid: String)
 }

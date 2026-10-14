@@ -23,13 +23,13 @@ class TransientSyncException(val safeCode: String, message: String) : Exception(
 class PermanentSyncException(val safeCode: String, message: String) : Exception(message)
 class CredentialRevokedException : Exception()
 
-class DpcGraph(val context: Context, val repository: PolicyRepository, val stateSyncClient: StateSyncClient, val trustedSigningKeyId: String) {
+class DpcGraph(val context: Context, val repository: PolicyRepository, val stateSyncClient: StateSyncClient, val auditClient: BackendIntegrationClient, val trustedSigningKeyId: String) {
     companion object {
         suspend fun from(context: Context): DpcGraph? {
             val appContext = context.applicationContext
             val enrollment = DpcDatabase.getDatabase(appContext).dpcDao().getActiveDeviceIdentity() ?: return null
             val identity = DeviceKeyStore().getOrCreate(enrollment.keyAlias)
-            return DpcGraph(appContext, PolicyRepository(appContext), StateSyncClient(enrollment.apiOrigin, enrollment.deviceUuid, enrollment.credentialUuid, identity, enrollment.serverSigningKeyId, enrollment.serverSigningPublicKey, enrollment.lastAcceptedServerTimeEpochSeconds), enrollment.serverSigningKeyId)
+            return DpcGraph(appContext, PolicyRepository(appContext), StateSyncClient(enrollment.apiOrigin, enrollment.deviceUuid, enrollment.credentialUuid, identity, enrollment.serverSigningKeyId, enrollment.serverSigningPublicKey, enrollment.lastAcceptedServerTimeEpochSeconds), BackendIntegrationClient(enrollment.apiOrigin, enrollment.deviceUuid, enrollment.credentialUuid, identity, enrollment.serverSigningKeyId, enrollment.serverSigningPublicKey, enrollment.lastAcceptedServerTimeEpochSeconds), enrollment.serverSigningKeyId)
         }
     }
 }
@@ -48,6 +48,18 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
         }.getOrDefault(false)
         if (!permitted) return Result.retry()
         val graph = DpcGraph.from(applicationContext) ?: return Result.success()
+        val identity = DpcDatabase.getDatabase(applicationContext).dpcDao().getActiveDeviceIdentity()
+        var auditUploadFailed = false
+        if (identity != null) {
+            val auditIdentity = DeviceKeyStore().getOrCreate(identity.keyAlias)
+            auditUploadFailed = !AuditOutbox(
+                DpcDatabase.getDatabase(applicationContext),
+                io.github.sun808ey.edugd.dpc.audit.AuditChain(applicationContext),
+                identity.deviceUuid,
+                identity.credentialUuid,
+                auditIdentity,
+            ).flush(graph.auditClient)
+        }
         return try {
             val state = graph.stateSyncClient.fetchState()
             if (state == null) throw TransientSyncException("empty_state", "v3 state response was empty")
@@ -86,7 +98,12 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
                 else -> throw PermanentSyncException("unsupported_operation", "unsupported state operation")
             }
             DpcDatabase.getDatabase(applicationContext).dpcDao().updateAcceptedServerTime(state.deviceUuid, state.serverEpochSeconds)
-            Result.success()
+            if (identity != null) {
+                val auditIdentity = DeviceKeyStore().getOrCreate(identity.keyAlias)
+                val flushed = AuditOutbox(DpcDatabase.getDatabase(applicationContext), io.github.sun808ey.edugd.dpc.audit.AuditChain(applicationContext), identity.deviceUuid, identity.credentialUuid, auditIdentity).flush(graph.auditClient)
+                auditUploadFailed = auditUploadFailed || !flushed
+            }
+            if (auditUploadFailed) Result.retry() else Result.success()
         } catch (_: CredentialRevokedException) {
             DpcDatabase.getDatabase(applicationContext).dpcDao().markIdentityRevoked()
             SyncScheduler.cancel(applicationContext)

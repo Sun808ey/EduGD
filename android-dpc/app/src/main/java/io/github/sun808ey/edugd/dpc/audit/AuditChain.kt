@@ -123,6 +123,26 @@ class AuditChain(
         return prefs.getString("audit_last_hash", GENESIS_HASH) ?: GENESIS_HASH
     }
 
+    fun lastSequence(): Long = prefs.getLong("audit_last_sequence", -1L)
+
+    @Synchronized
+    fun eventsAfter(sequence: Long, limit: Int): List<JSONObject> {
+        val last = lastSequence()
+        if (sequence >= last || limit <= 0) return emptyList()
+        return ((sequence + 1)..minOf(last, sequence + limit.toLong()))
+            .mapNotNull { prefs.getString("audit_event_$it", null)?.let(::JSONObject) }
+    }
+
+    fun uploadedSequence(): Long = prefs.getLong("audit_uploaded_sequence", -1L)
+
+    fun markUploaded(sequence: Long, head: String) {
+        require(sequence >= uploadedSequence())
+        require(head.length == 64 && head.matches(Regex("^[0-9a-f]{64}$")))
+        prefs.edit().putLong("audit_uploaded_sequence", sequence).putString("audit_uploaded_head", head).apply()
+    }
+
+    fun uploadedHead(): String = prefs.getString("audit_uploaded_head", GENESIS_HASH) ?: GENESIS_HASH
+
     fun verifyChain(): Boolean {
         val lastSequence = prefs.getLong("audit_last_sequence", -1L)
         var expectedPreviousHash = GENESIS_HASH

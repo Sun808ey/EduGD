@@ -1,6 +1,8 @@
 package io.github.sun808ey.edugd.dpc.policy
 
 import android.content.Context
+import android.content.Intent
+import androidx.core.content.ContextCompat
 import io.github.sun808ey.edugd.dpc.admin.DevicePolicyController
 import io.github.sun808ey.edugd.dpc.admin.ApplicationRestrictionSettings
 import io.github.sun808ey.edugd.dpc.admin.DeviceRestrictionSettings
@@ -15,6 +17,8 @@ import io.github.sun808ey.edugd.dpc.db.PolicyStateEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import io.github.sun808ey.edugd.dpc.vpn.EduFilteringVpnService
+import io.github.sun808ey.edugd.dpc.vpn.WebFilterSettings
 
 data class SignedEnvelope(
     val policyUuid: String,
@@ -89,6 +93,12 @@ class AtomicPolicyActivator(private val context: Context) {
             dpc.clearScreenLock()
             envelope.screenLock?.let { dpc.applyScreenLock(it) }
             envelope.networkSettings?.let { dpc.applyNetworkSettings(it) }
+            configureWebFilteringVpn(envelope.payloadJson)
+            ScreenTimeEnforcer(context).reconcile(
+                JSONObject(envelope.payloadJson),
+                envelope.revisionUuid,
+                envelope.suspendedPackages.toSet(),
+            )
 
             auditChain.appendEvent(
                 eventCode = "policy_applied",
@@ -113,6 +123,7 @@ class AtomicPolicyActivator(private val context: Context) {
     suspend fun clear(): ApplyResult = withContext(Dispatchers.IO) {
         try {
             dpc.clearNetworkSettings()
+            stopWebFilteringVpn()
             val active = dao.getActivePolicyEnvelope()
             if (active != null) {
                 val payload = JSONObject(active.payloadJson)
@@ -126,6 +137,8 @@ class AtomicPolicyActivator(private val context: Context) {
                 dpc.clearApplicationRestrictions(ApplicationRestrictionSettings.fromPayload(payload))
                 dpc.clearDeviceRestrictions()
                 dpc.clearScreenLock()
+                stopWebFilteringVpn()
+                ScreenTimeEnforcer(context).clear(payload, active.revisionUuid)
                 dao.updatePolicyStatus(active.policyUuid, "CLEARED")
             } else {
                 dpc.clearManagedPackages(emptyList())
@@ -194,6 +207,11 @@ class AtomicPolicyActivator(private val context: Context) {
         dpc.setPackagesSuspended(desiredBlocked, true)
         dpc.setLockTaskPackages(packagesFrom(desiredMode, "lock_task_packages"))
         dao.insertPolicyState(currentState.copy(currentModeId = desiredModeId, lastServerTime = System.currentTimeMillis()))
+        ScreenTimeEnforcer(context).reconcile(
+            payload,
+            active.revisionUuid,
+            packagesFrom(desiredMode, "blocked_packages").toSet(),
+        )
         auditChain.appendEvent(
             eventCode = "policy_applied",
             policyUuid = active.policyUuid,
@@ -208,5 +226,20 @@ class AtomicPolicyActivator(private val context: Context) {
     private fun packagesFrom(mode: org.json.JSONObject?, key: String): List<String> {
         val packages = mode?.optJSONArray(key) ?: return emptyList()
         return (0 until packages.length()).mapNotNull { packages.optString(it).takeIf(String::isNotBlank) }
+    }
+
+    private fun configureWebFilteringVpn(payloadJson: String) {
+        val settings = WebFilterSettings.fromPayload(JSONObject(payloadJson))
+        if (settings == null || settings.browserPackages.isEmpty()) {
+            stopWebFilteringVpn()
+            return
+        }
+        val intent = Intent(context, EduFilteringVpnService::class.java)
+            .putExtra(EduFilteringVpnService.EXTRA_PAYLOAD_JSON, payloadJson)
+        ContextCompat.startForegroundService(context, intent)
+    }
+
+    private fun stopWebFilteringVpn() {
+        context.stopService(Intent(context, EduFilteringVpnService::class.java).setAction(EduFilteringVpnService.ACTION_STOP))
     }
 }

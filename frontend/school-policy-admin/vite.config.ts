@@ -25,7 +25,10 @@ export default defineConfig(({ command, mode }) => {
         name: 'edug-exact-connect-csp',
         transformIndexHtml: command === 'build' ? {
           order: 'post',
-          handler: () => [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: `default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self' ${connectSources.join(' ')}; base-uri 'none'; form-action 'self'; object-src 'none'; manifest-src 'self'; upgrade-insecure-requests` }, injectTo: 'head' }],
+          // MUI uses Emotion to inject scoped component styles at runtime. Keep
+          // all resource classes restricted while allowing those generated
+          // style tags to render the authenticated admin shell.
+          handler: () => [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: `default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self'; connect-src 'self' ${connectSources.join(' ')}; base-uri 'none'; form-action 'self'; object-src 'none'; manifest-src 'self'; upgrade-insecure-requests` }, injectTo: 'head' }],
         } : undefined,
       },
     ],

@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { BarChart3, Building2, ClipboardList, FileText, KeyRound, Languages, LayoutDashboard, LogOut, Menu, PackageCheck, RefreshCw, Settings2, ShieldCheck, SunMoon, UsersRound, X } from 'lucide-react'
+import { BarChart3, Building2, ClipboardList, FileText, KeyRound, Languages, LayoutDashboard, LogOut, Menu, PackageCheck, RefreshCw, Settings2, ShieldCheck, SunMoon, UsersRound, X, Workflow } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AppBar, Box, Button, Divider, Drawer, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Paper, Stack, Toolbar, Typography } from '@mui/material'
@@ -29,7 +29,7 @@ function buildNavSections(hasSchool: boolean, canManageAdministrators: boolean):
   return [
   {
     label: 'Overview',
-    items: [{ to: '/dashboard', key: 'dashboard' as const, icon: LayoutDashboard }, { to: '/sync', label: 'Sync queue', icon: RefreshCw }],
+    items: [{ to: '/dashboard', key: 'dashboard' as const, icon: LayoutDashboard }, { to: '/enforcement', label: 'Enforcement center', icon: Workflow }, { to: '/sync', label: 'Sync queue', icon: RefreshCw }],
   },
   {
     label: 'Asset management',

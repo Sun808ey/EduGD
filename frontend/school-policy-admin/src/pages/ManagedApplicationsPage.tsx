@@ -1,5 +1,6 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Alert, Box, Button, Chip, FormControl, FormControlLabel, InputLabel, MenuItem, Paper, Select, Stack, Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material'
 import { adminService } from '@/services/admin.service'
 import { ErrorState, LoadingState } from '@/components/ui/AsyncState'
 import { errorMessage } from '@/services/errors'
@@ -8,10 +9,7 @@ import type { ManagedApplication, ManagedDomain } from '@/types/api.types'
 
 type FormState = Omit<ManagedApplication, 'application_uuid' | 'created_at' | 'updated_at'>
 type DomainFormState = Omit<ManagedDomain, 'domain_uuid' | 'created_at' | 'updated_at'>
-const emptyForm: FormState = {
-  display_name: '', package_name: '', signing_certificate_sha256: '', category: '',
-  education_approved: false, mandatory_block: false, status: 'enabled',
-}
+const emptyForm: FormState = { display_name: '', package_name: '', signing_certificate_sha256: '', category: '', education_approved: false, mandatory_block: false, status: 'enabled' }
 const emptyDomainForm: DomainFormState = { domain: '', category: 'custom', status: 'enabled' }
 
 export function ManagedApplicationsPage() {
@@ -24,78 +22,24 @@ export function ManagedApplicationsPage() {
   const [error, setError] = useState('')
   const applications = useQuery({ queryKey: ['managed-applications'], queryFn: ({ signal }) => adminService.listManagedApplications(signal) })
   const domains = useQuery({ queryKey: ['managed-domains'], queryFn: ({ signal }) => adminService.listManagedDomains(signal) })
-  const onSuccess = async () => {
-    setForm(emptyForm); setEditingUuid(null); setError('')
-    await client.invalidateQueries({ queryKey: ['managed-applications'] })
-  }
-  const create = useMutation({
-    mutationFn: () => adminService.createManagedApplication({ ...form, signing_certificate_sha256: form.signing_certificate_sha256 || null }),
-    onSuccess, onError: (caught) => setError(errorMessage(caught)),
-  })
-  const update = useMutation({
-    mutationFn: () => adminService.updateManagedApplication(editingUuid!, { ...form, signing_certificate_sha256: form.signing_certificate_sha256 || null }),
-    onSuccess, onError: (caught) => setError(errorMessage(caught)),
-  })
-  const domainCreate = useMutation({
-    mutationFn: () => adminService.createManagedDomain(domainForm),
-    onSuccess: async () => { setDomainForm(emptyDomainForm); setEditingDomainUuid(null); setError(''); await client.invalidateQueries({ queryKey: ['managed-domains'] }) },
-    onError: (caught) => setError(errorMessage(caught)),
-  })
-  const domainUpdate = useMutation({
-    mutationFn: () => adminService.updateManagedDomain(editingDomainUuid!, domainForm),
-    onSuccess: async () => { setDomainForm(emptyDomainForm); setEditingDomainUuid(null); setError(''); await client.invalidateQueries({ queryKey: ['managed-domains'] }) },
-    onError: (caught) => setError(errorMessage(caught)),
-  })
+  const resetApplication = async () => { setForm(emptyForm); setEditingUuid(null); setError(''); await client.invalidateQueries({ queryKey: ['managed-applications'] }) }
+  const resetDomain = async () => { setDomainForm(emptyDomainForm); setEditingDomainUuid(null); setError(''); await client.invalidateQueries({ queryKey: ['managed-domains'] }) }
+  const create = useMutation({ mutationFn: () => adminService.createManagedApplication({ ...form, signing_certificate_sha256: form.signing_certificate_sha256 || null }), onSuccess: resetApplication, onError: (caught) => setError(errorMessage(caught)) })
+  const update = useMutation({ mutationFn: () => adminService.updateManagedApplication(editingUuid!, { ...form, signing_certificate_sha256: form.signing_certificate_sha256 || null }), onSuccess: resetApplication, onError: (caught) => setError(errorMessage(caught)) })
+  const domainCreate = useMutation({ mutationFn: () => adminService.createManagedDomain(domainForm), onSuccess: resetDomain, onError: (caught) => setError(errorMessage(caught)) })
+  const domainUpdate = useMutation({ mutationFn: () => adminService.updateManagedDomain(editingDomainUuid!, domainForm), onSuccess: resetDomain, onError: (caught) => setError(errorMessage(caught)) })
   const busy = create.isPending || update.isPending || domainCreate.isPending || domainUpdate.isPending
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); setError('')
-    if (editingUuid) update.mutate()
-    else create.mutate()
-  }
-  const startEdit = (application: ManagedApplication) => {
-    setEditingUuid(application.application_uuid)
-    setForm({
-      display_name: application.display_name, package_name: application.package_name,
-      signing_certificate_sha256: application.signing_certificate_sha256 ?? '',
-      category: application.category, education_approved: application.education_approved,
-      mandatory_block: application.mandatory_block, status: application.status,
-    })
-    setError('')
-  }
-  const cancelEdit = () => { setEditingUuid(null); setForm(emptyForm); setError('') }
+  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); setError(''); if (editingUuid) update.mutate(); else create.mutate() }
+  const startEdit = (application: ManagedApplication) => { setEditingUuid(application.application_uuid); setForm({ display_name: application.display_name, package_name: application.package_name, signing_certificate_sha256: application.signing_certificate_sha256 ?? '', category: application.category, education_approved: application.education_approved, mandatory_block: application.mandatory_block, status: application.status }); setError('') }
   const startDomainEdit = (domain: ManagedDomain) => { setEditingDomainUuid(domain.domain_uuid); setDomainForm({ domain: domain.domain, category: domain.category, status: domain.status }); setError('') }
-  const cancelDomainEdit = () => { setEditingDomainUuid(null); setDomainForm(emptyDomainForm); setError('') }
 
-  return <section className="space-y-6">
-    <header>
-    <h1 className="text-3xl font-semibold">Applications &amp; domains</h1>
-      <p className="mt-2 text-sm text-slate-600">Maintain verified application identities and the validated domain catalogue used by policy forms.</p>
-    </header>
-    {hasPermission('policy.manage') && <form onSubmit={submit} className="grid gap-4 rounded-2xl border bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-semibold">{editingUuid ? 'Edit catalogue identity' : 'Add verified catalogue identity'}</h2>
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Display name"><input required value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} className="input" maxLength={120} /></Field>
-        <Field label="Canonical package name"><input required value={form.package_name} onChange={(event) => setForm({ ...form, package_name: event.target.value })} className="input" /></Field>
-        <Field label="Signing certificate SHA-256 (base64url)"><input required value={form.signing_certificate_sha256 ?? ''} onChange={(event) => setForm({ ...form, signing_certificate_sha256: event.target.value })} className="input" /></Field>
-        <Field label="Category"><input required placeholder="education, social, games" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} className="input" maxLength={64} /></Field>
-        <Field label="Status"><select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as FormState['status'] })} className="input"><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></Field>
-      </div>
-      <div className="flex flex-wrap gap-5 text-sm"><Toggle label="Education approved" checked={form.education_approved} onChange={(value) => setForm({ ...form, education_approved: value })} /><Toggle label="Mandatory block" checked={form.mandatory_block} onChange={(value) => setForm({ ...form, mandatory_block: value })} /></div>
-      {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      <div className="flex flex-wrap gap-3"><button disabled={busy} className="w-fit rounded-full bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{busy ? 'Saving...' : editingUuid ? 'Save catalogue identity' : 'Add catalogue identity'}</button>{editingUuid && <button type="button" onClick={cancelEdit} className="rounded-full border px-5 py-2.5 text-sm font-semibold">Cancel</button>}</div>
-    </form>}
-    {applications.isLoading && <LoadingState label="Loading managed applications..." />}
-    {applications.isError && <ErrorState message="Managed applications are temporarily unavailable." retry={() => void applications.refetch()} />}
-    {applications.data && <div className="overflow-hidden rounded-2xl border bg-white"><div className="overflow-x-auto"><table className="w-full min-w-240 text-left text-sm"><thead className="bg-slate-50"><tr><th className="p-4">Application</th><th className="p-4">Package</th><th className="p-4">Category</th><th className="p-4">Certificate</th><th className="p-4">Flags</th><th className="p-4">Status</th><th className="p-4">Actions</th></tr></thead><tbody className="divide-y">{applications.data.map((application) => <tr key={application.application_uuid}><td className="p-4 font-medium">{application.display_name}</td><td className="p-4 font-mono text-xs">{application.package_name}</td><td className="p-4">{application.category}</td><td className="p-4">{application.signing_certificate_sha256 ? 'Verified' : 'Missing'}</td><td className="p-4">{application.education_approved ? 'Education approved' : 'Unapproved'}{application.mandatory_block ? ' - Mandatory block' : ''}</td><td className="p-4">{application.status}</td><td className="p-4">{hasPermission('policy.manage') && <button type="button" onClick={() => startEdit(application)} className="font-semibold text-emerald-700">Edit</button>}</td></tr>)}</tbody></table></div></div>}
-    <section className="space-y-4 rounded-2xl border bg-white p-6 shadow-sm">
-      <div><h2 className="text-lg font-semibold">Blocked-domain catalogue</h2><p className="mt-1 text-sm text-slate-600">Maintain the validated domains available in policy URL-filter dropdowns. Policies store the selected values; disabling a domain removes it from future choices.</p></div>
-      {hasPermission('policy.manage') && <form onSubmit={(event) => { event.preventDefault(); if (editingDomainUuid) domainUpdate.mutate(); else domainCreate.mutate() }} className="grid gap-4 md:grid-cols-[2fr_1fr_1fr_auto] md:items-end"><Field label="Domain"><input required value={domainForm.domain} onChange={(event) => setDomainForm({ ...domainForm, domain: event.target.value })} className="input" placeholder="example.org" /></Field><Field label="Category"><input required value={domainForm.category} onChange={(event) => setDomainForm({ ...domainForm, category: event.target.value.toLowerCase() })} className="input" placeholder="social, games, custom" /></Field><Field label="Status"><select value={domainForm.status} onChange={(event) => setDomainForm({ ...domainForm, status: event.target.value as DomainFormState['status'] })} className="input"><option value="enabled">Enabled</option><option value="disabled">Disabled</option></select></Field><div className="flex gap-2"><button disabled={busy} className="rounded-full bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{editingDomainUuid ? 'Save domain' : 'Add domain'}</button>{editingDomainUuid && <button type="button" onClick={cancelDomainEdit} className="rounded-full border px-4 py-2.5 text-sm font-semibold">Cancel</button>}</div></form>}
-      {domains.isLoading && <LoadingState label="Loading blocked domains..." />}
-      {domains.isError && <ErrorState message="Blocked domains are temporarily unavailable." retry={() => void domains.refetch()} />}
-      {domains.data && <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50"><tr><th className="p-3">Domain</th><th className="p-3">Category</th><th className="p-3">Status</th><th className="p-3">Actions</th></tr></thead><tbody className="divide-y">{domains.data.map((domain) => <tr key={domain.domain_uuid}><td className="p-3 font-medium">{domain.domain}</td><td className="p-3">{domain.category}</td><td className="p-3">{domain.status}</td><td className="p-3">{hasPermission('policy.manage') && <button type="button" onClick={() => startDomainEdit(domain)} className="font-semibold text-emerald-700">Edit</button>}</td></tr>)}</tbody></table></div>}
-    </section>
-  </section>
+  return <Stack spacing={3}>
+    <Box component="header"><Typography variant="overline" color="primary.main" sx={{ fontWeight: 800, letterSpacing: '.14em' }}>Policy management</Typography><Typography component="h1" variant="h4" sx={{ mt: .25, fontWeight: 800 }}>Applications and domains</Typography><Typography color="text.secondary" sx={{ mt: 1, maxWidth: 800 }}>Maintain verified application identities and the browser-domain catalogue used by policy schedules. Only catalogue entries can be selected for enforcement.</Typography></Box>
+    {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
+    {hasPermission('policy.manage') && <Paper component="form" onSubmit={submit} variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}><Stack spacing={2}><Typography variant="h6" sx={{ fontWeight: 800 }}>{editingUuid ? 'Edit application identity' : 'Add verified application identity'}</Typography><Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' } }}><TextField required label="Display name" value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} slotProps={{ htmlInput: { maxLength: 120 } }} /><TextField required label="Canonical package name" helperText="Example: org.example.learning" value={form.package_name} onChange={(event) => setForm({ ...form, package_name: event.target.value })} /><TextField required label="Signing certificate SHA-256" helperText="Base64url certificate identity" value={form.signing_certificate_sha256 ?? ''} onChange={(event) => setForm({ ...form, signing_certificate_sha256: event.target.value })} /><TextField required label="Category" placeholder="education, social, games" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} slotProps={{ htmlInput: { maxLength: 64 } }} /><FormControl><InputLabel id="application-status-label">Status</InputLabel><Select labelId="application-status-label" label="Status" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as FormState['status'] })}><MenuItem value="enabled">Enabled</MenuItem><MenuItem value="disabled">Disabled</MenuItem></Select></FormControl></Box><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}><FormControlLabel control={<Switch checked={form.education_approved} onChange={(event) => setForm({ ...form, education_approved: event.target.checked })} />} label="Education approved" /><FormControlLabel control={<Switch checked={form.mandatory_block} onChange={(event) => setForm({ ...form, mandatory_block: event.target.checked })} />} label="Mandatory block" /></Stack><Stack direction="row" spacing={1}><Button type="submit" variant="contained" disabled={busy}>{busy ? 'Saving…' : editingUuid ? 'Save identity' : 'Add identity'}</Button>{editingUuid && <Button type="button" variant="outlined" onClick={() => { setEditingUuid(null); setForm(emptyForm); setError('') }}>Cancel</Button>}</Stack></Stack></Paper>}
+    {applications.isLoading && <LoadingState label="Loading managed applications…" />}{applications.isError && <ErrorState message="Managed applications are temporarily unavailable." retry={() => void applications.refetch()} />}{applications.data && <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}><TableContainer><Table sx={{ minWidth: 760 }} aria-label="Managed applications"><TableHead><TableRow><TableCell>Application</TableCell><TableCell>Package</TableCell><TableCell>Category</TableCell><TableCell>Certificate</TableCell><TableCell>Flags</TableCell><TableCell>Status</TableCell><TableCell>Actions</TableCell></TableRow></TableHead><TableBody>{applications.data.map((application) => <TableRow key={application.application_uuid}><TableCell sx={{ fontWeight: 700 }}>{application.display_name}</TableCell><TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{application.package_name}</TableCell><TableCell>{application.category}</TableCell><TableCell><Chip size="small" color={application.signing_certificate_sha256 ? 'success' : 'warning'} label={application.signing_certificate_sha256 ? 'Verified' : 'Missing'} /></TableCell><TableCell>{application.mandatory_block ? 'Mandatory block' : application.education_approved ? 'Education approved' : 'Unapproved'}</TableCell><TableCell>{application.status}</TableCell><TableCell>{hasPermission('policy.manage') && <Button size="small" onClick={() => startEdit(application)}>Edit</Button>}</TableCell></TableRow>)}</TableBody></Table></TableContainer></Paper>}
+    <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}><Stack spacing={2}><Box><Typography variant="h6" sx={{ fontWeight: 800 }}>Browser-domain catalogue</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .5 }}>Maintain validated domains available to time-based browser filtering. Disabled domains cannot be selected for new policies.</Typography></Box>{hasPermission('policy.manage') && <Box component="form" onSubmit={(event) => { event.preventDefault(); if (editingDomainUuid) domainUpdate.mutate(); else domainCreate.mutate() }} sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '2fr 1fr 1fr auto' }, alignItems: 'start' }}><TextField required label="Domain" placeholder="example.org" value={domainForm.domain} onChange={(event) => setDomainForm({ ...domainForm, domain: event.target.value })} /><TextField required label="Category" placeholder="social, games, custom" value={domainForm.category} onChange={(event) => setDomainForm({ ...domainForm, category: event.target.value.toLowerCase() })} /><FormControl><InputLabel id="domain-status-label">Status</InputLabel><Select labelId="domain-status-label" label="Status" value={domainForm.status} onChange={(event) => setDomainForm({ ...domainForm, status: event.target.value as DomainFormState['status'] })}><MenuItem value="enabled">Enabled</MenuItem><MenuItem value="disabled">Disabled</MenuItem></Select></FormControl><Stack direction="row" spacing={1}><Button type="submit" variant="contained" disabled={busy}>{editingDomainUuid ? 'Save domain' : 'Add domain'}</Button>{editingDomainUuid && <Button type="button" onClick={() => { setEditingDomainUuid(null); setDomainForm(emptyDomainForm) }}>Cancel</Button>}</Stack></Box>}{domains.isLoading && <LoadingState label="Loading browser domains…" />}{domains.isError && <ErrorState message="Browser domains are temporarily unavailable." retry={() => void domains.refetch()} />}{domains.data && <TableContainer><Table size="small" aria-label="Browser domains"><TableHead><TableRow><TableCell>Domain</TableCell><TableCell>Category</TableCell><TableCell>Status</TableCell><TableCell>Actions</TableCell></TableRow></TableHead><TableBody>{domains.data.map((domain) => <TableRow key={domain.domain_uuid}><TableCell sx={{ fontWeight: 700 }}>{domain.domain}</TableCell><TableCell>{domain.category}</TableCell><TableCell><Chip size="small" color={domain.status === 'enabled' ? 'success' : 'default'} label={domain.status} /></TableCell><TableCell>{hasPermission('policy.manage') && <Button size="small" onClick={() => startDomainEdit(domain)}>Edit</Button>}</TableCell></TableRow>)}</TableBody></Table></TableContainer>}</Stack></Paper>
+  </Stack>
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="block text-sm font-medium text-slate-700"><span>{label}</span>{children}</label> }
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label className="flex items-center gap-2"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />{label}</label> }
+export default ManagedApplicationsPage

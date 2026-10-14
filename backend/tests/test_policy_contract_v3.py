@@ -85,6 +85,38 @@ def test_v3_normalizes_domain_rules() -> None:
     assert result["web_filter"]["rules"][0]["include_subdomains"] is True
 
 
+def test_v3_normalizes_screen_time_target_packages() -> None:
+    value = policy()
+    value["screen_time"]["target_packages"] = [
+        "com.example.social",
+        "com.example.games",
+    ]
+
+    result = validate_policy_v3(value)
+
+    assert result["screen_time"]["target_packages"] == [
+        "com.example.games",
+        "com.example.social",
+    ]
+
+
+def test_v3_keeps_legacy_screen_time_without_targets_compatible() -> None:
+    result = validate_policy_v3(policy())
+
+    assert "target_packages" not in result["screen_time"]
+
+
+def test_v3_rejects_duplicate_screen_time_target_packages() -> None:
+    value = policy()
+    value["screen_time"]["target_packages"] = [
+        "com.example.social",
+        "com.example.social",
+    ]
+
+    with pytest.raises(PolicyContractError, match="target_packages"):
+        validate_policy_v3(value)
+
+
 def test_v3_accepts_recurring_time_based_schedules() -> None:
     value = policy()
     value["schedules"] = [
@@ -594,6 +626,33 @@ def test_v3_rejects_web_filter_rule_without_subdomain_semantics() -> None:
     value = policy()
     del value["web_filter"]["rules"][0]["include_subdomains"]
 
+    with pytest.raises(PolicyContractError):
+        validate_policy_v3(value)
+
+
+def test_v3_normalizes_browser_scope_without_changing_legacy_shape() -> None:
+    value = policy()
+    value["web_filter"]["browser_packages"] = [
+        "com.example.browser",
+        "org.example.browser",
+    ]
+
+    result = validate_policy_v3(value)
+
+    assert result["web_filter"]["browser_packages"] == [
+        "com.example.browser",
+        "org.example.browser",
+    ]
+
+
+def test_v3_rejects_duplicate_or_invalid_browser_scope() -> None:
+    value = policy()
+    value["web_filter"]["browser_packages"] = ["com.example.browser"] * 2
+
+    with pytest.raises(PolicyContractError):
+        validate_policy_v3(value)
+
+    value["web_filter"]["browser_packages"] = ["browser"]
     with pytest.raises(PolicyContractError):
         validate_policy_v3(value)
 

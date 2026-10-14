@@ -220,11 +220,13 @@ def validate_policy_v3(value: object) -> dict[str, object]:
     # duplicate priorities and ambiguous overlaps. Reuse that canonical
     # representation for v3 so the DPC can enforce school timetables.
     screen = value["screen_time"]
-    if not isinstance(screen, dict) or set(screen) != {
-        "daily_limit_minutes",
-        "reset_minute",
-        "exhausted_mode_id",
-    }:
+    if (
+        not isinstance(screen, dict)
+        or not {"daily_limit_minutes", "reset_minute", "exhausted_mode_id"}.issubset(screen)
+        or not set(screen).issubset(
+            {"daily_limit_minutes", "reset_minute", "exhausted_mode_id", "target_packages"}
+        )
+    ):
         raise PolicyContractError("invalid screen_time")
     limit = screen["daily_limit_minutes"]
     reset = screen["reset_minute"]
@@ -236,14 +238,38 @@ def validate_policy_v3(value: object) -> dict[str, object]:
     modes = cast(list[dict[str, object]], common["modes"])
     if not isinstance(exhausted, str) or exhausted not in {m["mode_id"] for m in modes}:
         raise PolicyContractError("invalid exhausted_mode_id")
+    target_packages = screen.get("target_packages", [])
+    if (
+        not isinstance(target_packages, list)
+        or len(target_packages) > 256
+        or any(
+            not isinstance(package_name, str)
+            or _PACKAGE.fullmatch(package_name) is None
+            for package_name in target_packages
+        )
+        or len(set(target_packages)) != len(target_packages)
+    ):
+        raise PolicyContractError("invalid screen-time target_packages")
     web = value["web_filter"]
-    if not isinstance(web, dict) or set(web) != {"default_action", "rules"}:
+    if not isinstance(web, dict) or set(web) not in ({"default_action", "rules"}, {"default_action", "rules", "browser_packages"}):
         raise PolicyContractError("invalid web_filter")
     default_action = web["default_action"]
     if default_action not in {"allow", "block"}:
         raise PolicyContractError("invalid web-filter default_action")
     if not isinstance(web["rules"], list) or len(web["rules"]) > 256:
         raise PolicyContractError("invalid web-filter rules")
+    browser_packages = web.get("browser_packages", [])
+    if (
+        not isinstance(browser_packages, list)
+        or len(browser_packages) > 64
+        or any(
+            not isinstance(package_name, str)
+            or _PACKAGE.fullmatch(package_name) is None
+            for package_name in browser_packages
+        )
+        or len(set(browser_packages)) != len(browser_packages)
+    ):
+        raise PolicyContractError("invalid web-filter browser_packages")
     rules: list[dict[str, object]] = []
     seen: set[tuple[str, str]] = set()
     ids: set[str] = set()
@@ -289,18 +315,24 @@ def validate_policy_v3(value: object) -> dict[str, object]:
                 "reason": reason,
             }
         )
+    screen_time_result: dict[str, object] = {
+        "daily_limit_minutes": limit,
+        "reset_minute": reset,
+        "exhausted_mode_id": exhausted,
+    }
+    if "target_packages" in screen:
+        screen_time_result["target_packages"] = sorted(target_packages)
+    web_filter_result: dict[str, object] = {
+        "default_action": default_action,
+        "rules": sorted(rules, key=lambda r: r["rule_id"]),
+    }
+    if "browser_packages" in web:
+        web_filter_result["browser_packages"] = sorted(browser_packages)
     result: dict[str, object] = {
         **common,
         "schema_version": POLICY_SCHEMA_VERSION,
-        "screen_time": {
-            "daily_limit_minutes": limit,
-            "reset_minute": reset,
-            "exhausted_mode_id": exhausted,
-        },
-        "web_filter": {
-            "default_action": default_action,
-            "rules": sorted(rules, key=lambda r: r["rule_id"]),
-        },
+        "screen_time": screen_time_result,
+        "web_filter": web_filter_result,
         "network_controls": _validate_network_controls(value["network_controls"]),
         "telephony_controls": _validate_telephony_controls(value["telephony_controls"]),
     }

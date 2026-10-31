@@ -68,6 +68,7 @@ const assignmentSchema = z.object({
 
 export const deviceSchema = z.object({
   device_uuid: uuid,
+  device_reference: z.string().optional(),
   android_version: z.string().nullable(),
   api_level: z.number().int().nullable(),
   status: z.enum(['active', 'suspended', 'retired']),
@@ -131,7 +132,9 @@ export const enrollmentTokenSchema = z.object({
   token_uuid: uuid,
   status: z.string(),
   bound_device_uuid: uuid.nullable(),
+  bound_device_reference: z.string().nullable().optional(),
   consumed_by_device_uuid: uuid.nullable(),
+  consumed_by_device_reference: z.string().nullable().optional(),
   expires_at: nullableDate,
   created_at: nullableDate,
   revoked_at: nullableDate,
@@ -156,22 +159,23 @@ export const issuedEnrollmentTokenSchema = z.object({
 })
 
 export const auditEventSchema = z.object({
-  event_type: z.enum(['administrator_authentication', 'device_enrollment', 'device_asset', 'policy_assignment', 'policy_synchronization', 'incident']),
+  event_type: z.enum(['administrator_authentication', 'device_enrollment', 'device_asset', 'policy_assignment', 'policy_synchronization', 'incident', 'violation']),
   event_uuid: uuid,
   category: z.string(),
   occurred_at: nullableDate,
   failure_class: z.string().nullable().optional(),
   operation: z.string().optional(),
   device_uuid: uuid.optional(),
+  device_reference: z.string().optional(),
   policy_revision_uuid: uuid.optional(),
 })
 export const auditEventsSchema = z.object({ audit_events: z.array(auditEventSchema), pagination })
-export const incidentSchema = z.object({ incident_uuid: uuid, incident_number: z.string(), device_uuid: uuid.nullable(), asset_number: z.string().nullable(), incident_type: z.string(), description: z.string(), reported_by: z.string(), reported_at: nullableDate, status: z.enum(['OPEN', 'UNDER_REVIEW', 'ACTION_TAKEN', 'CLOSED']), action_taken: z.string().nullable(), responsible_person: z.string().nullable(), closed_at: nullableDate, created_by: z.string().nullable(), updated_at: nullableDate })
+export const incidentSchema = z.object({ incident_uuid: uuid, incident_number: z.string(), device_uuid: uuid.nullable(), device_reference: z.string().nullable().optional(), asset_number: z.string().nullable(), incident_type: z.string(), description: z.string(), reported_by: z.string(), reported_at: nullableDate, status: z.enum(['OPEN', 'UNDER_REVIEW', 'ACTION_TAKEN', 'CLOSED']), action_taken: z.string().nullable(), responsible_person: z.string().nullable(), closed_at: nullableDate, created_by: z.string().nullable(), updated_at: nullableDate })
 export const incidentsSchema = z.object({ incidents: z.array(incidentSchema), pagination })
 export const incidentResponseSchema = z.object({ incident: incidentSchema })
-export const policyChangeSchema = z.object({ event_uuid: uuid, policy_name: z.string().nullable(), previous_policy_name: z.string().nullable(), previous_version: z.number().int().positive().nullable(), new_version: z.number().int().positive().nullable(), administrator: z.string().nullable(), occurred_at: nullableDate, device_uuid: uuid.nullable(), asset_number: z.string().nullable(), devices_affected: z.number().int().positive(), reason: z.string(), operation: z.string(), result: z.string() })
+export const policyChangeSchema = z.object({ event_uuid: uuid, policy_name: z.string().nullable(), previous_policy_name: z.string().nullable(), previous_version: z.number().int().positive().nullable(), new_version: z.number().int().positive().nullable(), administrator: z.string().nullable(), occurred_at: nullableDate, device_uuid: uuid.nullable(), device_reference: z.string().nullable().optional(), asset_number: z.string().nullable(), devices_affected: z.number().int().positive(), reason: z.string(), operation: z.string(), result: z.string() })
 export const policyChangesSchema = z.object({ policy_changes: z.array(policyChangeSchema), pagination })
-export const violationReportItemSchema = z.object({ event_uuid: uuid, device_uuid: uuid, asset_number: z.string().nullable(), class_name: z.string().nullable(), event_code: z.string(), violation_type: z.string(), outcome: z.string(), rule_id: z.string().nullable(), details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])), policy_uuid: uuid.nullable(), policy_name: z.string().nullable(), policy_version: z.number().int().positive().nullable(), occurred_at: nullableDate, received_at: nullableDate, sequence: z.number().int().positive(), event_hash: z.string(), previous_event_hash: z.string().nullable() })
+export const violationReportItemSchema = z.object({ event_uuid: uuid, device_uuid: uuid, device_reference: z.string().optional(), asset_number: z.string().nullable(), class_name: z.string().nullable(), event_code: z.string(), violation_type: z.string(), outcome: z.string(), rule_id: z.string().nullable(), details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])), policy_uuid: uuid.nullable(), policy_name: z.string().nullable(), policy_version: z.number().int().positive().nullable(), occurred_at: nullableDate, received_at: nullableDate, sequence: z.number().int().positive(), event_hash: z.string(), previous_event_hash: z.string().nullable() })
 export const violationReportsSchema = z.object({ violations: z.array(violationReportItemSchema), pagination })
 export const messageSchema = z.object({ message: z.string() })
 

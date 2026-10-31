@@ -5,6 +5,7 @@ import hmac
 import ipaddress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from secrets import token_urlsafe
 from typing import Never
 
@@ -24,10 +25,17 @@ from app.models import (
 )
 
 ADMINISTRATOR_LOCK_DURATION = timedelta(minutes=15)
-_DUMMY_PASSWORD_VERIFIER = generate_password_hash(
-    token_urlsafe(32),
-    method="scrypt",
-)
+
+
+@lru_cache(maxsize=1)
+def _dummy_password_verifier() -> str:
+    """Build the invalid-user verifier only when it is actually needed.
+
+    Generating a scrypt verifier is intentionally expensive. Keeping this
+    behind a cache preserves constant-work invalid-user authentication without
+    making every API process pay that cost during module import.
+    """
+    return generate_password_hash(token_urlsafe(32), method="scrypt")
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,8 +66,11 @@ def authenticate_administrator(
     source_address: str | None,
 ) -> AdministratorLoginResult:
     source_pseudonym = pseudonymize_source_address(source_address)
+    normalized_username = username.lower() if isinstance(username, str) else ""
     canonical_username = (
-        username if ADMINISTRATOR_USERNAME_PATTERN.fullmatch(username) else None
+        normalized_username
+        if ADMINISTRATOR_USERNAME_PATTERN.fullmatch(normalized_username)
+        else None
     )
 
     try:
@@ -74,7 +85,7 @@ def authenticate_administrator(
         verifier = (
             administrator.password_verifier
             if administrator is not None
-            else _DUMMY_PASSWORD_VERIFIER
+            else _dummy_password_verifier()
         )
         password_valid = _check_password(verifier, password)
         now = utc_now()

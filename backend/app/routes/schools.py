@@ -62,12 +62,8 @@ def current_school() -> Response:
 def create_school() -> Response:
     request.max_content_length = current_app.config["ADMIN_AUTH_MAX_CONTENT_LENGTH"]
     payload = request.get_json(silent=True)
-    if not isinstance(payload, dict) or set(payload) not in (
-        _SCHOOL_FIELDS,
-        _SCHOOL_FIELDS_WITH_TIMEZONE,
-    ):
+    if not isinstance(payload, dict) or set(payload) != _SCHOOL_FIELDS_WITH_TIMEZONE:
         return admin_error("invalid_school", "invalid school registration request", 400)
-    payload.setdefault("timezone", "Africa/Kampala")
     if payload["official_email"] == "":
         payload["official_email"] = None
     try:

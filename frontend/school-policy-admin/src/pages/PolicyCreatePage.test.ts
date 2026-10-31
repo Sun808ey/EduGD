@@ -25,6 +25,7 @@ const options = {
   displaySchoolName: true,
   supportMessage: 'Contact the ICT office',
   administratorNotes: 'This policy is for normal classroom learning.',
+  schedule: { timezone: 'UTC', days: [1, 2, 3, 4, 5], startMinute: 480, endMinute: 960, modeId: 'learning', priority: 1 },
 }
 
 describe('policy template device-use mode', () => {
@@ -98,7 +99,7 @@ describe('policy template device-use mode', () => {
     })
     expect(payload.default_mode).toBe('learning')
     expect(modes[0].lock_task_packages).toEqual(modes[0].allowed_packages)
-    expect(modes[1].lock_task_packages).toEqual(modes[1].allowed_packages)
+    expect(modes[1].lock_task_packages).toEqual([])
   })
 
   it('removes lock-task packages when kiosk mode is disabled', () => {

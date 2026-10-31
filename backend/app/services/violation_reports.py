@@ -10,6 +10,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.admin_api import Pagination, isoformat_utc, pagination_payload
 from app.device_identity import parse_canonical_uuid4
+from app.device_reference import human_device_reference
 from app.extensions import db
 from app.models import (
     Device,
@@ -192,6 +193,7 @@ def _violation_summary(
     return {
         "event_uuid": str(event.event_uuid),
         "device_uuid": str(device.device_uuid),
+        "device_reference": human_device_reference(device.id, device.asset_number),
         "asset_number": device.asset_number,
         "class_name": class_assignment.target_name if class_assignment else None,
         "event_code": event.event_code,

@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
 from app.admin_api import Pagination, isoformat_utc, pagination_payload
+from app.device_reference import human_device_reference
 from app.extensions import db
 from app.models import (
     INCIDENT_STATUSES,
@@ -191,6 +192,11 @@ def _summary(row: Incident) -> dict[str, object]:
         "incident_uuid": str(row.incident_uuid),
         "incident_number": row.incident_number,
         "device_uuid": str(row.device.device_uuid) if row.device else None,
+        "device_reference": human_device_reference(
+            row.device.id, row.device.asset_number
+        )
+        if row.device
+        else None,
         "asset_number": row.device.asset_number if row.device else None,
         "incident_type": row.incident_type,
         "description": row.description,

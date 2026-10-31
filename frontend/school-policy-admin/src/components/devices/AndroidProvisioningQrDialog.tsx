@@ -16,12 +16,21 @@ export function AndroidProvisioningQrDialog({ issued, open, onOpenChange }: { is
       const config = resolveAndroidProvisioningConfig()
       if (!config) throw new Error('QR provisioning is not configured for this deployment.')
       const apiBaseUrl = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.PROD)
-      const apiOrigin = new URL(apiBaseUrl).origin
+      // Development uses the Vite proxy and therefore resolves the API base
+      // to `/api/v1`. Give URL a browser origin so the user sees the intended
+      // HTTPS-origin validation instead of the raw "Invalid URL" exception.
+      const apiOrigin = new URL(apiBaseUrl, window.location.origin).origin
       const payload = buildAndroidProvisioningPayload({ ...config, apiOrigin, pairingToken: issued.pairing_token })
       await verifyAndroidProvisioningTrustAnchor(config)
       if (!cancelled) setResult({ payload, encoded: JSON.stringify(payload) })
       } catch (error) {
-        if (!cancelled) setResult({ error: error instanceof Error ? error.message : 'QR provisioning configuration is invalid.' })
+        const message = error instanceof Error ? error.message : 'QR provisioning configuration is invalid.'
+        const friendlyMessage = message === 'The DPC API origin must be an HTTPS origin.'
+          ? 'QR generation requires an HTTPS API origin. The current dashboard is using a local HTTP browser origin. Suggested fix: set VITE_API_BASE_URL to the deployed HTTPS API ending in /api/v1, then restart the frontend before generating a production enrollment QR.'
+          : message === 'Invalid URL'
+            ? 'QR generation could not resolve the API address. Suggested fix: set VITE_API_BASE_URL to a complete HTTPS URL ending in /api/v1, then restart the frontend.'
+            : message
+        if (!cancelled) setResult({ error: friendlyMessage })
       }
     })()
     return () => { cancelled = true }

@@ -48,6 +48,7 @@ export interface PolicyAssignment {
 
 export interface Device {
   device_uuid: string
+  device_reference?: string
   android_version: string | null
   api_level: number | null
   status: 'active' | 'suspended' | 'retired'
@@ -101,7 +102,9 @@ export interface EnrollmentToken {
   token_uuid: string
   status: string
   bound_device_uuid: string | null
+  bound_device_reference?: string | null
   consumed_by_device_uuid: string | null
+  consumed_by_device_reference?: string | null
   expires_at: string | null
   created_at: string | null
   revoked_at: string | null
@@ -126,20 +129,21 @@ export interface IssuedEnrollmentToken {
 }
 
 export interface AuditEvent {
-  event_type: 'administrator_authentication' | 'device_enrollment' | 'device_asset' | 'policy_assignment' | 'policy_synchronization' | 'incident'
+  event_type: 'administrator_authentication' | 'device_enrollment' | 'device_asset' | 'policy_assignment' | 'policy_synchronization' | 'incident' | 'violation'
   event_uuid: string
   category: string
   occurred_at: string | null
   failure_class?: string | null
   operation?: string
   device_uuid?: string
+  device_reference?: string
   policy_revision_uuid?: string
 }
 
 export type IncidentStatus = 'OPEN' | 'UNDER_REVIEW' | 'ACTION_TAKEN' | 'CLOSED'
-export interface Incident { incident_uuid: string; incident_number: string; device_uuid: string | null; asset_number: string | null; incident_type: string; description: string; reported_by: string; reported_at: string | null; status: IncidentStatus; action_taken: string | null; responsible_person: string | null; closed_at: string | null; created_by: string | null; updated_at: string | null }
-export interface PolicyChange { event_uuid: string; policy_name: string | null; previous_policy_name: string | null; previous_version: number | null; new_version: number | null; administrator: string | null; occurred_at: string | null; device_uuid: string | null; asset_number: string | null; devices_affected: number; reason: string; operation: string; result: string }
-export interface ViolationReportItem { event_uuid: string; device_uuid: string; asset_number: string | null; class_name: string | null; event_code: string; violation_type: string; outcome: string; rule_id: string | null; details: Record<string, string | number | boolean | null>; policy_uuid: string | null; policy_name: string | null; policy_version: number | null; occurred_at: string | null; received_at: string | null; sequence: number; event_hash: string; previous_event_hash: string | null }
+export interface Incident { incident_uuid: string; incident_number: string; device_uuid: string | null; device_reference?: string | null; asset_number: string | null; incident_type: string; description: string; reported_by: string; reported_at: string | null; status: IncidentStatus; action_taken: string | null; responsible_person: string | null; closed_at: string | null; created_by: string | null; updated_at: string | null }
+export interface PolicyChange { event_uuid: string; policy_name: string | null; previous_policy_name: string | null; previous_version: number | null; new_version: number | null; administrator: string | null; occurred_at: string | null; device_uuid: string | null; device_reference?: string | null; asset_number: string | null; devices_affected: number; reason: string; operation: string; result: string }
+export interface ViolationReportItem { event_uuid: string; device_uuid: string; device_reference?: string; asset_number: string | null; class_name: string | null; event_code: string; violation_type: string; outcome: string; rule_id: string | null; details: Record<string, string | number | boolean | null>; policy_uuid: string | null; policy_name: string | null; policy_version: number | null; occurred_at: string | null; received_at: string | null; sequence: number; event_hash: string; previous_event_hash: string | null }
 
 export interface PageRequest {
   page: number

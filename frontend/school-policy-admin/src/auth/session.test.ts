@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearSessionToken, getSessionExpiry, getSessionToken, setSessionToken } from '@/auth/session'
 
-describe('memory-only session', () => {
+describe('memory-only administrator session', () => {
   beforeEach(() => { clearSessionToken(); localStorage.clear(); sessionStorage.clear(); vi.useRealTimers() })
   it('holds the token only in module memory', () => {
     setSessionToken('secret-token', 900)

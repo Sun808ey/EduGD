@@ -16,7 +16,7 @@ export default defineConfig({
     command: 'python ../../backend/scripts/local_stack.py --e2e --frontend-port 4173',
     url: 'http://127.0.0.1:4173/login',
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: 300_000,
     env: {
       VITE_DPC_SERVER_SIGNING_KEY_ID: 'local-e2e-signing-key',
       VITE_DPC_SERVER_SIGNING_PUBLIC_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',

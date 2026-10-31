@@ -10,6 +10,7 @@ from sqlalchemy.orm import joinedload
 
 from app.admin_api import Pagination, isoformat_utc, pagination_payload
 from app.device_identity import parse_canonical_uuid4
+from app.device_reference import human_device_reference
 from app.extensions import db
 from app.models import (
     ADMINISTRATOR_AUTHENTICATION_EVENT_CATEGORIES,
@@ -23,6 +24,7 @@ from app.models import (
     DeviceComplianceState,
     DeviceEnrollmentEvent,
     DevicePolicyAssignment,
+    DeviceSecurityEvent,
     EnrollmentToken,
     Incident,
     Policy,
@@ -31,6 +33,7 @@ from app.models import (
     PolicySynchronizationEvent,
 )
 from app.policy_contract import PolicyContractError
+from app.services.violation_reports import VIOLATION_EVENT_CODES, _violation_summary
 
 
 class AdminReadNotFoundError(LookupError):
@@ -96,6 +99,7 @@ def get_device_policy_assignment(device_uuid: object) -> dict[str, object]:
         assignment = _active_assignment(device.id)
         return {
             "device_uuid": str(device.device_uuid),
+            "device_reference": human_device_reference(device.id, device.asset_number),
             "assignment": _assignment_summary(assignment) if assignment else None,
         }
     except AdminReadNotFoundError:
@@ -221,6 +225,7 @@ def list_audit_events(
         "policy_synchronization": _policy_synchronization_events,
         "incident": _incident_events,
         "device_asset": _device_asset_events,
+        "violation": _violation_events,
     }
     selected_loaders = (
         [loaders[event_type]] if event_type is not None else list(loaders.values())
@@ -303,6 +308,7 @@ def _device_summary(device: Device) -> dict[str, object]:
         ).total_seconds() > connection_review_after_days * 24 * 60 * 60
     return {
         "device_uuid": str(device.device_uuid),
+        "device_reference": human_device_reference(device.id, device.asset_number),
         "android_version": device.android_version,
         "api_level": device.api_level,
         "status": device.status,
@@ -437,7 +443,17 @@ def _enrollment_token_summary(token: EnrollmentToken) -> dict[str, object]:
         "token_uuid": str(token.token_uuid),
         "status": token.status,
         "bound_device_uuid": str(bound_device.device_uuid) if bound_device else None,
+        "bound_device_reference": human_device_reference(
+            bound_device.id, bound_device.asset_number
+        )
+        if bound_device
+        else None,
         "consumed_by_device_uuid": str(consumed_device.device_uuid)
+        if consumed_device
+        else None,
+        "consumed_by_device_reference": human_device_reference(
+            consumed_device.id, consumed_device.asset_number
+        )
         if consumed_device
         else None,
         "expires_at": isoformat_utc(token.expires_at),
@@ -518,6 +534,9 @@ def _policy_assignment_events(limit: int) -> list[dict[str, object]]:
             "operation": "assign",
             "occurred_at": isoformat_utc(row.assigned_at),
             "device_uuid": str(row.device.device_uuid),
+            "device_reference": human_device_reference(
+                row.device.id, row.device.asset_number
+            ),
             "policy_revision_uuid": str(row.policy_revision.revision_uuid),
         }
         for row in rows
@@ -577,6 +596,9 @@ def _policy_change_summary(event: PolicyAssignmentEvent) -> dict[str, object]:
         "administrator": administrator.display_name if administrator else None,
         "occurred_at": isoformat_utc(event.created_at),
         "device_uuid": str(device.device_uuid) if device else None,
+        "device_reference": human_device_reference(device.id, device.asset_number)
+        if device
+        else None,
         "asset_number": device.asset_number if device else None,
         "devices_affected": 1,
         "reason": event.reason,
@@ -594,6 +616,12 @@ def _policy_synchronization_events(limit: int) -> list[dict[str, object]]:
         )
         .limit(limit)
     ).all()
+    devices = {
+        device.id: device
+        for device in db.session.scalars(
+            select(Device).where(Device.id.in_({row.device_id for row in rows}))
+        ).all()
+    }
     return [
         {
             "event_type": "policy_synchronization",
@@ -601,6 +629,10 @@ def _policy_synchronization_events(limit: int) -> list[dict[str, object]]:
             "category": row.outcome_category,
             "operation": row.operation,
             "occurred_at": isoformat_utc(row.requested_at),
+            "device_uuid": str(devices[row.device_id].device_uuid),
+            "device_reference": human_device_reference(
+                row.device_id, devices[row.device_id].asset_number
+            ),
         }
         for row in rows
         if row.operation in POLICY_SYNC_OPERATIONS
@@ -622,6 +654,11 @@ def _incident_events(limit: int) -> list[dict[str, object]]:
             "operation": row.incident_type,
             "occurred_at": isoformat_utc(row.reported_at),
             "device_uuid": str(row.device.device_uuid) if row.device else None,
+            "device_reference": human_device_reference(
+                row.device.id, row.device.asset_number
+            )
+            if row.device
+            else None,
         }
         for row in rows
     ]
@@ -643,8 +680,33 @@ def _device_asset_events(limit: int) -> list[dict[str, object]]:
             "operation": row.operation,
             "occurred_at": isoformat_utc(row.created_at),
             "device_uuid": str(row.device.device_uuid),
+            "device_reference": human_device_reference(
+                row.device.id, row.device.asset_number
+            ),
         }
         for row in rows
+    ]
+
+
+def _violation_events(limit: int) -> list[dict[str, object]]:
+    rows = db.session.execute(
+        select(DeviceSecurityEvent, Device)
+        .join(Device, Device.id == DeviceSecurityEvent.device_id)
+        .where(DeviceSecurityEvent.event_code.in_(VIOLATION_EVENT_CODES))
+        .order_by(
+            DeviceSecurityEvent.occurred_at.desc(),
+            DeviceSecurityEvent.sequence.desc(),
+        )
+        .limit(limit)
+    ).all()
+    return [
+        {
+            **_violation_summary(event, device),
+            "event_type": "violation",
+            "category": event.event_code,
+            "operation": event.outcome,
+        }
+        for event, device in rows
     ]
 
 
@@ -689,6 +751,7 @@ AUDIT_EVENT_TYPES = frozenset(
         "policy_synchronization",
         "incident",
         "device_asset",
+        "violation",
     }
 )
 

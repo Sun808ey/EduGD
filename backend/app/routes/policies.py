@@ -115,8 +115,12 @@ def create_admin_policy() -> Response:
         return admin_json(
             {"policy_uuid": str(policy.policy_uuid), "status": policy.status}, 201
         )
-    except (ValueError, TypeError):
-        return admin_error("invalid_policy", "invalid policy creation request", 400)
+    except (ValueError, TypeError) as error:
+        return admin_error(
+            "invalid_policy",
+            f"Policy validation failed: {error}. Review the policy fields and try again.",
+            400,
+        )
     except PolicyAdministrationConflict:
         return admin_error(
             "policy_conflict", "policy conflicts with existing state", 409
@@ -142,8 +146,12 @@ def create_admin_policy_revision(policy_uuid: str) -> Response:
             {"revision_uuid": str(revision.revision_uuid), "version": revision.version},
             201,
         )
-    except (ValueError, TypeError):
-        return admin_error("invalid_policy", "invalid policy revision request", 400)
+    except (ValueError, TypeError) as error:
+        return admin_error(
+            "invalid_policy",
+            f"Policy revision validation failed: {error}. Review the policy fields and try again.",
+            400,
+        )
     except PolicyAdministrationNotFound:
         return admin_error("policy_not_found", "policy not found", 404)
     except PolicyAdministrationConflict:

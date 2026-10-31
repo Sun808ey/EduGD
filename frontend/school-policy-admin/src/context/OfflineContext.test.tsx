@@ -69,6 +69,15 @@ describe('offline provider', () => {
     expect(screen.getByText('offline:1:1')).toBeInTheDocument()
   })
 
+  it('does not send when the queue has no synchronisable work', async () => {
+    vi.mocked(listOfflineQueue).mockResolvedValue([{ ...queueItem, state: 'SENT_TO_DEVICE' }])
+    renderProvider()
+    await screen.findByText('online:0:1')
+    fireEvent.click(screen.getByRole('button', { name: 'sync' }))
+    await waitFor(() => expect(listOfflineQueue).toHaveBeenCalledTimes(2))
+    expect(flushOfflineQueue).not.toHaveBeenCalled()
+  })
+
   it('requires the provider when using the hook', () => {
     expect(() => render(<Probe />)).toThrow('useOfflineStatus must be used within OfflineProvider')
   })

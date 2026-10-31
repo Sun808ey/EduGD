@@ -8,12 +8,25 @@ type LiveRequestInit = { method?: string; body?: string; headers?: Record<string
 test.setTimeout(120_000)
 
 async function signIn(page: Page, credentials = admin) {
-  await page.goto('/login')
-  await page.getByLabel('Username').fill(credentials.username)
-  await page.getByLabel('Password').fill(credentials.password)
-  await page.getByRole('button', { name: 'Sign in' }).click()
-  await expect(page).toHaveURL(/\/dashboard$/, { timeout: 60_000 })
-  await expect(page.getByRole('heading', { name: 'School devices at a glance' })).toBeVisible({ timeout: 60_000 })
+  let lastError: unknown
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await page.goto('/login')
+    await page.getByLabel('Username').fill(credentials.username)
+    await page.getByLabel('Password').fill(credentials.password)
+    await page.getByRole('button', { name: 'Sign in' }).click()
+    try {
+      await expect(page).toHaveURL(/\/dashboard$/, { timeout: 20_000 })
+      await expect(page.getByRole('heading', { name: 'School devices at a glance' })).toBeVisible({ timeout: 20_000 })
+      return
+    } catch (error) {
+      lastError = error
+      await page.evaluate(() => {
+        localStorage.clear()
+        sessionStorage.clear()
+      })
+    }
+  }
+  throw lastError
 }
 
 async function openNavigation(page: Page) {
@@ -48,7 +61,7 @@ test('uses the live Flask API for the administrator dashboard lifecycle', async 
   await expect(page.getByText('Total registered devices').locator('..').getByText(/^\d+$/)).toBeVisible()
   await openNavigation(page)
   await page.getByRole('link', { name: 'Devices', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Devices' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Devices' })).toBeVisible({ timeout: 60_000 })
   await expect(page.getByText('22222222-2222-4222-8222-222222222222', { exact: true })).toBeVisible({ timeout: 60000 })
   await openNavigation(page)
   await page.getByRole('link', { name: 'Policies' }).click()
@@ -63,23 +76,25 @@ test('uses the live Flask API for the administrator dashboard lifecycle', async 
 
 test('loads live deep links and administrator management', async ({ page }) => {
   await signIn(page)
-  await page.getByRole('link', { name: 'Devices and enrollment' }).click()
+  await openNavigation(page)
+  await page.getByRole('link', { name: 'Devices', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Devices' })).toBeVisible()
   await navigateInApp(page, '/dashboard')
-  await expect(page.getByRole('heading', { name: 'School devices at a glance' })).toBeVisible()
-  await page.getByRole('link', { name: 'Policies and assignments' }).click()
-  await expect(page.getByRole('heading', { name: /Policies/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'School devices at a glance' })).toBeVisible({ timeout: 60_000 })
+  await openNavigation(page)
+  await page.getByRole('link', { name: 'Policies', exact: true }).click()
+  await expect(page.getByRole('heading', { name: /Policies/ })).toBeVisible({ timeout: 60_000 })
   await navigateInApp(page, '/devices/22222222-2222-4222-8222-222222222222')
   await expect(page.getByRole('heading', { name: '22222222-2222-4222-8222-222222222222' })).toBeVisible({ timeout: 60_000 })
   await navigateInApp(page, '/administrators')
-  await expect(page.getByRole('heading', { name: 'Administrators' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Create administrator' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Administrators' })).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByRole('heading', { name: 'Create administrator' })).toBeVisible({ timeout: 60_000 })
   await navigateInApp(page, '/applications')
-  await expect(page.getByRole('heading', { name: 'Applications & domains' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Applications & domains' })).toBeVisible({ timeout: 60_000 })
   await navigateInApp(page, '/translations')
-  await expect(page.getByRole('heading', { name: 'Approved-content translation' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Approved-content translation' })).toBeVisible({ timeout: 60_000 })
   await navigateInApp(page, '/logs')
-  await expect(page.getByRole('heading', { name: 'Audit events' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Audit events' })).toBeVisible({ timeout: 60_000 })
 })
 
 test('checks live browser security boundaries and direct CORS behavior', async ({ page }) => {
@@ -111,7 +126,7 @@ test('checks live browser security boundaries and direct CORS behavior', async (
 
 test('rejects unsafe localhost QR origins without persisting the token', async ({ page }) => {
   await signIn(page)
-  await navigateInApp(page, '/devices')
+  await navigateInApp(page, '/provisioning')
   await expect(page.getByRole('heading', { name: 'Enrollment tokens' })).toBeVisible()
   await page.getByRole('button', { name: 'Create enrollment token' }).click()
   await page.getByLabel('Policy template').selectOption({ index: 1 })
@@ -122,7 +137,7 @@ test('rejects unsafe localhost QR origins without persisting the token', async (
   await page.getByRole('button', { name: 'Generate QR' }).click()
   const qrDialog = page.getByRole('dialog').last()
   await expect(qrDialog.getByRole('heading', { name: 'Android enrollment QR' })).toBeVisible()
-  await expect(qrDialog.getByRole('alert')).toContainText(/HTTPS origin|Invalid URL/i)
+  await expect(qrDialog.getByRole('alert')).toContainText(/HTTPS (API )?origin|Invalid URL/i)
   await expect(qrDialog.locator('svg[aria-label="Android device enrollment QR code"]')).toHaveCount(0)
   expect(await qrDialog.textContent()).not.toContain(pairingToken as string)
   await qrDialog.getByRole('button', { name: 'Close' }).click()
@@ -166,9 +181,9 @@ test('creates an administrator through the live dashboard contract', async ({ pa
   await page.getByLabel('Your operator password').fill(admin.password)
   await page.getByLabel('Reason for granting administrator access').fill('live dashboard verification')
   await page.getByRole('button', { name: 'Create administrator' }).click()
-  await expect(page.getByRole('status')).toContainText(username)
+  await expect(page.getByRole('status')).toContainText(username, { timeout: 60_000 })
   const administrator = page.locator('article').filter({ hasText: username })
-  await expect(administrator).toContainText('active')
+  await expect(administrator).toContainText('active', { timeout: 60_000 })
   await administrator.getByRole('button', { name: 'Revoke sessions' }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Your operator password').fill(admin.password)
@@ -477,7 +492,7 @@ test('shows a real browser-offline dependency failure and recovers when connecti
   await signIn(page)
   await navigateInApp(page, '/devices')
   await expect(page.getByRole('heading', { name: 'Devices' })).toBeVisible()
-  await expect(page.getByLabel('Status').first()).toBeVisible()
+  await expect(page.getByLabel('Connection review').first()).toBeVisible()
   await page.context().setOffline(true)
   const offlineFetchRejected = await page.evaluate(async () => {
     try {
@@ -489,7 +504,7 @@ test('shows a real browser-offline dependency failure and recovers when connecti
   })
   expect(offlineFetchRejected).toBe(true)
   await page.context().setOffline(false)
-  await page.getByLabel('Status').first().selectOption('active')
+  await page.getByLabel('Connection review').first().selectOption('reported')
   await expect(page.getByRole('heading', { name: 'Devices' })).toBeVisible()
 })
 

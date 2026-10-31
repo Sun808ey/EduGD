@@ -47,6 +47,11 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="seed the NDEJJE SS enrollment, policy, check-in, and violation scenario",
     )
+    parser.add_argument(
+        "--blank-school",
+        action="store_true",
+        help="leave the demo school profile empty for clean dashboard registration",
+    )
     return parser
 
 
@@ -213,6 +218,8 @@ def main() -> int:
                 else "scripts.seed_local_e2e"
             )
             seed_command = [sys.executable, "-m", seed_module]
+            if args.blank_school and args.demo_scenario:
+                seed_command.append("--blank-school")
             _run(seed_command, env=env)
         flask_process = subprocess.Popen(
             [

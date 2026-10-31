@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
-import { Alert, Box, Button, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material'
 import { adminService } from '@/services/admin.service'
 import { ErrorState, LoadingState } from '@/components/ui/AsyncState'
 import { errorMessage } from '@/services/errors'
@@ -20,7 +20,18 @@ export function SchoolRegistrationPage() {
   const [error, setError] = useState('')
   const cache = useQueryClient()
   const school = useQuery({ queryKey: ['school'], queryFn: ({ signal }) => adminService.getSchool(signal) })
-  const mutation = useMutation({ mutationFn: () => school.data ? adminService.updateSchool(form) : adminService.registerSchool(form), onSuccess: async () => { setError(''); setEditing(false); await cache.invalidateQueries({ queryKey: ['school'] }) }, onError: (caught) => setError(errorMessage(caught)) })
+  const editablePayload = {
+    name: form.name,
+    district: form.district,
+    school_type: form.school_type,
+    contact_person: form.contact_person,
+    official_telephone: form.official_telephone,
+    official_email: form.official_email,
+    physical_location: form.physical_location,
+    authorised_administrator_name: form.authorised_administrator_name,
+    timezone: form.timezone,
+  }
+  const mutation = useMutation({ mutationFn: () => school.data ? adminService.updateSchool(editablePayload) : adminService.registerSchool(editablePayload), onSuccess: async () => { setError(''); setEditing(false); await cache.invalidateQueries({ queryKey: ['school'] }) }, onError: (caught) => setError(errorMessage(caught)) })
 
   function update(field: keyof SchoolRegistration, value: string) { setForm((current) => ({ ...current, [field]: value })) }
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setError(''); mutation.mutate() }
@@ -37,5 +48,5 @@ export function SchoolRegistrationPage() {
     { key: 'physical_location', label: 'Physical location', maxLength: 255 },
     { key: 'authorised_administrator_name', label: 'Authorised administrator', maxLength: 120 },
   ]
-  return <Stack spacing={3}><Box component="header"><Typography component="h1" variant="h4" sx={{ fontWeight: 800 }}>{school.data ? 'Edit school profile' : 'Register your school'}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>These details are used by administrators, policy schedules, and secure device enrollment.</Typography></Box><Alert severity="info">Do not enter learner information or private telephone contacts. The timetable timezone is required before time-based policies can be published.</Alert><Paper component="form" onSubmit={submit} variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}><Stack spacing={2}><Typography component="h2" variant="h6" sx={{ fontWeight: 800 }}>School details</Typography>{error && <Alert severity="error">{error}</Alert>}<Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' } }}>{fields.map(({ key, label, type, maxLength }) => <TextField key={key} name={key} required={key !== 'official_email'} label={label} type={type} value={form[key] ?? ''} onChange={(event) => update(key, event.currentTarget.value)} slotProps={{ htmlInput: { maxLength } }} />)}<TextField name="timezone" required select label="Timetable timezone" value={form.timezone} onChange={(event) => update('timezone', event.currentTarget.value)} helperText="Policy windows use this timezone.">{timezones.map((timezone) => <MenuItem key={timezone} value={timezone}>{timezone}</MenuItem>)}</TextField></Box><Stack direction="row" spacing={1}><Button type="submit" variant="contained" disabled={mutation.isPending}>{mutation.isPending ? 'Saving…' : school.data ? 'Save changes' : 'Register school'}</Button>{school.data && <Button type="button" variant="outlined" onClick={() => { setForm(school.data!); setEditing(false); setError('') }}>Cancel</Button>}</Stack></Stack></Paper></Stack>
+  return <Stack spacing={3}><Box component="header"><Typography component="h1" variant="h4" sx={{ fontWeight: 800 }}>{school.data ? 'Edit school profile' : 'Register your school'}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>These details are used by administrators, policy schedules, and secure device enrollment.</Typography></Box><Alert severity="info">Do not enter learner information or private telephone contacts. The timetable timezone is required before time-based policies can be published.</Alert><Paper component="form" onSubmit={submit} variant="outlined" sx={{ borderRadius: 3, p: { xs: 2, sm: 3 } }}><Stack spacing={2}><Typography component="h2" variant="h6" sx={{ fontWeight: 800 }}>School details</Typography>{error && <Alert severity="error">{error}</Alert>}<Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' } }}>{fields.map(({ key, label, type, maxLength }) => <TextField key={key} name={key} required={key !== 'official_email'} label={label} type={type} value={form[key] ?? ''} onChange={(event) => update(key, event.currentTarget.value)} slotProps={{ htmlInput: { maxLength } }} />)}<label className="school-timezone-field"><span className="school-timezone-label">Timetable timezone</span><select name="timezone" aria-label="Timetable timezone" required value={form.timezone} onChange={(event) => update('timezone', event.currentTarget.value)}><option value="" disabled>Select a timezone</option>{timezones.map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}</select><span className="school-timezone-help">Policy windows use this timezone.</span></label></Box><Stack direction="row" spacing={1}><Button type="submit" variant="contained" disabled={mutation.isPending}>{mutation.isPending ? 'Saving…' : school.data ? 'Save changes' : 'Register school'}</Button>{school.data && <Button type="button" variant="outlined" onClick={() => { setForm(school.data!); setEditing(false); setError('') }}>Cancel</Button>}</Stack></Stack></Paper></Stack>
 }

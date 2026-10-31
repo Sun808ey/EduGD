@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useQueryClient } from '@tanstack/react-query'
 import api from '@/services/api'
 import { flushOfflineQueue, listOfflineQueue, type OfflineQueueItem } from '@/services/offlineStore'
+import { announceLiveAction } from '@/context/liveActionEvents'
 
 interface OfflineContextValue {
   isOnline: boolean
@@ -22,15 +23,25 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => { setQueue(await listOfflineQueue()) }, [])
   const syncNow = useCallback(async () => {
     if (!isOnline) { await refresh(); return }
-    await flushOfflineQueue(async (item) => {
-      const response = await api.request({ method: item.method, url: item.url, data: item.payload })
-      return response.data
-    })
-    await refresh()
-    await queryClient.invalidateQueries({ queryKey: ['devices'] })
-    await queryClient.invalidateQueries({ queryKey: ['policies'] })
-    await queryClient.invalidateQueries({ queryKey: ['policy'] })
-    await queryClient.invalidateQueries({ queryKey: ['assignments'] })
+    const currentQueue = await listOfflineQueue()
+    setQueue(currentQueue)
+    if (!currentQueue.some((item) => item.state === 'LOCAL_ONLY' || item.state === 'PENDING_SYNC' || item.state === 'FAILED')) return
+    announceLiveAction({ state: 'pending', label: 'Synchronisation' })
+    try {
+      await flushOfflineQueue(async (item) => {
+        const response = await api.request({ method: item.method, url: item.url, data: item.payload })
+        return response.data
+      })
+      await refresh()
+      await queryClient.invalidateQueries({ queryKey: ['devices'] })
+      await queryClient.invalidateQueries({ queryKey: ['policies'] })
+      await queryClient.invalidateQueries({ queryKey: ['policy'] })
+      await queryClient.invalidateQueries({ queryKey: ['assignments'] })
+      announceLiveAction({ state: 'success', label: 'Synchronisation', detail: 'Queued changes and affected records are up to date.' })
+    } catch (error) {
+      announceLiveAction({ state: 'error', label: 'Synchronisation', detail: error instanceof Error ? error.message : 'Queued changes could not be delivered.' })
+      throw error
+    }
   }, [isOnline, queryClient, refresh])
 
   useEffect(() => {

@@ -14,7 +14,7 @@ export function ReportsPage() {
   const [exportError, setExportError] = useState(false)
   const devices = useQuery({ queryKey: ['report-devices'], queryFn: ({ signal }) => adminService.listDevices({ page: 1, perPage: 100 }, undefined, signal) })
   const filters = useMemo(() => ({ deviceUuid: deviceUuid || undefined, className: className.trim() || undefined, from: from || undefined, to: to || undefined }), [deviceUuid, className, from, to])
-  const report = useQuery({ queryKey: ['violation-report', page, filters], queryFn: ({ signal }) => adminService.listViolationReports({ page, perPage: 25 }, filters, signal) })
+  const report = useQuery({ queryKey: ['violation-report', page, filters], queryFn: ({ signal }) => adminService.listViolationReports({ page, perPage: 10 }, filters, signal) })
 
   async function exportCsv() {
     setExportError(false)

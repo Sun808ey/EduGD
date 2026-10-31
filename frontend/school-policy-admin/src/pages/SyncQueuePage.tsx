@@ -1,11 +1,16 @@
+import { useEffect } from 'react'
 import { Button, Chip, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material'
 import { RefreshCw } from 'lucide-react'
 import { useOfflineStatus } from '@/context/OfflineContext'
+import { ensureOperationalQueueHistory } from '@/services/offlineStore'
 
 const stateColor = (state: string) => state === 'FAILED' ? 'error' : state === 'APPLIED' ? 'success' : state === 'SENT_TO_DEVICE' ? 'info' : 'warning'
 
 export default function SyncQueuePage() {
   const { queue, pendingCount, isOnline, refresh, syncNow } = useOfflineStatus()
+  useEffect(() => {
+    void ensureOperationalQueueHistory().then(() => refresh())
+  }, [refresh])
   return <Stack spacing={3}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between' }}>
       <BoxTitle pendingCount={pendingCount} />

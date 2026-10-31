@@ -80,7 +80,7 @@ export type OfflinePolicySettings = {
 }
 
 export type RecurringSchedule = {
-  timezone?: string
+  timezone: string
   days: number[]
   startMinute: number
   endMinute: number
@@ -188,7 +188,8 @@ const modeIds: Record<DeviceUseMode, string> = {
 }
 
 export function buildPolicyPayload(options: PolicyPayloadOptions): Record<string, unknown> {
-  const schedule = options.schedule ?? { timezone: 'Africa/Kampala', days: [1, 2, 3, 4, 5], startMinute: 480, endMinute: 960, modeId: modeIds[options.deviceUseMode], priority: 1 }
+  const schedule = options.schedule
+  if (!schedule?.timezone?.trim()) throw new Error('A school timetable timezone is required before creating a policy.')
   const emergencyPackages = split(options.emergency)
   const selectedPackages = options.approvedApplications?.map((application) => application.package_name) ?? split(options.allowed)
   const primaryPackages = [...new Set([...emergencyPackages, ...selectedPackages])]
@@ -208,7 +209,7 @@ export function buildPolicyPayload(options: PolicyPayloadOptions): Record<string
     application_mode: 'allowlist',
     allowed_packages: allowedPackages,
     blocked_packages: options.blockedPackages ?? split(options.blocked),
-    lock_task_packages: options.kioskModeEnabled
+    lock_task_packages: options.kioskModeEnabled && modeId === primaryModeId
       ? options.approvedApplications
         ? [...new Set([...emergencyPackages, ...options.approvedApplications.filter((application) => application.allow_in_kiosk).map((application) => application.package_name)])]
         : allowedPackages
@@ -221,7 +222,7 @@ export function buildPolicyPayload(options: PolicyPayloadOptions): Record<string
     ...(options.policyCode?.trim() ? { policy_code: options.policyCode.trim() } : {}),
     ...(options.description?.trim() ? { description: options.description.trim() } : {}),
     schema_version: 3,
-    timezone: schedule.timezone ?? 'Africa/Kampala',
+    timezone: schedule.timezone,
     refresh_after_seconds: 3600,
     default_mode: primaryModeId,
     emergency_packages: emergencyPackages,

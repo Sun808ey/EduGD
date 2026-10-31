@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '@/context/AuthContext'
 import { useAuth } from '@/hooks/useAuth'
 import { authService } from '@/services/auth.service'
-import { clearSessionToken, getSessionToken } from '@/auth/session'
+import { clearSessionToken, getSessionToken, setSessionToken } from '@/auth/session'
 
 vi.mock('@/services/auth.service', () => ({ authService: { login: vi.fn(), getCurrentAdministrator: vi.fn(), logout: vi.fn() } }))
 
@@ -46,6 +46,14 @@ describe('administrator session lifecycle', () => {
     fireEvent.click(screen.getByRole('button', { name: 'login' }))
     await screen.findByText('authenticated:admin:true')
     expect(getSessionToken()).toBe('memory-token')
+    expect(authService.getCurrentAdministrator).toHaveBeenCalledOnce()
+  })
+
+  it('rehydrates a persisted session before exposing protected state', async () => {
+    setSessionToken('persisted-token', 900)
+    renderProvider()
+    expect(screen.getByText('authenticating:none:false')).toBeInTheDocument()
+    await screen.findByText('authenticated:admin:true')
     expect(authService.getCurrentAdministrator).toHaveBeenCalledOnce()
   })
 

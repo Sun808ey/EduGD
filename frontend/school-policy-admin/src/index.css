@@ -163,6 +163,105 @@ input[type="radio"] {
 /* Keep the long policy editor and its live summary visible together. The
    editor is identified by its form followed by a preview aside so unrelated
    admin sections are not affected. */
+.policy-editor {
+  font-size: 0.9rem;
+}
+
+.policy-editor > header {
+  padding: clamp(1.25rem, 2.5vw, 2rem);
+  border: 1px solid color-mix(in srgb, var(--app-focus) 18%, var(--app-border));
+  border-radius: 1.25rem;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--app-focus) 8%, var(--app-surface)) 0%, var(--app-surface) 62%);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--app-focus) 8%, transparent);
+}
+
+.policy-editor h1 {
+  font-size: clamp(1.65rem, 3vw, 2.15rem);
+  line-height: 1.15;
+}
+
+.policy-editor-panel {
+  border-color: color-mix(in srgb, var(--app-focus) 12%, var(--app-border));
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.policy-editor-panel:hover {
+  border-color: color-mix(in srgb, var(--app-focus) 28%, var(--app-border));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--app-focus) 7%, transparent);
+}
+
+.policy-editor-panel > h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.policy-editor-panel > h2::before {
+  width: 0.35rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  background: var(--app-focus);
+  content: "";
+}
+
+.policy-editor-field > span {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.policy-editor .input,
+.policy-editor input:not([type="checkbox"]):not([type="radio"]),
+.policy-editor select,
+.policy-editor textarea {
+  min-height: 2.7rem;
+  width: 100%;
+  padding: 0.62rem 0.8rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.policy-editor textarea.input,
+.policy-editor textarea {
+  min-height: 8rem;
+}
+
+.policy-editor select[multiple] {
+  min-height: 9rem;
+  padding: 0.45rem;
+}
+
+.policy-editor input[type="checkbox"],
+.policy-editor input[type="radio"] {
+  flex: 0 0 auto;
+}
+
+.policy-editor-toggle {
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+  background: var(--app-surface-muted);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.policy-editor-form > button[type="submit"] {
+  min-height: 2.75rem;
+  font-size: 0.875rem;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--app-focus) 18%, transparent);
+}
+
+:root[data-theme="dark"] .policy-editor > header,
+:root[data-theme="dark"] .policy-editor-panel,
+:root[data-theme="dark"] .policy-editor-toggle {
+  background: var(--app-surface);
+}
+
 #main-content > div > section:has(> form + aside) {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -231,4 +330,190 @@ input[type="radio"] {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Stable structural fallbacks for the authenticated control room. These
+   classes complement MUI's generated styles so the dashboard keeps its
+   hierarchy during style injection, slow hydration, or constrained browsers. */
+.admin-shell {
+  min-height: 100vh;
+  display: flex;
+  background: var(--app-page);
+  color: var(--app-text);
+}
+
+.admin-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2rem;
+}
+
+@media (min-width: 900px) {
+  .admin-shell {
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .admin-desktop-drawer {
+    flex: 0 0 17rem;
+    width: 17rem;
+    height: 100vh;
+    min-height: 0;
+  }
+
+  .admin-desktop-drawer .MuiDrawer-paper {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .admin-sidebar {
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .admin-main {
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+}
+
+@media (max-width: 899.95px) {
+  .admin-mobile-drawer .MuiDrawer-paper {
+    overflow: hidden;
+  }
+
+  .admin-mobile-drawer .admin-sidebar {
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+}
+
+.dashboard-page {
+  display: grid;
+  gap: 2rem;
+  width: 100%;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.dashboard-header {
+  display: grid;
+  gap: .5rem;
+}
+
+.dashboard-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.dashboard-policy-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.dashboard-card {
+  min-width: 0;
+  min-height: 9.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: var(--app-surface);
+  color: var(--app-text);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 6%);
+}
+
+.dashboard-actions,
+.dashboard-audit,
+.dashboard-health {
+  min-width: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: var(--app-surface);
+  color: var(--app-text);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 6%);
+}
+
+.dashboard-action-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+}
+
+@media (max-width: 1199px) {
+  .dashboard-metric-grid,
+  .dashboard-policy-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .admin-main {
+    padding: 1rem;
+    padding-top: 5.5rem;
+  }
+
+  .dashboard-page {
+    gap: 1.5rem;
+  }
+
+  .dashboard-metric-grid,
+  .dashboard-policy-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-card {
+    min-height: 8.5rem;
+  }
+}
+.school-timezone-field {
+  display: grid;
+  gap: .35rem;
+  align-content: start;
+}
+
+.school-timezone-label {
+  color: var(--app-text);
+  font-size: .875rem;
+  font-weight: 600;
+}
+
+.school-timezone-field select {
+  min-height: 3.5rem;
+  width: 100%;
+  border: 1px solid var(--app-border-strong);
+  border-radius: .25rem;
+  background: var(--app-surface);
+  padding: .75rem;
+  color: var(--app-text);
+  font: inherit;
+}
+
+.school-timezone-field select:focus {
+  border-color: var(--app-focus);
+  outline: 2px solid color-mix(in srgb, var(--app-focus) 35%, transparent);
+  outline-offset: 1px;
+}
+
+.school-timezone-help {
+  color: var(--app-text-muted);
+  font-size: .75rem;
 }

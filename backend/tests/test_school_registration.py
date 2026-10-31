@@ -34,6 +34,7 @@ def _payload() -> dict[str, object]:
         "official_email": "ict@example.edu.ug",
         "physical_location": "Kampala",
         "authorised_administrator_name": "School Administrator",
+        "timezone": "UTC",
     }
 
 
@@ -76,6 +77,14 @@ def test_school_registration_rejects_invalid_or_unauthorised_requests(
     invalid["official_telephone"] = "invalid"
     assert (
         client.post("/api/v1/admin/school", headers=headers, json=invalid).status_code
+        == 400
+    )
+    missing_timezone = _payload()
+    missing_timezone.pop("timezone")
+    assert (
+        client.post(
+            "/api/v1/admin/school", headers=headers, json=missing_timezone
+        ).status_code
         == 400
     )
 

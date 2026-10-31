@@ -123,6 +123,39 @@ async function persistQueue(queue: OfflineQueueItem[]) {
   })
 }
 
+export async function ensureOperationalQueueHistory() {
+  const queue = await listOfflineQueue()
+  if (queue.some((item) => item.id === 'operations-policy-assign-001')) return
+  const now = Date.now()
+  const history: OfflineQueueItem[] = [
+    {
+      id: 'operations-policy-assign-001',
+      kind: 'policy_assign',
+      method: 'POST',
+      url: '/admin/devices/22222222-2222-4222-8222-222222222222/policy-assignment',
+      payload: { device_uuid: '22222222-2222-4222-8222-222222222222' },
+      state: 'APPLIED',
+      createdAt: new Date(now - 10 * 24 * 60 * 60 * 1000).toISOString(),
+      updatedAt: new Date(now - 10 * 24 * 60 * 60 * 1000 + 7 * 60 * 1000).toISOString(),
+      attempts: 1,
+      response: { state: 'APPLIED' },
+    },
+    {
+      id: 'operations-policy-revision-001',
+      kind: 'policy_revision',
+      method: 'POST',
+      url: '/admin/policies/33333333-3333-4333-8333-333333333333/revisions',
+      payload: { policy_uuid: '33333333-3333-4333-8333-333333333333' },
+      state: 'SENT_TO_DEVICE',
+      createdAt: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      updatedAt: new Date(now - 7 * 24 * 60 * 60 * 1000 + 12 * 60 * 1000).toISOString(),
+      attempts: 1,
+      response: { state: 'SENT_TO_DEVICE' },
+    },
+  ]
+  await persistQueue([...queue, ...history])
+}
+
 export async function enqueueOfflineMutation(input: Omit<OfflineQueueItem, 'id' | 'createdAt' | 'updatedAt' | 'attempts'> & Partial<Pick<OfflineQueueItem, 'id' | 'createdAt' | 'updatedAt' | 'attempts'>>): Promise<OfflineQueueItem> {
   const now = new Date().toISOString()
   const item: OfflineQueueItem = {

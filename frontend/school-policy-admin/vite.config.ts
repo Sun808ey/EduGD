@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { resolveApiBaseUrl, resolveApiTimeout, resolveSentryDsn } from './src/lib/environment.ts'
@@ -8,8 +9,20 @@ import { resolveApiBaseUrl, resolveApiTimeout, resolveSentryDsn } from './src/li
 const sourceDirectory = path
   .resolve(path.dirname(fileURLToPath(import.meta.url)), 'src')
   .replaceAll('\\', '/')
+const attachedKnowledgePath = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../output/edugd-180-questions-and-answers.md',
+)
+const attachedKnowledgeModule = 'virtual:edugd-qa-source'
+const resolvedAttachedKnowledgeModule = `\0${attachedKnowledgeModule}`
+const attachedKnowledgeText = fs.existsSync(attachedKnowledgePath)
+  ? fs.readFileSync(attachedKnowledgePath, 'utf8')
+  : ''
 export default defineConfig(({ command, mode }) => {
-  const env = loadEnv(mode, process.cwd(), 'VITE_')
+  // Explicit process environment values are authoritative for local runs.
+  // This keeps a developer's selected API origin from being shadowed by a
+  // machine-specific .env.local file.
+  const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env }
   const apiBaseUrl = resolveApiBaseUrl(env.VITE_API_BASE_URL, command === 'build')
   resolveApiTimeout(env.VITE_API_TIMEOUT)
   const sentryDsn = resolveSentryDsn(env.VITE_SENTRY_DSN)
@@ -21,6 +34,16 @@ export default defineConfig(({ command, mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      {
+        name: 'edugd-attached-knowledge-source',
+        resolveId(id) {
+          return id === attachedKnowledgeModule ? resolvedAttachedKnowledgeModule : undefined
+        },
+        load(id) {
+          if (id !== resolvedAttachedKnowledgeModule) return undefined
+          return `export const edugdQaSource = ${JSON.stringify(attachedKnowledgeText)}`
+        },
+      },
       {
         name: 'edug-exact-connect-csp',
         transformIndexHtml: command === 'build' ? {

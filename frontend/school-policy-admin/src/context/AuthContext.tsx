@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { authService } from '@/services/auth.service'
-import { clearSessionToken, getSessionExpiry, setSessionToken } from '@/auth/session'
+import { clearSessionToken, getSessionExpiry, getSessionToken, setSessionToken } from '@/auth/session'
 import { setUnauthorizedHandler } from '@/services/api'
 import { AuthContext } from '@/context/auth-context'
 import type { Administrator, AdministratorPermission } from '@/types/api.types'
@@ -10,7 +10,7 @@ import type { AuthStatus } from '@/context/auth-context'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Administrator | null>(null)
-  const [status, setStatus] = useState<AuthStatus>('anonymous')
+  const [status, setStatus] = useState<AuthStatus>(() => getSessionToken() ? 'authenticating' : 'anonymous')
   const [notice, setNotice] = useState<string | null>(null)
   const expiryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const queryClient = useQueryClient()
@@ -35,6 +35,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const remaining = Math.max(0, getSessionExpiry() - Date.now())
     expiryTimer.current = setTimeout(() => endSession('Your session expired. Please sign in again.'), remaining)
   }, [endSession])
+
+  useEffect(() => {
+    if (!getSessionToken()) return
+    let cancelled = false
+    void authService.getCurrentAdministrator()
+      .then((currentUser) => {
+        if (cancelled) return
+        setUser(currentUser)
+        setStatus('authenticated')
+        scheduleExpiry()
+      })
+      .catch(() => {
+        if (cancelled) return
+        endSession('Your session expired or was revoked. Please sign in again.')
+      })
+    return () => { cancelled = true }
+  }, [endSession, scheduleExpiry])
 
   const login = useCallback(async (username: string, password: string) => {
     setStatus('authenticating')

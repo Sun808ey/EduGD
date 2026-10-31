@@ -28,6 +28,7 @@ const AssignmentsPage = lazy(() => import('@/pages/AssignmentsPage').then((modul
 const DataProtectionPage = lazy(() => import('@/pages/DataProtectionPage').then((module) => ({ default: module.DataProtectionPage })))
 const SyncQueuePage = lazy(() => import('@/pages/SyncQueuePage'))
 const EnforcementCenterPage = lazy(() => import('@/pages/EnforcementCenterPage'))
+const OperationalControlRoomPage = lazy(() => import('@/pages/OperationalControlRoomPage'))
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute><LanguageProvider><AdminShell /></LanguageProvider></ProtectedRoute>}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/operations" element={<OperationalControlRoomPage />} />
           <Route path="/enforcement" element={<EnforcementCenterPage />} />
           <Route path="/school" element={<SchoolRegistrationPage />} />
           <Route path="/settings" element={<SchoolRegistrationPage />} />

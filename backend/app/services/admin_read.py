@@ -616,10 +616,19 @@ def _policy_synchronization_events(limit: int) -> list[dict[str, object]]:
         )
         .limit(limit)
     ).all()
+    eligible_rows: list[tuple[PolicySynchronizationEvent, int]] = []
+    for row in rows:
+        if row.operation not in POLICY_SYNC_OPERATIONS:
+            continue
+        device_id = row.device_id
+        if device_id is not None:
+            eligible_rows.append((row, device_id))
     devices = {
         device.id: device
         for device in db.session.scalars(
-            select(Device).where(Device.id.in_({row.device_id for row in rows}))
+            select(Device).where(
+                Device.id.in_({device_id for _, device_id in eligible_rows})
+            )
         ).all()
     }
     return [
@@ -629,13 +638,12 @@ def _policy_synchronization_events(limit: int) -> list[dict[str, object]]:
             "category": row.outcome_category,
             "operation": row.operation,
             "occurred_at": isoformat_utc(row.requested_at),
-            "device_uuid": str(devices[row.device_id].device_uuid),
+            "device_uuid": str(devices[device_id].device_uuid),
             "device_reference": human_device_reference(
-                row.device_id, devices[row.device_id].asset_number
+                device_id, devices[device_id].asset_number
             ),
         }
-        for row in rows
-        if row.operation in POLICY_SYNC_OPERATIONS
+        for row, device_id in eligible_rows
     ]
 
 

@@ -334,7 +334,7 @@ def validate_policy_v3(value: object) -> dict[str, object]:
         screen_time_result["target_packages"] = sorted(target_packages)
     web_filter_result: dict[str, object] = {
         "default_action": default_action,
-        "rules": sorted(rules, key=lambda r: r["rule_id"]),
+        "rules": sorted(rules, key=lambda r: cast(str, r["rule_id"])),
     }
     if "browser_packages" in web:
         web_filter_result["browser_packages"] = sorted(browser_packages)

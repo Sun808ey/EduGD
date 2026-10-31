@@ -222,9 +222,16 @@ def validate_policy_v3(value: object) -> dict[str, object]:
     screen = value["screen_time"]
     if (
         not isinstance(screen, dict)
-        or not {"daily_limit_minutes", "reset_minute", "exhausted_mode_id"}.issubset(screen)
+        or not {"daily_limit_minutes", "reset_minute", "exhausted_mode_id"}.issubset(
+            screen
+        )
         or not set(screen).issubset(
-            {"daily_limit_minutes", "reset_minute", "exhausted_mode_id", "target_packages"}
+            {
+                "daily_limit_minutes",
+                "reset_minute",
+                "exhausted_mode_id",
+                "target_packages",
+            }
         )
     ):
         raise PolicyContractError("invalid screen_time")
@@ -251,7 +258,10 @@ def validate_policy_v3(value: object) -> dict[str, object]:
     ):
         raise PolicyContractError("invalid screen-time target_packages")
     web = value["web_filter"]
-    if not isinstance(web, dict) or set(web) not in ({"default_action", "rules"}, {"default_action", "rules", "browser_packages"}):
+    if not isinstance(web, dict) or set(web) not in (
+        {"default_action", "rules"},
+        {"default_action", "rules", "browser_packages"},
+    ):
         raise PolicyContractError("invalid web_filter")
     default_action = web["default_action"]
     if default_action not in {"allow", "block"}:

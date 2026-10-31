@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".demo.DpcDemoActivity"
+            android:exported="true"
+            android:label="EduGD DPC demonstration harness" />
+    </application>
+</manifest>

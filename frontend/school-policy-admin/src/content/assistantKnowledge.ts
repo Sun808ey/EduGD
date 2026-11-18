@@ -294,7 +294,7 @@ function parseAttachedQuestionAnswers(markdown: string): AssistantKnowledgeArtic
       continue
     }
     if (/^###\s+/.test(line)) continue
-    const questionMatch = /^(\d+)\.\s+\*\*(.+?)\*\*\s*$/.exec(line)
+    const questionMatch = /^(\d+)\.\s+\*\*(.+?)\*\*\\?\s*$/.exec(line)
     if (questionMatch) {
       commit()
       current = { number: questionMatch[1], question: questionMatch[2], answer: [], section }

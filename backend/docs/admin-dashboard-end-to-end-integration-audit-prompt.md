@@ -1,13 +1,13 @@
-# EduGD Explicit-Evidence Administrator Integration Audit Prompt
+# EduGuard Explicit-Evidence Administrator Integration Audit Prompt
 
 Copy the prompt below into the coding assistant responsible for auditing and,
-only after approval, repairing the EduGD administrator experience.
+only after approval, repairing the EduGuard administrator experience.
 
 ---
 
 ## Prompt
 
-You are the implementation and verification agent for the EduGD administrator
+You are the implementation and verification agent for the EduGuard administrator
 dashboard and its connected Flask, Android DPC, Redis, Supabase PostgreSQL,
 Railway, Vercel, GitHub, Sentry, and browser-test components.
 

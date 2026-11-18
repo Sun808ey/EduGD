@@ -96,7 +96,7 @@ def upgrade() -> None:
     if op.get_bind().dialect.name == "postgresql":
         op.execute(
             """
-            CREATE FUNCTION edug_reject_policy_sync_event_mutation()
+            CREATE FUNCTION eduguard_reject_policy_sync_event_mutation()
             RETURNS trigger AS $$
             BEGIN
                 RAISE EXCEPTION 'policy synchronization events are immutable';
@@ -108,7 +108,7 @@ def upgrade() -> None:
             """
             CREATE TRIGGER trg_policy_synchronization_events_immutable
             BEFORE UPDATE OR DELETE ON policy_synchronization_events
-            FOR EACH ROW EXECUTE FUNCTION edug_reject_policy_sync_event_mutation()
+            FOR EACH ROW EXECUTE FUNCTION eduguard_reject_policy_sync_event_mutation()
             """
         )
 
@@ -161,7 +161,7 @@ def downgrade() -> None:
             "DROP TRIGGER trg_policy_synchronization_events_immutable "
             "ON policy_synchronization_events"
         )
-        op.execute("DROP FUNCTION edug_reject_policy_sync_event_mutation()")
+        op.execute("DROP FUNCTION eduguard_reject_policy_sync_event_mutation()")
     op.drop_index(
         "ix_policy_synchronization_events_pseudonym_requested",
         table_name="policy_synchronization_events",

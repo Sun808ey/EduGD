@@ -29,14 +29,14 @@ def policy() -> dict[str, object]:
         "timezone": "Africa/Kampala",
         "refresh_after_seconds": 300,
         "default_mode": "school",
-        "emergency_packages": ["org.edug.dpc"],
+        "emergency_packages": ["org.eduguard.dpc"],
         "required_capabilities": ["screen_time", "web_filter"],
         "minimum_dpc_version": 3,
         "modes": [
             {
                 "mode_id": "school",
                 "application_mode": "allowlist",
-                "allowed_packages": ["org.edug.dpc"],
+                "allowed_packages": ["org.eduguard.dpc"],
                 "blocked_packages": [],
                 "lock_task_packages": [],
                 "user_restrictions": [],
@@ -335,8 +335,8 @@ def test_v3_validates_policy_identity_and_kiosk_invariants() -> None:
             "allow_in_kiosk": True,
         }
     ]
-    value["emergency_packages"] = ["io.github.sun808ey.edugd.dpc"]
-    value["modes"][0]["allowed_packages"] = ["io.github.sun808ey.edugd.dpc"]
+    value["emergency_packages"] = ["io.github.sun808ey.eduguard.dpc"]
+    value["modes"][0]["allowed_packages"] = ["io.github.sun808ey.eduguard.dpc"]
 
     result = validate_policy_v3(value)
 

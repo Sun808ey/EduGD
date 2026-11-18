@@ -10,7 +10,7 @@ from app.deployment_identity import validate_deployment_identity  # noqa: E402
 if (
     os.getenv("APP_ENV", "development").lower() == "production"
     or os.getenv("RAILWAY_ENVIRONMENT_ID")
-    or os.getenv("EDUG_ENVIRONMENT")
+    or os.getenv("EDUGUARD_ENVIRONMENT")
 ):
     validate_deployment_identity(os.environ)
 

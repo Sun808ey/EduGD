@@ -4,7 +4,7 @@ const { chromium } = require('@playwright/test');
 
 const repoRoot = path.resolve(__dirname, '../../../');
 const outputDir = path.join(repoRoot, 'output');
-const outputPath = path.join(outputDir, 'edugd-android-device-flow.webm');
+const outputPath = path.join(outputDir, 'eduguard-android-device-flow.webm');
 const tempDir = path.join(outputDir, '.device-flow-video');
 
 fs.mkdirSync(outputDir, { recursive: true });
@@ -126,19 +126,19 @@ const html = `<!doctype html>
             <p>This school-owned device will be managed by your organization.</p>
             <div class="qr"><div class="qr-grid"></div><i class="finder one"></i><i class="finder two"></i><i class="finder three"></i><i class="scan-line"></i></div>
             <div class="center"><h2>Scan the enrollment QR code</h2><p class="muted">Provisioning is secured by Android Enterprise.</p></div>
-            <div class="card"><div class="row"><div class="icon">▣</div><div><strong>School-owned device</strong><span>EduGD device policy controller</span></div></div></div>
+            <div class="card"><div class="row"><div class="icon">▣</div><div><strong>School-owned device</strong><span>EduGuard device policy controller</span></div></div></div>
           </section>
           <section class="scene" data-scene="1">
             <div class="eyebrow">Android Enterprise</div>
             <h1>Provisioning device owner</h1>
             <p>Applying managed configuration and preparing the secure work environment.</p>
-            <div class="card"><div class="row"><div class="icon">↻</div><div><strong>EduGD Device Policy Controller</strong><span>Establishing organization controls</span></div></div><div class="progress"><i></i></div></div>
+            <div class="card"><div class="row"><div class="icon">↻</div><div><strong>EduGuard Device Policy Controller</strong><span>Establishing organization controls</span></div></div><div class="progress"><i></i></div></div>
             <div class="card"><div class="row"><div class="icon green">✓</div><div><strong>Management profile ready</strong><span>Device owner mode will be activated</span></div></div><div class="row"><div class="icon">⌁</div><div><strong>Secure enrollment channel</strong><span>Waiting for policy synchronization</span></div></div></div>
           </section>
           <section class="scene" data-scene="2">
             <div class="center">
               <div class="check">✓</div>
-              <div class="eyebrow">EduGD DPC</div>
+              <div class="eyebrow">EduGuard DPC</div>
               <h1>Device enrolled</h1>
               <p>The device is now connected to your school administration service.</p>
               <div class="pill"><i class="dot"></i>Policy synchronization active</div>
@@ -149,7 +149,7 @@ const html = `<!doctype html>
             <div class="eyebrow">Managed device</div>
             <h1>Class Time Policy</h1>
             <p class="launcher-sub">Active now · Device owner controls enabled</p>
-            <div class="app-grid"><div class="app safe"><b>∑</b><span>Khan Academy</span></div><div class="app safe"><b>文</b><span>Duolingo</span></div><div class="app safe"><b>ED</b><span>EduGD</span></div><div class="app blocked"><b>♪</b><span>Social video</span></div><div class="app blocked"><b>◎</b><span>Games</span></div><div class="app blocked"><b>◈</b><span>Entertainment</span></div></div>
+            <div class="app-grid"><div class="app safe"><b>∑</b><span>Khan Academy</span></div><div class="app safe"><b>文</b><span>Duolingo</span></div><div class="app safe"><b>ED</b><span>EduGuard</span></div><div class="app blocked"><b>♪</b><span>Social video</span></div><div class="app blocked"><b>◎</b><span>Games</span></div><div class="app blocked"><b>◈</b><span>Entertainment</span></div></div>
             <div class="managed"><strong>Managed by your school</strong><p>Learning applications are available. Restricted applications remain unavailable during class time.</p></div>
           </section>
           <section class="scene blocked-bg" data-scene="4">
@@ -157,10 +157,10 @@ const html = `<!doctype html>
             <h1>Opening social video</h1>
             <div class="app-launch">♪</div>
             <div class="deny"><h2>Access blocked</h2><p>Class Time Policy does not allow this application right now.</p><div class="support">This action is blocked by your school administrator.</div></div>
-            <div class="violation"><span class="icon red" style="width:34px;height:34px;border-radius:10px;font-size:18px">!</span><span>Policy violation recorded by EduGD DPC</span></div>
+            <div class="violation"><span class="icon red" style="width:34px;height:34px;border-radius:10px;font-size:18px">!</span><span>Policy violation recorded by EduGuard DPC</span></div>
           </section>
           <section class="scene review" data-scene="5">
-            <div class="review-top"><div><div class="eyebrow">EduGD activity</div><h1>Violation recorded</h1></div><div class="live"><i class="dot"></i>Synced</div></div>
+            <div class="review-top"><div><div class="eyebrow">EduGuard activity</div><h1>Violation recorded</h1></div><div class="live"><i class="dot"></i>Synced</div></div>
             <div class="event"><div class="event-head"><strong>Blocked application launch</strong><time>09:47:18</time></div><p>Social video · package restricted by Class Time Policy</p><span class="state">Recorded by device policy controller</span></div>
             <div class="event"><div class="event-head"><strong>Policy enforcement</strong><time>09:47:19</time></div><p>Access denied and support message displayed on device</p><span class="state">Enforced on device</span></div>
             <div class="event"><div class="event-head"><strong>Administration sync</strong><time>09:47:21</time></div><p>Violation event acknowledged by school service</p><span class="state">Securely synchronized</span></div>
@@ -186,7 +186,7 @@ const html = `<!doctype html>
             <div class="card"><div class="row"><div class="icon green">↻</div><div><strong>Next policy check-in scheduled</strong><span>Current policy remains active on device</span></div></div><div class="row"><div class="icon green">✓</div><div><strong>Lifecycle complete</strong><span>Provisioned · enrolled · enforced · recorded · acknowledged</span></div></div></div>
           </section>
         </div>
-        <div class="brand">EDUGD · DEVICE POLICY CONTROLLER</div>
+        <div class="brand">EduGuard · DEVICE POLICY CONTROLLER</div>
         <div class="timeline"><i id="timelineFill"></i></div>
         <div class="nav"></div>
       </div>

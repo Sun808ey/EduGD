@@ -1,10 +1,16 @@
-# EduG production integration implementation report
+# EduGuard production integration implementation report
+
+> **Historical implementation report.** Its tables describe repository and
+> provider state when the report was prepared. For the latest observations, use
+> [current project status](../../docs/current-status.md). Android source is now
+> present in this repository; physical-device certification remains unverified.
 
 Initial integration verification: 10 September 2026. Reviewed for Phase 1 on
 12 September 2026, including the subsequently completed administrator portal.
 The dated implementation tables below retain the initial work record; current
 synchronization evidence is in [the Phase 1 report](phase-1-synchronization-report.md).
-Production platform configuration and production state remain unverified.
+Production platform configuration and production state were unverified at the
+time of this report.
 
 ## A. Executive summary
 
@@ -34,7 +40,7 @@ cutover approval. No production database was contacted.
 | --- | --- |
 | Factory/entry | `app.create_app` is exported through `run.py`; Gunicorn can use `run:app` without restructuring. |
 | Database | Flask-SQLAlchemy with psycopg2; runtime and migration URLs are separate and restricted to approved Supabase direct/session connections. |
-| Migrations | Twenty linear revisions, current repository head `d8f1a3c6e9b2`. Hosted databases remain at their separately verified deployed head until the new migrations are explicitly approved. SQLite tests do not prove PostgreSQL trigger/concurrency behavior. |
+| Migrations (at report date) | Twenty linear revisions, then-current repository head `d8f1a3c6e9b2`. Hosted databases remained at their separately verified deployed head until new migrations were explicitly approved. SQLite tests do not prove PostgreSQL trigger/concurrency behavior. See the current-status page for the current local migration head and hosted verification boundary. |
 | Authentication | Existing 15-minute JWT Bearer sessions, database-authoritative administrator permissions/RBAC, enrollment controls and device signature/nonce checks remain. |
 | Policy/sync | Existing immutable policy revisions, assignments and synchronization contracts are retained. Protocol v2 adds canonical Ed25519-signed policy envelopes, authenticated device check-ins, and policy-application acknowledgements for the future DPC. |
 | Forensics | Revision hashes, assignment/synchronization hash chains and database triggers remain. Authenticated, signed, hash-chained offline device event batches are now ingested idempotently, while append-only check-ins and policy-application events maintain current-state projections. Hosted rollout remains gated on explicit migration and runtime-security approval. |
@@ -43,12 +49,13 @@ cutover approval. No production database was contacted.
 | Security | Strong secret validation, body limits, replay defenses and one trusted proxy hop already exist. Production CORS now requires exact HTTPS origins. Historical-secret remediation remains externally unverified. |
 | Deployment | Railway is the sole configured backend platform and runs migrations as a separate pre-deploy command. |
 | Frontend | The React/Vite/TypeScript administrator portal is implemented, including authentication, device/policy/enrollment/audit views and permission-aware actions. The starter UI and missing-module finding describe the pre-implementation baseline, now superseded by the frontend audit and section M. |
-| Android | No Android sources in this checkout. DevicePolicyManager → local deterministic engine → Room/queue → synchronization is the required external architecture, not a verified implementation here. Cloud connectivity must never become a prerequisite for cached enforcement. |
+| Android (at report date) | Android sources were not present in the checkout inspected for this report. Android DPC source is now present under `../android-dpc/` and `../app/`; physical-device certification remains unverified. Cloud connectivity must never become a prerequisite for cached enforcement. |
 
 The relevant backend, migrations, tests, configuration, dependencies, CI,
-deployment documentation and frontend foundation were reviewed. The source
-database contents, deployed source revision, Android build and external service
-settings are unknown and must not be inferred from this checkout.
+deployment documentation and frontend foundation were reviewed at the time.
+The source database contents, deployed source revision, Android build and
+external service settings were unknown then and must not be inferred from this
+historical report.
 
 ## C. Changes, justification, risk and verification
 

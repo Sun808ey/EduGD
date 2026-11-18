@@ -1,4 +1,4 @@
-# EduGD frontend/admin contract coverage
+# EduGuard frontend/admin contract coverage
 
 This registry is the source-of-truth checklist for the administrator dashboard.
 It describes the current Flask contracts and their safe browser representation.

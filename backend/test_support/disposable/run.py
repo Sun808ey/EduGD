@@ -13,7 +13,7 @@ from test_support.postgres_safety import (
     validate_postgres_test_environment,
 )
 
-DATABASE_HOST = "db.eduglocaltest0000001.supabase.co"
+DATABASE_HOST = "db.eduguardtest00000001.supabase.co"
 
 
 def _wait_for_internal_dns(timeout: float = 30.0) -> None:
@@ -45,7 +45,7 @@ def main() -> int:
             connection.execute(
                 text(
                     """DO $$ DECLARE role_name text; BEGIN
-                    FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated', 'service_role', 'edug_runtime'] LOOP
+                    FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated', 'service_role', 'eduguard_runtime'] LOOP
                         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
                             EXECUTE format('CREATE ROLE %I NOLOGIN', role_name);
                         END IF;

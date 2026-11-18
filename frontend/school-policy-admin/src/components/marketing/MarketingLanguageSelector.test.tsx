@@ -26,7 +26,7 @@ describe('MarketingLanguageSelector', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose language/i }))
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Luganda' }))
     expect(window.localStorage.getItem(publicLanguageStorageKey)).toBe('lug')
-    expect(window.localStorage.getItem('edug.admin.language')).toBeNull()
+    expect(window.localStorage.getItem('eduguard.admin.language')).toBeNull()
     await waitFor(() => expect(api.post).toHaveBeenCalled())
     expect(vi.mocked(api.post).mock.calls.length).toBeLessThanOrEqual(60)
     for (const call of vi.mocked(api.post).mock.calls) {

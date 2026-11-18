@@ -122,7 +122,7 @@ def violation_report_csv() -> Response:
         writer.writerow({**row, "details": str(row["details"])})
     response = Response(output.getvalue(), mimetype="text/csv")
     response.headers["Content-Disposition"] = (
-        "attachment; filename=edugd-violations.csv"
+        "attachment; filename=eduguard-violations.csv"
     )
     response.headers["Cache-Control"] = "no-store"
     return response

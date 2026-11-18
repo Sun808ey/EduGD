@@ -7,7 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$packageName = "io.github.sun808ey.edugd.dpc"
+$packageName = "io.github.sun808ey.eduguard.dpc.debug"
 $adminComponent = "$packageName/.admin.AdminReceiver"
 $demoComponent = "$packageName/.demo.DpcDemoActivity"
 $learnerComponent = "$packageName/.MainActivity"
@@ -32,7 +32,7 @@ if (-not $SkipInstall) {
 & $Adb shell dpm list-owners
 if ($LASTEXITCODE -ne 0) { throw "Could not inspect DevicePolicyManager owners." }
 
-Write-Host "Setting EduGD as the device owner. Use a clean emulator with no account or work profile."
+Write-Host "Setting EduGuard as the device owner. Use a clean emulator with no account or work profile."
 & $Adb shell dpm set-device-owner --user current $adminComponent
 if ($LASTEXITCODE -ne 0) {
     throw "Device-owner provisioning failed. Reset the emulator and rerun; do not remove a real device owner during the panel demo."

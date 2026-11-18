@@ -1,12 +1,18 @@
 # Environment resource map
 
-> Historical deployment note: the hosted evidence below records the `e4a1b7c9d2f6`
-> deployment snapshot and its 18-table schema. The current repository head is
-> `d8f1a3c6e9b2`; current verification must use the repository migrations and
-> metadata-derived table inventory rather than treating the historical counts as
-> the current schema.
+> **Current-state pointer:** this file preserves historical provider setup and
+> execution evidence. Earlier statements here that staging and production
+> deployments are healthy, or that Android source is absent, are superseded by
+> the [current project status](../../docs/current-status.md), observed on
+> 18 November 2026. Android source is now present; device acceptance remains
+> outstanding.
 
-## Status and scope
+> Historical deployment note: the hosted evidence below records the
+> `e4a1b7c9d2f6` deployment snapshot and its 18-table schema. Revision references
+> in this record belong to that snapshot; use the current repository migration
+> history and metadata-derived inventory for present-day checks.
+
+## Historical status and scope
 
 **Workbook continuation:** the owner authorized completion against `inter.md`
 for the academic proof of concept, subject to current Free-only instructions.
@@ -28,19 +34,20 @@ deployment/authentication verification passed. Production owner preflight then
 confirmed the assigned database, verified TLS, effective migration privileges
 and an empty schema. Alembic reached `e4a1b7c9d2f6` with exactly 18 public
 tables. The runtime security transaction passed 126 permission checks, enabled
-RLS on all 18 tables, installed 18 `edug_backend_runtime` policies and denied
+RLS on all 18 tables, installed 18 `eduguard_backend_runtime` policies and denied
 the Data API roles. Production runtime connectivity, Railway deployment,
 public readiness, Vercel deployment and CORS verification now pass. The
 production API is `https://edug-api-production-production.up.railway.app` and
 the production frontend is `https://edug-admin.vercel.app`.
 
-**Latest progress, 17 September 2026:** the owner authorized steps 3–7 in
-sequence using zero-cost plans and confirmed EduG is strictly personal and
+**Historical progress, 17 September 2026:** the owner authorized steps 3–7 in
+sequence using zero-cost plans and confirmed EduGuard is strictly personal and
 non-commercial. Supabase schema/security checks, Redis TLS checks, Railway API
 deployments and Vercel frontend deployments now pass for staging and
-production. Android offline-device acceptance remains outstanding because this
-checkout has no Android implementation. Earlier pause and approval statements
-below are historical where superseded here.
+production. Android offline-device acceptance remained outstanding because
+physical-device evidence was not available then. Earlier pause and approval
+statements below are historical; see the current-status page for present
+provider state.
 
 ### Verified frontend assignments (step 3)
 
@@ -63,7 +70,7 @@ repository and assigned its provider domain. Its initial generated domain
 `project-irlim.vercel.app` remains an additional alias. Domain assignment is
 verified; the staging domain has no deployed application yet. Vercel's label
 "Production" inside this separate staging project means its stable deployment
-slot, not EduG production. No paid custom environment or paid build resource
+slot, not EduGuard production. No paid custom environment or paid build resource
 was enabled. Staging project model-training sharing and PR comments were disabled.
 The existing production deployment was not replaced. Build holds must be lifted
 only for the reviewed staging/release deployments at their respective gates.
@@ -92,7 +99,7 @@ workflow remains local until the owner commits and pushes. No commit/push was ma
 
 Both Railway APIs contained only generated platform variables before this step.
 Applied and read back seven non-secret settings using `--skip-deploys`:
-`APP_ENV=production`, the respective `EDUG_ENVIRONMENT`, `FLASK_APP=run.py`,
+`APP_ENV=production`, the respective `EDUGUARD_ENVIRONMENT`, `FLASK_APP=run.py`,
 `FLASK_DEBUG=false`, each exact frontend origin, pool size 1 and overflow 0.
 The platform environment IDs matched the resource map. Both services remain
 offline. Database/Redis URLs, signing/audit keys, enrollment settings, TLS trust,
@@ -128,10 +135,10 @@ Step 3 is paused until steps 1 and 2 are verified.
 **The owner confirmed both Supabase projects are active (healthy), on Free,
 and in `eu-west-1` on 13 September 2026.** The Supabase assignment checkpoint
 is satisfied by owner confirmation. The owner also confirmed `blissful-luck`
-as the EduG Railway host and reported that the Free-capacity check passed.
+as the EduGuard Railway host and reported that the Free-capacity check passed.
 The owner supplied distinct Railway staging/production environment IDs and
 confirmed staging was created empty, production remained unchanged, and no
-deployments or migrations were started. The owner also confirmed production has no EduG API or Redis service.
+deployments or migrations were started. The owner also confirmed production has no EduGuard API or Redis service.
 The empty staging API has since been created and verified as recorded below.
 The empty production API has also been created with separate explicit approval.
 Redis provisioning and owner-reported local probes are complete; credential
@@ -177,8 +184,8 @@ These are non-secret dashboard identifiers, not connection strings or tokens.
 | Provider | Observed resource | What is established | What remains unknown |
 | --- | --- | --- | --- |
 | Supabase | `Sun808ey's Project`, dashboard project `hldwbhnaoschhelecksq`, region `eu-west-1` | One project visible in the selected Free organization | Existing data, clients, intended environment, runtime roles and credential scope; do not designate it disposable |
-| Railway | `blissful-luck`, project `7d0c485e-3e9f-411c-9412-af8dd6f32481` | Owner-confirmed EduG host; owner reports Free-capacity check passed. Earlier dashboard observation listed no services | Environment IDs and absent production API/Redis confirmed by owner; service creation, configuration and token scopes pending |
-| Railway | `serene-appreciation`, project `c6d8efd6-7ddb-4cf8-b6dc-767b3d244f09` | `production` environment contains online service `PLuwebz` | No evidence connects it to EduG; leave untouched |
+| Railway | `blissful-luck`, project `7d0c485e-3e9f-411c-9412-af8dd6f32481` | Owner-confirmed EduGuard host; owner reports Free-capacity check passed. Earlier dashboard observation listed no services | Environment IDs and absent production API/Redis confirmed by owner; service creation, configuration and token scopes pending |
+| Railway | `serene-appreciation`, project `c6d8efd6-7ddb-4cf8-b6dc-767b3d244f09` | `production` environment contains online service `PLuwebz` | No evidence connects it to EduGuard; leave untouched |
 | Vercel | `sun-g/edug-admin` | Linked to `Sun808ey/EduGD`; stable domain `edug-admin.vercel.app`; feature-branch previews exist | Environment-specific API URL, production branch/root settings and deployment readiness |
 | Vercel | Other projects in `sun-g` | Other repositories are listed | Outside this map; do not repurpose them |
 
@@ -194,7 +201,7 @@ status. No third active project is part of this plan.
   point-in-time recovery are not included. Arrange approved manual backup and
   restore checks; do not commit dumps or promise continuous availability.[3]
 - Railway Free provides $1 of monthly credit.[6] The owner confirmed that the
-  Free-capacity check passed for EduG on `blissful-luck`; this checkpoint is
+  Free-capacity check passed for EduGuard on `blissful-luck`; this checkpoint is
   satisfied by owner confirmation. The earlier Trial observation is historical.
   No independent usage measurements or continuous-uptime guarantee are claimed.
   Keep deployed usage within Free allowances and retain required Redis hardening;
@@ -300,7 +307,7 @@ the overall isolation outcome complete. This map adds no runtime behavior.
    or migrations were started. The supplied confirmation contains only non-secret
    identifiers and setup status.
 
-   **Production service inventory complete by owner confirmation.** EduG API:
+   **Production service inventory complete by owner confirmation.** EduGuard API:
    absent, name/ID N/A. Redis: absent, name/ID N/A. Staging was created empty.
    The owner confirmed no configuration, deployment, migration, commit or push
    was performed during this inventory check. N/A denotes absence, not an ID.

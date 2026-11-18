@@ -82,8 +82,8 @@ def test_successful_login_stores_only_jti_digest_and_returns_bounded_jwt(
 
     with app.app_context():
         claims = decode_token(access_token)
-        assert claims["iss"] == "edug-school-policy-api"
-        assert claims["aud"] == "edug-school-administration"
+        assert claims["iss"] == "eduguard-school-policy-api"
+        assert claims["aud"] == "eduguard-school-administration"
         assert "permissions" not in claims
         assert "role" not in claims
         assert "password" not in claims

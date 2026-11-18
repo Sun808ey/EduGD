@@ -5,7 +5,7 @@ supported dashboard settings; new services cannot rely on legacy `railway.json`.
 The legacy JSON is retained as a reference, with automatic migrations removed.
 Do not attach source or start a deployment until the preceding gates pass.
 
-Applied so far: both services have verified `APP_ENV`, `EDUG_ENVIRONMENT`,
+Applied so far: both services have verified `APP_ENV`, `EDUGUARD_ENVIRONMENT`,
 `FLASK_APP`, `FLASK_DEBUG`, `ADMIN_FRONTEND_ORIGINS` and pool settings through
 the CLI with `--skip-deploys`. Both remain offline. The build/start/healthcheck
 settings below are prepared, not yet verified on the services. See the
@@ -27,7 +27,7 @@ settings below are prepared, not yet verified on the services. See the
 
 `run.py` now validates deployment identity before creating a production app.
 Set `APP_ENV=production` in both environments for production hardening, and set
-`EDUG_ENVIRONMENT` to `staging` or `production` respectively. The platform-provided
+`EDUGUARD_ENVIRONMENT` to `staging` or `production` respectively. The platform-provided
 `RAILWAY_ENVIRONMENT_ID` must match the pinned resource map. Never override that
 platform identity to make an incorrectly assigned service pass.
 

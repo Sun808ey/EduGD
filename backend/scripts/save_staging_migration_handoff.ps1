@@ -3,14 +3,14 @@
 param([switch]$FromClipboard)
 
 $ErrorActionPreference = 'Stop'
-$edugBackend = Split-Path -Parent $PSScriptRoot
-$edugPython = Join-Path $edugBackend 'venv\Scripts\python.exe'
-$edugDestination = Join-Path $edugBackend 'operator-evidence\staging-migration-url.clixml'
-$edugValidation = @'
+$eduguardBackend = Split-Path -Parent $PSScriptRoot
+$eduguardPython = Join-Path $eduguardBackend 'venv\Scripts\python.exe'
+$eduguardDestination = Join-Path $eduguardBackend 'operator-evidence\staging-migration-url.clixml'
+$eduguardValidation = @'
 import os
 from pathlib import Path
 from app.config import validate_postgres_database_uri, database_project_identity
-raw = os.environ.pop('EDUG_HANDOFF_INPUT', '')
+raw = os.environ.pop('EDUGUARD_HANDOFF_INPUT', '')
 if not raw.startswith(('postgresql://', 'postgresql+psycopg2://')):
     print('Not saved: enter the complete PostgreSQL URL, starting with postgresql:// or postgresql+psycopg2://.')
     raise SystemExit(2)
@@ -26,38 +26,38 @@ except Exception:
 print('PASS: local staging URL checks. No database connection was made.')
 '@
 
-if (-not (Test-Path -LiteralPath $edugPython)) {
+if (-not (Test-Path -LiteralPath $eduguardPython)) {
     throw 'Backend Python environment is missing.'
 }
-Push-Location $edugBackend
+Push-Location $eduguardBackend
 try {
-    $edugIgnored = & git check-ignore --quiet -- $edugDestination
+    $eduguardIgnored = & git check-ignore --quiet -- $eduguardDestination
     if ($LASTEXITCODE -ne 0) { throw 'Handoff destination is not Git-ignored.' }
     if ($FromClipboard) {
         # Explicit opt-in avoids console paste/shortcut problems at masked prompts.
-        $edugClipboardText = Get-Clipboard -Raw
-        if ([string]::IsNullOrWhiteSpace($edugClipboardText)) {
+        $eduguardClipboardText = Get-Clipboard -Raw
+        if ([string]::IsNullOrWhiteSpace($eduguardClipboardText)) {
             Write-Output 'Not saved: clipboard is empty. Copy the complete URL and retry.'
             return
         }
-        $edugInput = ConvertTo-SecureString -String $edugClipboardText.Trim() -AsPlainText -Force
-        $edugClipboardText = $null
+        $eduguardInput = ConvertTo-SecureString -String $eduguardClipboardText.Trim() -AsPlainText -Force
+        $eduguardClipboardText = $null
     } else {
-        $edugInput = Read-Host 'Paste the complete staging migration-owner PostgreSQL URL (hidden)' -AsSecureString
+        $eduguardInput = Read-Host 'Paste the complete staging migration-owner PostgreSQL URL (hidden)' -AsSecureString
     }
-    $edugPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($edugInput)
+    $eduguardPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($eduguardInput)
     try {
-        $env:EDUG_HANDOFF_INPUT = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($edugPointer)
+        $env:EDUGUARD_HANDOFF_INPUT = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($eduguardPointer)
     } finally {
-        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($edugPointer)
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($eduguardPointer)
     }
-    & $edugPython -c $edugValidation
+    & $eduguardPython -c $eduguardValidation
     if ($LASTEXITCODE -ne 0) {
         Write-Output 'Input was rejected. The existing encrypted file was not changed.'
         return
     }
-    New-Item -ItemType Directory -Path (Split-Path -Parent $edugDestination) -Force | Out-Null
-    $edugInput | Export-Clixml -LiteralPath $edugDestination
+    New-Item -ItemType Directory -Path (Split-Path -Parent $eduguardDestination) -Force | Out-Null
+    $eduguardInput | Export-Clixml -LiteralPath $eduguardDestination
     Write-Output 'SAVED: validated input encrypted for this Windows account. No migration performed.'
     if ($FromClipboard) {
         try {
@@ -69,8 +69,8 @@ try {
         }
     }
 } finally {
-    Remove-Item Env:EDUG_HANDOFF_INPUT -ErrorAction SilentlyContinue
-    $edugClipboardText = $null
-    if ($edugInput) { $edugInput.Dispose() }
+    Remove-Item Env:EDUGUARD_HANDOFF_INPUT -ErrorAction SilentlyContinue
+    $eduguardClipboardText = $null
+    if ($eduguardInput) { $eduguardInput.Dispose() }
     Pop-Location
 }

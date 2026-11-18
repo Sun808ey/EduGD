@@ -1,6 +1,6 @@
 """Identifiers for the pilot Android integration; no device-wide emergency allowlist."""
 
-DPC_APPLICATION_ID = "io.github.sun808ey.edugd.dpc"
+DPC_APPLICATION_ID = "io.github.sun808ey.eduguard.dpc"
 INITIAL_EDUCATIONAL_APPS = frozenset(
     {
         "com.google.android.apps.classroom",

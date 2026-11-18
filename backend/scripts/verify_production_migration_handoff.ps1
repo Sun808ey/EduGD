@@ -1,16 +1,16 @@
 # Run under the same Windows account that saved the encrypted handoff.
 # Output is deliberately redacted: never print the URL or provider exception.
 $ErrorActionPreference = 'Stop'
-$edugBackend = Split-Path -Parent $PSScriptRoot
-$edugPython = Join-Path $edugBackend 'venv\Scripts\python.exe'
-$edugHandoff = Join-Path $edugBackend 'operator-evidence\production-migration-url.clixml'
-$edugPointer = [IntPtr]::Zero
-$edugSecure = $null
+$eduguardBackend = Split-Path -Parent $PSScriptRoot
+$eduguardPython = Join-Path $eduguardBackend 'venv\Scripts\python.exe'
+$eduguardHandoff = Join-Path $eduguardBackend 'operator-evidence\production-migration-url.clixml'
+$eduguardPointer = [IntPtr]::Zero
+$eduguardSecure = $null
 
-if (-not (Test-Path -LiteralPath $edugPython)) { throw 'Backend Python environment is missing.' }
-if (-not (Test-Path -LiteralPath $edugHandoff)) { throw 'Encrypted production handoff is missing.' }
+if (-not (Test-Path -LiteralPath $eduguardPython)) { throw 'Backend Python environment is missing.' }
+if (-not (Test-Path -LiteralPath $eduguardHandoff)) { throw 'Encrypted production handoff is missing.' }
 
-$edugCheck = @'
+$eduguardCheck = @'
 import json
 import os
 
@@ -20,7 +20,7 @@ from sqlalchemy.engine import make_url
 result = {"production_preflight": "FAIL", "stage": "local_identity"}
 engine = None
 try:
-    raw = os.environ.pop("EDUG_PRODUCTION_MIGRATION_URL")
+    raw = os.environ.pop("EDUGUARD_PRODUCTION_MIGRATION_URL")
     url = make_url(raw)
     assert url.database == "postgres"
     assert url.port == 5432
@@ -103,20 +103,20 @@ raise SystemExit(0 if result["production_preflight"] == "PASS" else 1)
 '@
 
 try {
-    $edugSecure = Import-Clixml -LiteralPath $edugHandoff
-    $edugPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($edugSecure)
-    $env:EDUG_PRODUCTION_MIGRATION_URL = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($edugPointer)
-    Push-Location $edugBackend
+    $eduguardSecure = Import-Clixml -LiteralPath $eduguardHandoff
+    $eduguardPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($eduguardSecure)
+    $env:EDUGUARD_PRODUCTION_MIGRATION_URL = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($eduguardPointer)
+    Push-Location $eduguardBackend
     try {
-        $edugOutput = @($edugCheck | & $edugPython -)
-        $edugExitCode = $LASTEXITCODE
-        $edugOutput | Write-Output
-        if ($edugExitCode -ne 0) { throw 'Embedded verification failed.' }
+        $eduguardOutput = @($eduguardCheck | & $eduguardPython -)
+        $eduguardExitCode = $LASTEXITCODE
+        $eduguardOutput | Write-Output
+        if ($eduguardExitCode -ne 0) { throw 'Embedded verification failed.' }
     } finally { Pop-Location }
 } finally {
-    Remove-Item Env:EDUG_PRODUCTION_MIGRATION_URL -ErrorAction SilentlyContinue
-    if ($edugPointer -ne [IntPtr]::Zero) {
-        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($edugPointer)
+    Remove-Item Env:EDUGUARD_PRODUCTION_MIGRATION_URL -ErrorAction SilentlyContinue
+    if ($eduguardPointer -ne [IntPtr]::Zero) {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($eduguardPointer)
     }
-    if ($null -ne $edugSecure) { $edugSecure.Dispose() }
+    if ($null -ne $eduguardSecure) { $eduguardSecure.Dispose() }
 }

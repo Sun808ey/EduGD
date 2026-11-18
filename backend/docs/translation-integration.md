@@ -1,6 +1,6 @@
 # Sunbird AI translation integration
 
-EduGD uses Sunbird AI only as a presentation dependency for public marketing
+EduGuard uses Sunbird AI only as a presentation dependency for public marketing
 copy and approved administrator dynamic content. The supported language codes
 are exactly `eng`, `ach`, `lgg`, `teo`, `nyn`, and `lug`.
 

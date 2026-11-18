@@ -1,4 +1,8 @@
-# Phase 2 — EduGD contract matrix and feature classification
+# Phase 2 — EduGuard contract matrix and feature classification
+
+> **Historical matrix, 1 October 2026.** Its repository, migration and hosted
+> evidence is a dated snapshot. See [current project status](../../docs/current-status.md)
+> for the latest observed repository head and provider state.
 
 Date: 2026-10-01  
 Scope: repository evidence and disposable localhost evidence only. Hosted

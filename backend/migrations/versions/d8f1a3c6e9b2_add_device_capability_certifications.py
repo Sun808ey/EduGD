@@ -55,18 +55,18 @@ def upgrade() -> None:
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOKE ALL PRIVILEGES ON TABLE device_capability_certifications FROM anon; END IF;
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN REVOKE ALL PRIVILEGES ON TABLE device_capability_certifications FROM authenticated; END IF;
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN REVOKE ALL PRIVILEGES ON TABLE device_capability_certifications FROM service_role; END IF;
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN REVOKE ALL PRIVILEGES ON TABLE device_capability_certifications FROM edug_runtime; END IF;
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eduguard_runtime') THEN REVOKE ALL PRIVILEGES ON TABLE device_capability_certifications FROM eduguard_runtime; END IF;
             END $$"""
         )
         op.execute(
-            """CREATE FUNCTION edug_reject_certification_mutation() RETURNS trigger AS $$
+            """CREATE FUNCTION eduguard_reject_certification_mutation() RETURNS trigger AS $$
             BEGIN RAISE EXCEPTION 'certification evidence is immutable'; END;
             $$ LANGUAGE plpgsql"""
         )
         op.execute(
             "CREATE TRIGGER trg_device_capability_certifications_immutable "
             "BEFORE UPDATE OR DELETE ON device_capability_certifications "
-            "FOR EACH ROW EXECUTE FUNCTION edug_reject_certification_mutation()"
+            "FOR EACH ROW EXECUTE FUNCTION eduguard_reject_certification_mutation()"
         )
 
 
@@ -75,7 +75,7 @@ def downgrade() -> None:
         op.execute(
             "DROP TRIGGER trg_device_capability_certifications_immutable ON device_capability_certifications"
         )
-        op.execute("DROP FUNCTION edug_reject_certification_mutation()")
+        op.execute("DROP FUNCTION eduguard_reject_certification_mutation()")
     op.drop_index(
         "ix_device_capability_certifications_fingerprint",
         table_name="device_capability_certifications",

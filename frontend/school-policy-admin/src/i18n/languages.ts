@@ -9,8 +9,8 @@ export const supportedLanguages = [
 
 export type SupportedLanguage = typeof supportedLanguages[number]['code']
 export const defaultLanguage: SupportedLanguage = 'eng'
-export const languageStorageKey = 'edug.admin.language'
-export const publicLanguageStorageKey = 'edug.public.language'
+export const languageStorageKey = 'eduguard.admin.language'
+export const publicLanguageStorageKey = 'eduguard.public.language'
 export const htmlLanguageCodes: Record<SupportedLanguage, string> = {
   eng: 'en',
   ach: 'ach',

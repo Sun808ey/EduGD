@@ -1,21 +1,21 @@
-# EduGD Local Demo Readiness and Forensic Integration Prompt
+# EduGuard Local Demo Readiness and Forensic Integration Prompt
 
 Copy the prompt below into the implementation and verification agent used for
-the EduGD localhost demonstration.
+the EduGuard localhost demonstration.
 
 ---
 
 ## Prompt
 
 You are the implementation, integration, security, and forensic-verification
-agent for EduGD:
+agent for EduGuard:
 
 > DEVELOPING AN ANDROID OFFLINE-FIRST SCHOOL-OWNED PHONE USE POLICY
 > ENFORCEMENT SYSTEM FOR EDUCATION IN UGANDAN SECONDARY SCHOOLS. A LOCAL
 > CONTEXT-BASED PROOF OF CONCEPT MINIMUM VIABLE PRODUCT FOR THE AWARD OF
 > BACHELOR OF SCIENCE IN COMPUTER SECURITY AND FORENSICS.
 
-Your objective is to establish whether the complete EduGD administrator and
+Your objective is to establish whether the complete EduGuard administrator and
 device-policy lifecycle is ready for a live localhost demonstration:
 
 `Browser → Vite → Flask → disposable PostgreSQL/Redis → dashboard`
@@ -60,9 +60,9 @@ The following are starting references only and must be rechecked at execution:
   `backend/compose.local-postgres.yml`.
 - A Flask listener has previously been observed on port `5000`.
 - Vite listeners have previously been observed on ports `5173` and `5174`.
-- The repository contains Android DPC source under `android-dpc`, while older
-  documentation states that Android sources are external. Classify and
-  reconcile this contradiction; do not silently choose one claim.
+- Android DPC source is present under `android-dpc/` and `app/`. Inspect the
+  current implementation; physical-device behavior remains unverified until
+  actual device evidence is available.
 - Historical provider documents and supplied hosted links are not proof of
   current hosted state.
 

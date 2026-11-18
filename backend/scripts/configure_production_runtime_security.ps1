@@ -1,16 +1,16 @@
 # Apply and verify the reviewed production runtime grants and RLS policies.
 # Run under the same Windows account that saved the encrypted owner handoff.
 $ErrorActionPreference = 'Stop'
-$edugBackend = Split-Path -Parent $PSScriptRoot
-$edugPython = Join-Path $edugBackend 'venv\Scripts\python.exe'
-$edugHandoff = Join-Path $edugBackend 'operator-evidence\production-migration-url.clixml'
-$edugPointer = [IntPtr]::Zero
-$edugSecure = $null
+$eduguardBackend = Split-Path -Parent $PSScriptRoot
+$eduguardPython = Join-Path $eduguardBackend 'venv\Scripts\python.exe'
+$eduguardHandoff = Join-Path $eduguardBackend 'operator-evidence\production-migration-url.clixml'
+$eduguardPointer = [IntPtr]::Zero
+$eduguardSecure = $null
 
-if (-not (Test-Path -LiteralPath $edugPython)) { throw 'Backend Python environment is missing.' }
-if (-not (Test-Path -LiteralPath $edugHandoff)) { throw 'Encrypted production handoff is missing.' }
+if (-not (Test-Path -LiteralPath $eduguardPython)) { throw 'Backend Python environment is missing.' }
+if (-not (Test-Path -LiteralPath $eduguardHandoff)) { throw 'Encrypted production handoff is missing.' }
 
-$edugSecurity = @'
+$eduguardSecurity = @'
 import json
 import os
 
@@ -88,16 +88,16 @@ APPEND_ONLY = {
 PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER")
 DATA_API_ROLES = ("anon", "authenticated", "service_role")
 HARDENED_FUNCTIONS = (
-    "edug_reject_certification_mutation",
-    "edug_reject_device_audit_mutation",
-    "edug_reject_device_control_event_mutation",
-    "edug_reject_device_status_evidence_mutation",
-    "edug_reject_policy_assignment_event_mutation",
-    "edug_reject_policy_revision_mutation",
-    "edug_reject_policy_sync_event_mutation",
-    "edug_reject_web_filter_event_mutation",
-    "edug_valid_blocked_apps",
-    "edug_valid_policy_revision_payload",
+    "eduguard_reject_certification_mutation",
+    "eduguard_reject_device_audit_mutation",
+    "eduguard_reject_device_control_event_mutation",
+    "eduguard_reject_device_status_evidence_mutation",
+    "eduguard_reject_policy_assignment_event_mutation",
+    "eduguard_reject_policy_revision_mutation",
+    "eduguard_reject_policy_sync_event_mutation",
+    "eduguard_reject_web_filter_event_mutation",
+    "eduguard_valid_blocked_apps",
+    "eduguard_valid_policy_revision_payload",
 )
 
 def expected_privileges(table):
@@ -113,7 +113,7 @@ def expected_privileges(table):
 result = {"production_runtime_security": "FAIL", "stage": "connection"}
 engine = None
 try:
-    raw = os.environ.pop("EDUG_PRODUCTION_MIGRATION_URL")
+    raw = os.environ.pop("EDUGUARD_PRODUCTION_MIGRATION_URL")
     engine = create_engine(raw, pool_pre_ping=True, poolclass=NullPool)
     with engine.begin() as connection:
         result["stage"] = "prechange_gate"
@@ -137,48 +137,48 @@ try:
         runtime_role = connection.execute(
             text(
                 "SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, "
-                "rolreplication, rolbypassrls FROM pg_roles WHERE rolname='edug_runtime'"
+                "rolreplication, rolbypassrls FROM pg_roles WHERE rolname='eduguard_runtime'"
             )
         ).one_or_none()
         assert runtime_role is not None
         assert tuple(runtime_role) == (True, False, False, False, False, False)
 
         result["stage"] = "apply_security"
-        connection.execute(text("GRANT CONNECT ON DATABASE postgres TO edug_runtime"))
-        connection.execute(text("GRANT USAGE ON SCHEMA public TO edug_runtime"))
-        connection.execute(text("REVOKE CREATE ON SCHEMA public FROM PUBLIC, edug_runtime"))
+        connection.execute(text("GRANT CONNECT ON DATABASE postgres TO eduguard_runtime"))
+        connection.execute(text("GRANT USAGE ON SCHEMA public TO eduguard_runtime"))
+        connection.execute(text("REVOKE CREATE ON SCHEMA public FROM PUBLIC, eduguard_runtime"))
 
         for table in TABLES:
-            for role in ("PUBLIC", *DATA_API_ROLES, "edug_runtime"):
+            for role in ("PUBLIC", *DATA_API_ROLES, "eduguard_runtime"):
                 connection.execute(text(f"REVOKE ALL PRIVILEGES ON TABLE public.{table} FROM {role}"))
-            connection.execute(text(f"GRANT SELECT ON TABLE public.{table} TO edug_runtime"))
+            connection.execute(text(f"GRANT SELECT ON TABLE public.{table} TO eduguard_runtime"))
             allowed = expected_privileges(table)
             for privilege in ("INSERT", "UPDATE", "DELETE"):
                 if privilege in allowed:
                     connection.execute(
-                        text(f"GRANT {privilege} ON TABLE public.{table} TO edug_runtime")
+                        text(f"GRANT {privilege} ON TABLE public.{table} TO eduguard_runtime")
                     )
             connection.execute(text(f"ALTER TABLE public.{table} ENABLE ROW LEVEL SECURITY"))
             connection.execute(
-                text(f"DROP POLICY IF EXISTS edug_backend_runtime ON public.{table}")
+                text(f"DROP POLICY IF EXISTS eduguard_backend_runtime ON public.{table}")
             )
             connection.execute(
                 text(
-                    f"CREATE POLICY edug_backend_runtime ON public.{table} "
-                    "AS PERMISSIVE FOR ALL TO edug_runtime USING (true) WITH CHECK (true)"
+                    f"CREATE POLICY eduguard_backend_runtime ON public.{table} "
+                    "AS PERMISSIVE FOR ALL TO eduguard_runtime USING (true) WITH CHECK (true)"
                 )
             )
 
-        for role in ("PUBLIC", *DATA_API_ROLES, "edug_runtime"):
+        for role in ("PUBLIC", *DATA_API_ROLES, "eduguard_runtime"):
             connection.execute(
                 text(f"REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM {role}")
             )
         connection.execute(
-            text("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO edug_runtime")
+            text("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO eduguard_runtime")
         )
 
         # Future migrations must grant deliberately; avoid implicit Data API/runtime access.
-        for role in ("PUBLIC", *DATA_API_ROLES, "edug_runtime"):
+        for role in ("PUBLIC", *DATA_API_ROLES, "eduguard_runtime"):
             connection.execute(
                 text(
                     f"ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public "
@@ -204,9 +204,9 @@ try:
         assert len(functions) == len(HARDENED_FUNCTIONS)
         for function in functions:
             connection.execute(text(f"ALTER FUNCTION {function} SET search_path TO ''"))
-            for role in ("PUBLIC", *DATA_API_ROLES, "edug_runtime"):
+            for role in ("PUBLIC", *DATA_API_ROLES, "eduguard_runtime"):
                 connection.execute(text(f"REVOKE EXECUTE ON FUNCTION {function} FROM {role}"))
-            connection.execute(text(f"GRANT EXECUTE ON FUNCTION {function} TO edug_runtime"))
+            connection.execute(text(f"GRANT EXECUTE ON FUNCTION {function} TO eduguard_runtime"))
 
         result["stage"] = "catalog_verification"
         permission_checks = 0
@@ -214,7 +214,7 @@ try:
             allowed = expected_privileges(table)
             for privilege in PRIVILEGES:
                 actual = connection.execute(
-                    text("SELECT has_table_privilege('edug_runtime', :relation, :privilege)"),
+                    text("SELECT has_table_privilege('eduguard_runtime', :relation, :privilege)"),
                     {"relation": f"public.{table}", "privilege": privilege},
                 ).scalar_one()
                 assert actual is (privilege in allowed)
@@ -240,8 +240,8 @@ try:
         policies = connection.execute(
             text(
                 "SELECT count(*) FROM pg_policies WHERE schemaname='public' "
-                "AND tablename=ANY(:tables) AND policyname='edug_backend_runtime' "
-                "AND cmd='ALL' AND roles=ARRAY['edug_runtime']::name[]"
+                "AND tablename=ANY(:tables) AND policyname='eduguard_backend_runtime' "
+                "AND cmd='ALL' AND roles=ARRAY['eduguard_runtime']::name[]"
             ),
             {"tables": list(TABLES)},
         ).scalar_one()
@@ -255,7 +255,7 @@ try:
                     "ON n.oid=p.pronamespace WHERE n.nspname='public' "
                     "AND p.proname = ANY(:names) "
                     "AND COALESCE(p.proconfig, ARRAY[]::text[]) @> ARRAY['search_path=\"\"'] "
-                    "AND has_function_privilege('edug_runtime', p.oid, 'EXECUTE') "
+                    "AND has_function_privilege('eduguard_runtime', p.oid, 'EXECUTE') "
                     "AND NOT has_function_privilege('anon', p.oid, 'EXECUTE') "
                     "AND NOT has_function_privilege('authenticated', p.oid, 'EXECUTE') "
                     "AND NOT has_function_privilege('service_role', p.oid, 'EXECUTE')"
@@ -300,20 +300,20 @@ raise SystemExit(0 if result["production_runtime_security"] == "PASS" else 1)
 '@
 
 try {
-    $edugSecure = Import-Clixml -LiteralPath $edugHandoff
-    $edugPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($edugSecure)
-    $env:EDUG_PRODUCTION_MIGRATION_URL = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($edugPointer)
-    Push-Location $edugBackend
+    $eduguardSecure = Import-Clixml -LiteralPath $eduguardHandoff
+    $eduguardPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($eduguardSecure)
+    $env:EDUGUARD_PRODUCTION_MIGRATION_URL = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($eduguardPointer)
+    Push-Location $eduguardBackend
     try {
-        $edugOutput = @($edugSecurity | & $edugPython -)
-        $edugExitCode = $LASTEXITCODE
-        $edugOutput | Write-Output
-        if ($edugExitCode -ne 0) { throw 'Embedded verification failed.' }
+        $eduguardOutput = @($eduguardSecurity | & $eduguardPython -)
+        $eduguardExitCode = $LASTEXITCODE
+        $eduguardOutput | Write-Output
+        if ($eduguardExitCode -ne 0) { throw 'Embedded verification failed.' }
     } finally { Pop-Location }
 } finally {
-    Remove-Item Env:EDUG_PRODUCTION_MIGRATION_URL -ErrorAction SilentlyContinue
-    if ($edugPointer -ne [IntPtr]::Zero) {
-        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($edugPointer)
+    Remove-Item Env:EDUGUARD_PRODUCTION_MIGRATION_URL -ErrorAction SilentlyContinue
+    if ($eduguardPointer -ne [IntPtr]::Zero) {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($eduguardPointer)
     }
-    if ($null -ne $edugSecure) { $edugSecure.Dispose() }
+    if ($null -ne $eduguardSecure) { $eduguardSecure.Dispose() }
 }

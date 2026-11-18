@@ -25,16 +25,16 @@ RESOURCES = {
 
 def validate_deployment_identity(values: Mapping[str, str]) -> None:
     """Fail before opening connections; never render URLs or credentials."""
-    environment = values.get("EDUG_ENVIRONMENT", "")
+    environment = values.get("EDUGUARD_ENVIRONMENT", "")
     if environment not in RESOURCES:
-        raise RuntimeError("EDUG_ENVIRONMENT must identify staging or production")
+        raise RuntimeError("EDUGUARD_ENVIRONMENT must identify staging or production")
     project, redis_host, redis_port, origin, railway_environment = RESOURCES[
         environment
     ]
     if values.get("APP_ENV") != "production":
         raise RuntimeError("Deployed environments must use production hardening")
     if values.get("RAILWAY_ENVIRONMENT_ID") != railway_environment:
-        raise RuntimeError("Railway environment does not match EDUG_ENVIRONMENT")
+        raise RuntimeError("Railway environment does not match EDUGUARD_ENVIRONMENT")
     for name in ("DEVELOPMENT_DATABASE_URL", "POSTGRES_TEST_DATABASE_URL"):
         if values.get(name):
             raise RuntimeError(

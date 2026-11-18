@@ -9,22 +9,22 @@ const sourceDirectory = path
   .replaceAll('\\', '/')
 const attachedKnowledgePath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../output/edugd-180-questions-and-answers.md',
+  'src/content/eduguard-180-questions-and-answers.md',
 )
-const attachedKnowledgeModule = 'virtual:edugd-qa-source'
+const attachedKnowledgeModule = 'virtual:eduguard-qa-source'
 const resolvedAttachedKnowledgeModule = `\0${attachedKnowledgeModule}`
 
 export default defineConfig({
   plugins: [
     react(),
     {
-      name: 'edugd-attached-knowledge-source',
+      name: 'eduguard-attached-knowledge-source',
       resolveId(id) {
         return id === attachedKnowledgeModule ? resolvedAttachedKnowledgeModule : undefined
       },
       load(id) {
         if (id !== resolvedAttachedKnowledgeModule) return undefined
-        return `export const edugdQaSource = ${JSON.stringify(fs.readFileSync(attachedKnowledgePath, 'utf8'))}`
+        return `export const eduguardQaSource = ${JSON.stringify(fs.readFileSync(attachedKnowledgePath, 'utf8'))}`
       },
     },
   ],

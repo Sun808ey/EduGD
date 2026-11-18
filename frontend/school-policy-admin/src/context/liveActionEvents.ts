@@ -1,7 +1,7 @@
 export type LiveActionState = 'pending' | 'success' | 'error'
 export type LiveActionEvent = { state: LiveActionState; label: string; detail?: string }
 
-const eventName = 'edugd:admin-action'
+const eventName = 'eduguard:admin-action'
 
 export function announceLiveAction(event: LiveActionEvent) {
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent<LiveActionEvent>(eventName, { detail: event }))

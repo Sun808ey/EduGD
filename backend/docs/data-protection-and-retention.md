@@ -1,4 +1,4 @@
-# EDUGD data protection and retention controls
+# EduGuard data protection and retention controls
 This document is the operational boundary for the administrator panel. It is
 not legal advice and does not replace the school's Personal Data Protection
 Office (PDPO) registration or certificate review before real learner data is

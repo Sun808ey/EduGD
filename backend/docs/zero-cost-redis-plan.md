@@ -1,5 +1,10 @@
 # Zero-cost Redis setup: steps 1 and 2
 
+> **Historical provider checkpoint.** The reported Upstash/Aiven probe results
+> below were recorded in September 2026 and have not been rechecked for the
+> current snapshot. See [current project status](../../docs/current-status.md)
+> for the latest observed Redis evidence boundary.
+
 **Continuation, 14 September 2026:** the owner authorized steps 3–7 in order.
 Step 3 frontend assignments and step 4 local verification passed (38 isolated
 PostgreSQL tests and 495 default backend tests). Step 5 non-secret Railway

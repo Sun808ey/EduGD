@@ -14,7 +14,7 @@ branch_labels = None
 depends_on = None
 
 POSTGRES_VALIDATOR_FUNCTION = r"""
-CREATE FUNCTION edug_valid_blocked_apps(value json)
+CREATE FUNCTION eduguard_valid_blocked_apps(value json)
 RETURNS boolean
 LANGUAGE sql
 IMMUTABLE
@@ -47,7 +47,7 @@ def upgrade() -> None:
     op.create_check_constraint(
         "ck_policies_blocked_apps",
         "policies",
-        "edug_valid_blocked_apps(blocked_apps)",
+        "eduguard_valid_blocked_apps(blocked_apps)",
     )
 
 
@@ -59,4 +59,4 @@ def downgrade() -> None:
         "policies",
         type_="check",
     )
-    op.execute("DROP FUNCTION edug_valid_blocked_apps(json)")
+    op.execute("DROP FUNCTION eduguard_valid_blocked_apps(json)")

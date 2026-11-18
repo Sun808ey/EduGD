@@ -9,7 +9,7 @@ from app.deployment_identity import RESOURCES, validate_deployment_identity
 def deployment_values(environment: str) -> dict[str, str]:
     project, host, port, origin, railway_id = RESOURCES[environment]
     return {
-        "EDUG_ENVIRONMENT": environment,
+        "EDUGUARD_ENVIRONMENT": environment,
         "APP_ENV": "production",
         "RAILWAY_ENVIRONMENT_ID": railway_id,
         "PRODUCTION_DATABASE_URL": (
@@ -45,7 +45,7 @@ def test_cross_environment_value_rejected(name: str) -> None:
 @pytest.mark.parametrize(
     "override",
     [
-        {"EDUG_ENVIRONMENT": ""},
+        {"EDUGUARD_ENVIRONMENT": ""},
         {"APP_ENV": "development"},
         {"RAILWAY_ENVIRONMENT_ID": ""},
         {"POSTGRES_TEST_DATABASE_URL": "must-not-be-present"},
@@ -83,7 +83,7 @@ def test_railway_entrypoint_cannot_fall_back_to_development(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("APP_ENV", raising=False)
-    monkeypatch.delenv("EDUG_ENVIRONMENT", raising=False)
+    monkeypatch.delenv("EDUGUARD_ENVIRONMENT", raising=False)
     monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID", RESOURCES["staging"][4])
-    with pytest.raises(RuntimeError, match="EDUG_ENVIRONMENT"):
+    with pytest.raises(RuntimeError, match="EDUGUARD_ENVIRONMENT"):
         runpy.run_path(str(Path(__file__).resolve().parents[1] / "run.py"))

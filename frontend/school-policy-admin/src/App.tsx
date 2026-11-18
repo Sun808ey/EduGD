@@ -79,7 +79,7 @@ function App() {
 }
 
 function MessagePage({ title, message }: { title: string; message: string }) {
-  return <main className="grid min-h-screen place-items-center bg-slate-100 p-6"><div className="max-w-md text-center"><h1 className="text-3xl font-semibold">{title}</h1><p className="mt-3 text-slate-600">{message}</p><a href="/" className="mt-6 inline-block font-semibold text-emerald-700">Return to EduG</a></div></main>
+  return <main className="grid min-h-screen place-items-center bg-slate-100 p-6"><div className="max-w-md text-center"><h1 className="text-3xl font-semibold">{title}</h1><p className="mt-3 text-slate-600">{message}</p><a href="/" className="mt-6 inline-block font-semibold text-emerald-700">Return to EduGuard</a></div></main>
 }
 
 export default App

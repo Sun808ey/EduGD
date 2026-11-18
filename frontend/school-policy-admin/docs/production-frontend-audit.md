@@ -1,8 +1,14 @@
-# EduG Production Frontend Implementation Audit
+# EduGuard Production Frontend Implementation Audit
+
+> **Historical implementation audit.** Its deployment findings and manual
+> action list predate the current Vercel/Railway state. The Vercel project now
+> exists but has no live deployment, and Railway staging's latest deployment
+> failed. See [current project status](../../../docs/current-status.md) before
+> acting on any deployment step below.
 
 ## A. Executive summary
 
-The EduG administrator frontend has been implemented as a React 19 and Vite 8
+The EduGuard administrator frontend has been implemented as a React 19 and Vite 8
 single-page application for Vercel. It integrates only with the existing Flask
 administrator API and preserves Flask as the authentication, RBAC, policy,
 synchronization and audit authority. It does not connect to Supabase and does
@@ -15,10 +21,10 @@ handling; runtime payload validation; privacy-filtered Sentry support; security
 headers; SPA deep-link routing; CI; unit coverage; and desktop/mobile browser
 tests.
 
-The frontend code and its local integration contract pass. Production
-deployment remains an external gate because no Vercel project URL, Railway
-public URL, production CORS value, production credentials, live Sentry project
-or dedicated Supabase test database was available in the repository.
+The frontend code and its local integration contract passed the checks recorded
+at the time. Production deployment remained an external gate in that audit
+because its provider and credential evidence was not available then. Current
+deployment availability is recorded in the current-status page.
 
 ## B. Audit findings
 
@@ -327,6 +333,11 @@ All results below were produced from the working tree on 11 September 2026.
 
 ## L. MANUAL ACTION REQUIRED
 
+This checklist is retained as the original deployment plan. The Vercel project
+creation step has since been completed; do not repeat it. The current staging
+deployment is canceled, so check the current-status page and review provider
+configuration before proceeding with any remaining release steps.
+
 ### 1. Complete protected CI gates
 
 1. Push the branch and open a pull request.
@@ -339,7 +350,7 @@ All results below were produced from the working tree on 11 September 2026.
 
 ### 2. Create the Vercel project
 
-1. Import the EduGD Git repository into Vercel.
+1. Import the EduGuard Git repository into Vercel.
 2. Set Root Directory to `frontend/school-policy-admin`.
 3. Confirm Framework Preset `Vite`, Install Command `npm ci`, Build Command
    `npm run build`, and Output Directory `dist`.

@@ -35,8 +35,8 @@ For the disposable local backend scenario, provide credentials through the
 environment rather than storing them in source:
 
 ```powershell
-Set-Item Env:EDUG_DEMO_ADMIN_PASSWORD (Read-Host 'Enter the disposable demo administrator credential')
-Set-Item Env:EDUG_DEMO_READONLY_PASSWORD (Read-Host 'Enter the disposable demo read-only credential')
+Set-Item Env:EDUGUARD_DEMO_ADMIN_PASSWORD (Read-Host 'Enter the disposable demo administrator credential')
+Set-Item Env:EDUGUARD_DEMO_READONLY_PASSWORD (Read-Host 'Enter the disposable demo read-only credential')
 ```
 
 These values are required only when running `backend/scripts/seed_local_demo.py`
@@ -53,7 +53,7 @@ From `android-dpc`:
 .\scripts\run-panel-demo.ps1
 ```
 
-The script installs the debug APK, sets the EduGD admin receiver as device owner, verifies ownership, and launches the debug-only harness. To also show the learner-facing status screen:
+The script installs the debug APK, sets the EduGuard admin receiver as device owner, verifies ownership, and launches the debug-only harness. To also show the learner-facing status screen:
 
 ```powershell
 .\scripts\run-panel-demo.ps1 -SkipInstall -OpenLearnerUi
@@ -63,9 +63,9 @@ Equivalent manual commands are:
 
 ```powershell
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell dpm set-device-owner --user current io.github.sun808ey.edugd.dpc/.admin.AdminReceiver
+adb shell dpm set-device-owner --user current io.github.sun808ey.eduguard.dpc.debug/.admin.AdminReceiver
 adb shell dpm list-owners
-adb shell am start -n io.github.sun808ey.edugd.dpc/.demo.DpcDemoActivity
+adb shell am start -n io.github.sun808ey.eduguard.dpc.debug/.demo.DpcDemoActivity
 ```
 
 ## End-to-end dashboard demonstration
@@ -94,13 +94,13 @@ Use local backend/database and the administrator dashboard prepared for the demo
 | Panel claim | Implementation evidence |
 |---|---|
 | Admin policy assignment is server-controlled | [`policies.py`](../backend/app/routes/policies.py:195) |
-| DPC state is fetched through the signed v3 state endpoint | [`dpc_controls.py`](../backend/app/routes/dpc_controls.py:358) and [`BackendIntegrationClient.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/edugd/dpc/sync/BackendIntegrationClient.kt:40) |
-| Signed state and policy are verified before use | [`BackendIntegrationClient.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/edugd/dpc/sync/BackendIntegrationClient.kt:88) |
-| The normal worker applies the policy | [`SyncWorker.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/edugd/dpc/sync/SyncWorker.kt:38) and [`AtomicPolicyActivator.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/edugd/dpc/policy/AtomicPolicyActivator.kt:52) |
-| Android restrictions are applied by the DPC | [`DevicePolicyController.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/edugd/dpc/admin/DevicePolicyController.kt:236) |
-| Acknowledgement returns to the backend | [`StateSyncClient.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/edugd/dpc/sync/StateSyncClient.kt:15) and [`device_audit.py`](../backend/app/routes/device_audit.py:76) |
-| Local policy and evidence are retained | [`DpcDatabase.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/edugd/dpc/db/DpcDatabase.kt:10) and [`AuditChain.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/edugd/dpc/audit/AuditChain.kt:50) |
-| The panel read-back is debug-only | [`DpcDemoActivity.kt`](../android-dpc/app/src/debug/java/io/github/sun808ey/edugd/dpc/demo/DpcDemoActivity.kt:35) |
+| DPC state is fetched through the signed v3 state endpoint | [`dpc_controls.py`](../backend/app/routes/dpc_controls.py:358) and [`BackendIntegrationClient.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/eduguard/dpc/sync/BackendIntegrationClient.kt:40) |
+| Signed state and policy are verified before use | [`BackendIntegrationClient.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/eduguard/dpc/sync/BackendIntegrationClient.kt:88) |
+| The normal worker applies the policy | [`SyncWorker.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/eduguard/dpc/sync/SyncWorker.kt:38) and [`AtomicPolicyActivator.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/eduguard/dpc/policy/AtomicPolicyActivator.kt:52) |
+| Android restrictions are applied by the DPC | [`DevicePolicyController.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/eduguard/dpc/admin/DevicePolicyController.kt:236) |
+| Acknowledgement returns to the backend | [`StateSyncClient.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/eduguard/dpc/sync/StateSyncClient.kt:15) and [`device_audit.py`](../backend/app/routes/device_audit.py:76) |
+| Local policy and evidence are retained | [`DpcDatabase.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/eduguard/dpc/db/DpcDatabase.kt:10) and [`AuditChain.kt`](../android-dpc/app/src/main/java/io/github/sun808ey/eduguard/dpc/audit/AuditChain.kt:50) |
+| The panel read-back is debug-only | [`DpcDemoActivity.kt`](../android-dpc/app/src/debug/java/io/github/sun808ey/eduguard/dpc/demo/DpcDemoActivity.kt:35) |
 
 ## Recommended wording
 

@@ -2,7 +2,7 @@ import { Alert, List, ListItem, ListItemText, Paper, Stack, Typography } from '@
 
 export function DataProtectionPage() {
   return <Stack spacing={3}>
-    <header><Typography variant="overline" color="text.secondary">Governance</Typography><Typography component="h1" variant="h4" sx={{ fontWeight: 800 }}>Data protection</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>This notice describes the limited information EDUGD uses to administer school-owned devices.</Typography></header>
+    <header><Typography variant="overline" color="text.secondary">Governance</Typography><Typography component="h1" variant="h4" sx={{ fontWeight: 800 }}>Data protection</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>This notice describes the limited information EduGuard uses to administer school-owned devices.</Typography></header>
     <Alert severity="info"><strong>Before using real learner information:</strong> confirm the school’s Personal Data Protection Office registration and certificate requirements with the responsible data-protection officer. This panel is not legal advice.</Alert>
     <Paper variant="outlined" sx={{ p: 3 }}><Typography variant="h6" sx={{ fontWeight: 800 }}>Privacy notice</Typography><List dense>
       <ListItem><ListItemText primary="What we collect" secondary="School contact details, school-owned device numbers and hardware identifiers, policy records, class or department responsibility, and security-relevant audit events." /></ListItem>

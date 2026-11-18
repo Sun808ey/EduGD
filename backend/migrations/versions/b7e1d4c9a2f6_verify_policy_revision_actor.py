@@ -72,7 +72,7 @@ def upgrade() -> None:
             f"CREATE TRIGGER {TRIGGER} "
             "BEFORE UPDATE OR DELETE ON policy_revisions "
             "FOR EACH ROW EXECUTE FUNCTION "
-            "edug_reject_policy_revision_mutation()"
+            "eduguard_reject_policy_revision_mutation()"
         )
     else:
         connection.execute(
@@ -133,5 +133,5 @@ def downgrade() -> None:
             f"CREATE TRIGGER {TRIGGER} "
             "BEFORE UPDATE OR DELETE ON policy_revisions "
             "FOR EACH ROW EXECUTE FUNCTION "
-            "edug_reject_policy_revision_mutation()"
+            "eduguard_reject_policy_revision_mutation()"
         )

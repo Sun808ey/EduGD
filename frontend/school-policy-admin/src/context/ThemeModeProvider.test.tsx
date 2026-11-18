@@ -24,12 +24,12 @@ describe('theme mode provider', () => {
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('light'))
     fireEvent.click(screen.getByRole('button', { name: 'toggle' }))
     expect(screen.getByText('dark')).toBeInTheDocument()
-    await waitFor(() => expect(window.localStorage.getItem('edugd-theme')).toBe('dark'))
+    await waitFor(() => expect(window.localStorage.getItem('eduguard-theme')).toBe('dark'))
     expect(document.documentElement.style.colorScheme).toBe('dark')
   })
 
   it('honours stored and system dark-mode preferences', () => {
-    window.localStorage.setItem('edugd-theme', 'dark')
+    window.localStorage.setItem('eduguard-theme', 'dark')
     render(<ThemeModeProvider><Probe /></ThemeModeProvider>)
     expect(screen.getByText('dark')).toBeInTheDocument()
 

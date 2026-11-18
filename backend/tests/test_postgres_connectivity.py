@@ -25,7 +25,7 @@ def test_approved_postgres_connection_is_read_only_and_uses_tls() -> None:
     try:
         connection = psycopg2.connect(
             approved.application_database_url,
-            application_name="edug-nondestructive-connectivity-test",
+            application_name="eduguard-nondestructive-connectivity-test",
             connect_timeout=CONNECT_TIMEOUT_SECONDS,
         )
         with closing(connection):

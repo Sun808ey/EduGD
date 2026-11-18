@@ -442,7 +442,7 @@ def test_logs_routes_map_report_errors_and_csv(app, monkeypatch) -> None:
         g.administrator_request_context = context
         response = handler(logs.violation_report_csv)()
         assert response.status_code == 200
-        assert "edugd-violations.csv" in response.headers["Content-Disposition"]
+        assert "eduguard-violations.csv" in response.headers["Content-Disposition"]
         assert "web_filter_blocked" in response.get_data(as_text=True)
 
 

@@ -71,7 +71,7 @@ def upgrade() -> None:
     _backfill_sync_heads()
     if op.get_bind().dialect.name == "postgresql":
         op.execute("""
-            CREATE FUNCTION edug_reject_policy_assignment_event_mutation()
+            CREATE FUNCTION eduguard_reject_policy_assignment_event_mutation()
             RETURNS trigger AS $$ BEGIN
                 RAISE EXCEPTION 'policy assignment events are immutable';
             END; $$ LANGUAGE plpgsql
@@ -79,7 +79,7 @@ def upgrade() -> None:
         op.execute("""
             CREATE TRIGGER trg_policy_assignment_events_immutable
             BEFORE UPDATE OR DELETE ON policy_assignment_events
-            FOR EACH ROW EXECUTE FUNCTION edug_reject_policy_assignment_event_mutation()
+            FOR EACH ROW EXECUTE FUNCTION eduguard_reject_policy_assignment_event_mutation()
         """)
 
 
@@ -143,7 +143,7 @@ def downgrade() -> None:
         raise RuntimeError("forensic chain downgrade refused: assignment evidence would be lost")
     if connection.dialect.name == "postgresql":
         op.execute("DROP TRIGGER trg_policy_assignment_events_immutable ON policy_assignment_events")
-        op.execute("DROP FUNCTION edug_reject_policy_assignment_event_mutation()")
+        op.execute("DROP FUNCTION eduguard_reject_policy_assignment_event_mutation()")
     op.drop_table("policy_synchronization_chain_heads")
     op.drop_index(
         "uq_policy_synchronization_events_hash",

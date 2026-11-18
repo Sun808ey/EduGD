@@ -127,7 +127,7 @@ def inventory(connection: Connection, *, fingerprints: bool) -> dict[str, Any]:
         ),
         "functions": query(
             connection,
-            "SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS arguments, p.prosecdef, pg_get_functiondef(p.oid) AS definition FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname LIKE 'edug_%' ORDER BY p.proname,arguments",
+            "SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS arguments, p.prosecdef, pg_get_functiondef(p.oid) AS definition FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname LIKE 'eduguard_%' ORDER BY p.proname,arguments",
         ),
         "grants": query(
             connection,
@@ -251,7 +251,7 @@ def main() -> int:
         url = validate_postgres_database_uri(
             "inventory connection", os.environ.get(arguments.url_env, "")
         )
-        app = Flask("edug-read-only-inventory")
+        app = Flask("eduguard-read-only-inventory")
         app.config.update(
             SQLALCHEMY_DATABASE_URI=url,
             SQLALCHEMY_ENGINE_OPTIONS={

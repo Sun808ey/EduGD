@@ -1,5 +1,5 @@
 ###############################################################################
-# EduG - Flask + React (Vite) + Android Studio Monorepo
+# EduGuard - Flask + React (Vite) + Android Studio Monorepo
 ###############################################################################
 
 ###############################################################################
@@ -183,6 +183,8 @@ androidDPC/**/*.jks
 
 androidDPC/**/*.apk
 androidDPC/**/*.aab
+
+android-dpc/.kotlin/
 
 .idea/
 

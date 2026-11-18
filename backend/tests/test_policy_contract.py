@@ -33,14 +33,14 @@ def policy() -> dict[str, object]:
         "timezone": "Africa/Kampala",
         "refresh_after_seconds": 3600,
         "default_mode": "class_hours",
-        "emergency_packages": ["org.edug.dpc"],
+        "emergency_packages": ["org.eduguard.dpc"],
         "required_capabilities": ["lock_task", "package_suspension"],
         "minimum_dpc_version": 1,
         "modes": [
             {
                 "mode_id": "class_hours",
                 "application_mode": "allowlist",
-                "allowed_packages": ["org.edug.dpc", "org.example.learning"],
+                "allowed_packages": ["org.eduguard.dpc", "org.example.learning"],
                 "blocked_packages": ["com.example.game"],
                 "lock_task_packages": ["org.example.learning"],
                 "user_restrictions": ["disallow_install_unknown_sources"],
@@ -49,7 +49,7 @@ def policy() -> dict[str, object]:
             {
                 "mode_id": "night",
                 "application_mode": "allowlist",
-                "allowed_packages": ["org.edug.dpc"],
+                "allowed_packages": ["org.eduguard.dpc"],
                 "blocked_packages": ["com.example.game", "org.example.learning"],
                 "lock_task_packages": [],
                 "user_restrictions": ["disallow_install_unknown_sources"],

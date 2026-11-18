@@ -45,7 +45,7 @@ def main() -> int:
             connection.exec_driver_sql("SET TRANSACTION READ ONLY")
             require(
                 connection.execute(text("SELECT current_user")).scalar()
-                == "edug_runtime",
+                == "eduguard_runtime",
                 "unexpected database runtime role",
             )
             stage = "database_tls"

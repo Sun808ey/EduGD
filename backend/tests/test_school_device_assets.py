@@ -40,7 +40,7 @@ def _headers(app: Flask) -> dict[str, str]:
 
 def _payload() -> dict[str, object]:
     return {
-        "asset_number": "EDUGD-TAB-001",
+        "asset_number": "EduGuard-TAB-001",
         "manufacturer": "Samsung",
         "model": "Galaxy Tab A",
         "serial_number": "SERIAL-001",
@@ -66,7 +66,7 @@ def test_school_owned_asset_registration_and_listing(app: Flask) -> None:
 
     devices = client.get("/api/v1/admin/devices", headers=headers).get_json()["devices"]
     asset = next(device for device in devices if device["device_uuid"] == device_uuid)
-    assert asset["asset_number"] == "EDUGD-TAB-001"
+    assert asset["asset_number"] == "EduGuard-TAB-001"
     assert asset["serial_number"].endswith("-001")
     assert "SERIAL" not in asset["serial_number"]
     assert asset["date_received"] == "2026-09-20"
@@ -120,7 +120,7 @@ def test_asset_correction_is_minimised_and_audited(app: Flask) -> None:
     }
     correction.update(
         {
-            "asset_number": "EDUGD-TAB-001-CORRECTED",
+            "asset_number": "EduGuard-TAB-001-CORRECTED",
             "reason": "Verified against the school inventory register",
         }
     )

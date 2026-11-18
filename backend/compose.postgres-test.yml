@@ -1,7 +1,7 @@
 # No host ports, hosted secrets or external network at test runtime.
 # This Supabase-shaped hostname is only an isolated Docker DNS alias allowing
 # the existing strict identity/TLS checks to run against ordinary PostgreSQL.
-name: edug-disposable-postgres
+name: eduguard-disposable-postgres
 services:
   certificates:
     build:
@@ -14,9 +14,9 @@ services:
   postgres:
     image: postgres:17-bookworm
     environment:
-      POSTGRES_USER: edug_test
-      POSTGRES_PASSWORD: ${EDUG_DISPOSABLE_POSTGRES_TOKEN:?required}
-      POSTGRES_DB: edug_test
+      POSTGRES_USER: eduguard_test
+      POSTGRES_PASSWORD: ${EDUGUARD_DISPOSABLE_POSTGRES_TOKEN:?required}
+      POSTGRES_DB: eduguard_test
     command: [postgres, -c, ssl=on, -c, ssl_cert_file=/certs/server.crt, -c, ssl_key_file=/certs/server.key]
     depends_on:
       certificates:
@@ -27,9 +27,9 @@ services:
       - /var/lib/postgresql/data
     networks:
       isolated:
-        aliases: [db.eduglocaltest0000001.supabase.co]
+        aliases: [db.eduguardtest00000001.supabase.co]
     healthcheck:
-      test: [CMD-SHELL, pg_isready -U edug_test -d edug_test]
+      test: [CMD-SHELL, pg_isready -U eduguard_test -d eduguard_test]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -41,9 +41,9 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      POSTGRES_TEST_DATABASE_URL: postgresql://edug_test:${EDUG_DISPOSABLE_POSTGRES_TOKEN:?required}@db.eduglocaltest0000001.supabase.co:5432/edug_test?sslmode=verify-full&sslrootcert=/certs/server.crt
-      MIGRATION_DATABASE_URL: postgresql://edug_test:${EDUG_DISPOSABLE_POSTGRES_TOKEN:?required}@db.eduglocaltest0000001.supabase.co:5432/edug_test?sslmode=verify-full&sslrootcert=/certs/server.crt
-      POSTGRES_TEST_PROJECT_REF: eduglocaltest0000001
+      POSTGRES_TEST_DATABASE_URL: postgresql://eduguard_test:${EDUGUARD_DISPOSABLE_POSTGRES_TOKEN:?required}@db.eduguardtest00000001.supabase.co:5432/eduguard_test?sslmode=verify-full&sslrootcert=/certs/server.crt
+      MIGRATION_DATABASE_URL: postgresql://eduguard_test:${EDUGUARD_DISPOSABLE_POSTGRES_TOKEN:?required}@db.eduguardtest00000001.supabase.co:5432/eduguard_test?sslmode=verify-full&sslrootcert=/certs/server.crt
+      POSTGRES_TEST_PROJECT_REF: eduguardtest00000001
       POSTGRES_TEST_PURPOSE: backend-integration-test
       ALLOW_DESTRUCTIVE_POSTGRES_TESTS: "true"
     volumes:

@@ -1,9 +1,15 @@
-# EduG administrator frontend
+# EduGuard administrator frontend
 
 This React and Vite single-page application is the browser administration
 client for the existing Flask REST API. Flask remains the business,
 authentication, RBAC, policy, synchronization and audit authority. The browser
 never connects to Supabase directly.
+
+For the latest observed deployment and backend state, see the repository's
+[current project status](../../docs/current-status.md). The configured Vercel
+staging and production projects currently have no live deployment; the setup
+instructions below describe the intended configuration, not a statement that
+either is running.
 
 The Android application is outside this frontend. Its offline-first policy
 engine, Room data and event queue continue operating without cloud
@@ -47,7 +53,7 @@ extra data before transmission.
 
 - Node.js 24
 - npm 11
-- A running EduG Flask backend for interactive development
+- A running EduGuard Flask backend for interactive development
 - Playwright Chromium for browser tests
 
 The required Node and npm ranges are recorded in `.nvmrc` and `package.json`.
@@ -132,7 +138,7 @@ The Vercel project must use this directory as its project root so Vercel can
 read `vercel.json`, `package.json` and the lockfile.
 
 1. Merge the reviewed frontend branch into the branch Vercel will deploy.
-2. In Vercel, choose **Add New > Project** and import the EduGD repository.
+2. In Vercel, choose **Add New > Project** and import the EduGuard repository.
 3. Set **Root Directory** to `frontend/school-policy-admin`.
 4. Confirm framework **Vite**, build command `npm run build`, install command
    `npm ci`, and output directory `dist`.

@@ -5,7 +5,7 @@ const pptxgen = require('../tmp/pptx-build/node_modules/pptxgenjs');
 const root = path.resolve(__dirname, '..');
 const outputDir = path.join(root, 'output', 'powerpoint');
 const output = path.join(outputDir, 'EduGuard_Academic_Pitch.pptx');
-const assetDir = path.join(root, 'output', 'edugd-pitch-assets');
+const assetDir = path.join(root, 'output', 'eduguard-pitch-assets');
 const assets = {
   dashboard: path.join(assetDir, 'dashboard.png'),
   policies: path.join(assetDir, 'policies.png'),

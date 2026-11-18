@@ -35,14 +35,14 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
         REVOKE ALL PRIVILEGES ON TABLE public.{table} FROM service_role;
     END IF;
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
-        REVOKE ALL PRIVILEGES ON TABLE public.{table} FROM edug_runtime;
-        GRANT {privileges} ON TABLE public.{table} TO edug_runtime;
-        DROP POLICY IF EXISTS edug_backend_runtime ON public.{table};
-        CREATE POLICY edug_backend_runtime ON public.{table}
-            AS PERMISSIVE FOR ALL TO edug_runtime
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eduguard_runtime') THEN
+        REVOKE ALL PRIVILEGES ON TABLE public.{table} FROM eduguard_runtime;
+        GRANT {privileges} ON TABLE public.{table} TO eduguard_runtime;
+        DROP POLICY IF EXISTS eduguard_backend_runtime ON public.{table};
+        CREATE POLICY eduguard_backend_runtime ON public.{table}
+            AS PERMISSIVE FOR ALL TO eduguard_runtime
             USING (true) WITH CHECK (true);
-        {f"GRANT USAGE, SELECT ON SEQUENCE public.{sequence} TO edug_runtime;" if table != "incidents" else ""}
+        {f"GRANT USAGE, SELECT ON SEQUENCE public.{sequence} TO eduguard_runtime;" if table != "incidents" else ""}
     END IF;
 END
 $$;
@@ -61,9 +61,20 @@ def downgrade() -> None:
             sequence = f"{table}_id_seq"
             op.execute(
                 f"""\
+DROP POLICY IF EXISTS eduguard_backend_runtime ON public.{table};
 DROP POLICY IF EXISTS edug_backend_runtime ON public.{table};
-REVOKE ALL PRIVILEGES ON TABLE public.{table} FROM edug_runtime;
-{f"REVOKE ALL PRIVILEGES ON SEQUENCE public.{sequence} FROM edug_runtime;" if table != "incidents" else ""}
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eduguard_runtime') THEN
+        REVOKE ALL PRIVILEGES ON TABLE public.{table} FROM eduguard_runtime;
+        {f"REVOKE ALL PRIVILEGES ON SEQUENCE public.{sequence} FROM eduguard_runtime;" if table != "incidents" else ""}
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
+        REVOKE ALL PRIVILEGES ON TABLE public.{table} FROM edug_runtime;
+        {f"REVOKE ALL PRIVILEGES ON SEQUENCE public.{sequence} FROM edug_runtime;" if table != "incidents" else ""}
+    END IF;
+END
+$$;
 ALTER TABLE public.{table} DISABLE ROW LEVEL SECURITY;
 """
             )

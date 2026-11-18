@@ -49,21 +49,21 @@ def upgrade() -> None:
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOKE ALL PRIVILEGES ON TABLE device_web_filter_events FROM anon; END IF;
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN REVOKE ALL PRIVILEGES ON TABLE device_web_filter_events FROM authenticated; END IF;
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN REVOKE ALL PRIVILEGES ON TABLE device_web_filter_events FROM service_role; END IF;
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
-                GRANT SELECT, INSERT ON TABLE device_web_filter_events TO edug_runtime;
-                CREATE POLICY edug_backend_runtime ON device_web_filter_events AS PERMISSIVE FOR ALL TO edug_runtime USING (true) WITH CHECK (true);
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eduguard_runtime') THEN
+                GRANT SELECT, INSERT ON TABLE device_web_filter_events TO eduguard_runtime;
+                CREATE POLICY eduguard_backend_runtime ON device_web_filter_events AS PERMISSIVE FOR ALL TO eduguard_runtime USING (true) WITH CHECK (true);
             END IF;
         END $$""")
-        op.execute("""CREATE FUNCTION edug_reject_web_filter_event_mutation() RETURNS trigger AS $$
+        op.execute("""CREATE FUNCTION eduguard_reject_web_filter_event_mutation() RETURNS trigger AS $$
             BEGIN RAISE EXCEPTION 'web filter evidence is immutable'; END;
         $$ LANGUAGE plpgsql""")
-        op.execute("CREATE TRIGGER trg_device_web_filter_events_immutable BEFORE UPDATE OR DELETE ON device_web_filter_events FOR EACH ROW EXECUTE FUNCTION edug_reject_web_filter_event_mutation()")
+        op.execute("CREATE TRIGGER trg_device_web_filter_events_immutable BEFORE UPDATE OR DELETE ON device_web_filter_events FOR EACH ROW EXECUTE FUNCTION eduguard_reject_web_filter_event_mutation()")
 
 
 def downgrade() -> None:
     if op.get_bind().dialect.name == "postgresql":
         op.execute("DROP TRIGGER trg_device_web_filter_events_immutable ON device_web_filter_events")
-        op.execute("DROP FUNCTION edug_reject_web_filter_event_mutation()")
+        op.execute("DROP FUNCTION eduguard_reject_web_filter_event_mutation()")
     op.drop_index("ix_device_web_filter_events_device_observed", table_name="device_web_filter_events")
     op.drop_table("device_web_filter_events")
     with op.batch_alter_table("administrator_permissions") as batch:

@@ -86,10 +86,10 @@ def test_development_accepts_only_the_dedicated_local_database(
 ) -> None:
     monkeypatch.setenv(
         "DEVELOPMENT_DATABASE_URL",
-        "postgresql+psycopg2://edug_local:placeholder@127.0.0.1:5432/edug_local",
+        "postgresql+psycopg2://eduguard_local:placeholder@127.0.0.1:5432/eduguard_local",
     )
 
-    assert resolve_database_uri(DevelopmentConfig).endswith("/edug_local")
+    assert resolve_database_uri(DevelopmentConfig).endswith("/eduguard_local")
 
 
 def test_development_accepts_a_nonstandard_port_for_the_dedicated_local_database(
@@ -97,30 +97,32 @@ def test_development_accepts_a_nonstandard_port_for_the_dedicated_local_database
 ) -> None:
     monkeypatch.setenv(
         "DEVELOPMENT_DATABASE_URL",
-        "postgresql+psycopg2://edug_local:placeholder@127.0.0.1:55432/edug_local",
+        "postgresql+psycopg2://eduguard_local:placeholder@127.0.0.1:55432/eduguard_local",
     )
 
-    assert resolve_database_uri(DevelopmentConfig).endswith("/edug_local")
+    assert resolve_database_uri(DevelopmentConfig).endswith("/eduguard_local")
 
 
 def test_non_development_rejects_local_postgres_database(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    local_url = "postgresql+psycopg2://edug_local:placeholder@127.0.0.1:5432/edug_local"
+    local_url = (
+        "postgresql+psycopg2://eduguard_local:placeholder@127.0.0.1:5432/eduguard_local"
+    )
     monkeypatch.setenv("PRODUCTION_DATABASE_URL", local_url)
 
     with pytest.raises(RuntimeError, match="PRODUCTION_DATABASE_URL"):
         resolve_database_uri(ProductionConfig)
 
 
-@pytest.mark.parametrize("database_name", ["postgres", "edug_other"])
+@pytest.mark.parametrize("database_name", ["postgres", "eduguard_other"])
 def test_local_development_requires_the_dedicated_database_name(
     monkeypatch: pytest.MonkeyPatch,
     database_name: str,
 ) -> None:
     monkeypatch.setenv(
         "DEVELOPMENT_DATABASE_URL",
-        f"postgresql+psycopg2://edug_local:placeholder@127.0.0.1:5432/{database_name}",
+        f"postgresql+psycopg2://eduguard_local:placeholder@127.0.0.1:5432/{database_name}",
     )
 
     with pytest.raises(RuntimeError, match="Supabase project"):
@@ -348,8 +350,12 @@ def test_unknown_application_environment_is_rejected() -> None:
 
 
 def test_local_migration_target_must_match_application_host() -> None:
-    application_url = "postgresql://edug_local:placeholder@127.0.0.1:5432/edug_local"
-    migration_url = "postgresql://edug_local:placeholder@localhost:5432/edug_local"
+    application_url = (
+        "postgresql://eduguard_local:placeholder@127.0.0.1:5432/eduguard_local"
+    )
+    migration_url = (
+        "postgresql://eduguard_local:placeholder@localhost:5432/eduguard_local"
+    )
 
     with pytest.raises(RuntimeError, match="must match the local application"):
         validate_migration_target(

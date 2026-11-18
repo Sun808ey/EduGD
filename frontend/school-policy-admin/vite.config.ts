@@ -11,9 +11,9 @@ const sourceDirectory = path
   .replaceAll('\\', '/')
 const attachedKnowledgePath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../output/edugd-180-questions-and-answers.md',
+  'src/content/eduguard-180-questions-and-answers.md',
 )
-const attachedKnowledgeModule = 'virtual:edugd-qa-source'
+const attachedKnowledgeModule = 'virtual:eduguard-qa-source'
 const resolvedAttachedKnowledgeModule = `\0${attachedKnowledgeModule}`
 const attachedKnowledgeText = fs.existsSync(attachedKnowledgePath)
   ? fs.readFileSync(attachedKnowledgePath, 'utf8')
@@ -35,17 +35,17 @@ export default defineConfig(({ command, mode }) => {
       react(),
       tailwindcss(),
       {
-        name: 'edugd-attached-knowledge-source',
+        name: 'eduguard-attached-knowledge-source',
         resolveId(id) {
           return id === attachedKnowledgeModule ? resolvedAttachedKnowledgeModule : undefined
         },
         load(id) {
           if (id !== resolvedAttachedKnowledgeModule) return undefined
-          return `export const edugdQaSource = ${JSON.stringify(attachedKnowledgeText)}`
+          return `export const eduguardQaSource = ${JSON.stringify(attachedKnowledgeText)}`
         },
       },
       {
-        name: 'edug-exact-connect-csp',
+        name: 'eduguard-exact-connect-csp',
         transformIndexHtml: command === 'build' ? {
           order: 'post',
           // MUI uses Emotion to inject scoped component styles at runtime. Keep

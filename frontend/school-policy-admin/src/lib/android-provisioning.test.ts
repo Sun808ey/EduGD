@@ -7,8 +7,8 @@ const validInput = {
   serverSigningKeyId: 'dpc-v3-1',
   serverSigningPublicKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
   serverSigningKeyFingerprint: '66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925',
-  deviceAdminComponentName: 'io.github.sun808ey.edugd.dpc/.admin.AdminReceiver',
-  packageDownloadLocation: 'https://downloads.example.test/edugd-dpc.apk',
+  deviceAdminComponentName: 'io.github.sun808ey.eduguard.dpc/.admin.AdminReceiver',
+  packageDownloadLocation: 'https://downloads.example.test/eduguard-dpc.apk',
   signatureChecksum: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
   minimumVersionCode: 1,
 }

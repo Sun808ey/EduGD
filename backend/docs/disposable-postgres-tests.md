@@ -8,9 +8,9 @@ permissions or deployed network paths. Those remain separate checks.
 Start Docker Desktop's Linux engine, then run from `backend`:
 
 ```powershell
-$env:EDUG_DISPOSABLE_POSTGRES_TOKEN = [guid]::NewGuid().ToString("N")
+$env:EDUGUARD_DISPOSABLE_POSTGRES_TOKEN = [guid]::NewGuid().ToString("N")
 docker compose -f compose.postgres-test.yml run --build --rm tests
-Remove-Item Env:EDUG_DISPOSABLE_POSTGRES_TOKEN
+Remove-Item Env:EDUGUARD_DISPOSABLE_POSTGRES_TOKEN
 ```
 
 After the run, remove only this named stack and its disposable certificate volume:
@@ -20,7 +20,7 @@ docker compose -f compose.postgres-test.yml down --volumes
 ```
 
 No ports are published. The runtime network is internal and the database lives
-in tmpfs. `db.eduglocaltest0000001.supabase.co` is a Docker DNS alias for this
+in tmpfs. `db.eduguardtest00000001.supabase.co` is a Docker DNS alias for this
 local container, not a real Supabase assignment. The alias preserves the existing
 identity and verify-full TLS validation. A temporary certificate is generated
 inside the stack and shared read-only with PostgreSQL and the test runner.

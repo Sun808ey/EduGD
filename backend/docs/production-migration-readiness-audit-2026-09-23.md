@@ -1,5 +1,10 @@
 # Production migration-readiness audit - 23 September 2026
 
+> **Historical readiness audit.** This report records the 23 September 2026
+> evidence only; it does not establish current production availability. See
+> [current project status](../../docs/current-status.md) before using its prior
+> PASS findings operationally.
+
 ## Verdict: PASS
 
 The DPC v3 release was validated, migrated, and deployed once to the existing

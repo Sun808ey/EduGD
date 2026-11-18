@@ -45,7 +45,7 @@ export function AndroidProvisioningQrDialog({ issued, open, onOpenChange }: { is
       <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-4">
         <Dialog.Popup className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
           <Dialog.Title className="text-xl font-semibold">Android enrollment QR</Dialog.Title>
-          <Dialog.Description className="mt-2 text-sm text-slate-600">Scan this once from the factory-reset device setup wizard. The QR is generated in memory and is never stored by EduGD.</Dialog.Description>
+          <Dialog.Description className="mt-2 text-sm text-slate-600">Scan this once from the factory-reset device setup wizard. The QR is generated in memory and is never stored by EduGuard.</Dialog.Description>
           {result.loading ? <div className="mt-6 rounded-lg bg-slate-50 p-4 text-sm text-slate-700">Validating the DPC signing trust anchor…</div> : result.error ? <div role="alert" className="mt-6 rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{result.error}</div> : <>
             <div className="mt-6 flex justify-center rounded-xl border bg-white p-4"><QRCodeSVG value={result.encoded!} size={300} level="M" includeMargin aria-label="Android device enrollment QR code" /></div>
             <p className="mt-4 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700">{redactedSummary}</p>

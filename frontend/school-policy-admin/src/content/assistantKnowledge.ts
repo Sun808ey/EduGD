@@ -1,4 +1,4 @@
-import { edugdQaSource } from 'virtual:edugd-qa-source'
+import { eduguardQaSource } from 'virtual:eduguard-qa-source'
 
 export type AssistantKnowledgeArticle = {
   id: string
@@ -180,7 +180,7 @@ const curatedAssistantKnowledge: AssistantKnowledgeArticle[] = [
   {
     id: 'frontend-workflows',
     title: 'Frontend workflow map',
-    source: 'Repository documentation - EduGD administrator frontend README',
+    source: 'Repository documentation - EduGuard administrator frontend README',
     keywords: ['frontend workflow', 'page', 'pages', 'dashboard route', 'device list', 'policy list', 'audit-event list', 'error'],
     answer: 'The administrator frontend covers login, device list and detail, policy list and immutable revision history, assignments, provisioning tokens, applications and domains, synchronization, violations, incidents, audit filtering, structured API errors, pagination, retry actions, and data-protection settings.',
   },
@@ -268,7 +268,7 @@ function normalise(value: string) {
 function parseAttachedQuestionAnswers(markdown: string): AssistantKnowledgeArticle[] {
   const lines = markdown.split(/\r?\n/)
   const articles: AssistantKnowledgeArticle[] = []
-  let section = 'EduGD reference'
+  let section = 'EduGuard reference'
   let current: { number: string; question: string; answer: string[]; section: string } | null = null
 
   function commit() {
@@ -279,9 +279,9 @@ function parseAttachedQuestionAnswers(markdown: string): AssistantKnowledgeArtic
       .split(/\s+/)
       .filter((word) => word.length > 2 && !ignoredQuestionWords.has(word))
     articles.push({
-      id: `edugd-qa-${current.number}`,
+      id: `eduguard-qa-${current.number}`,
       title: current.question,
-      source: `EduGD reference · ${current.section} · Question ${current.number}`,
+      source: `EduGuard reference · ${current.section} · Question ${current.number}`,
       keywords: [...new Set([current.question, ...questionWords])],
       answer,
     })
@@ -311,7 +311,7 @@ function parseAttachedQuestionAnswers(markdown: string): AssistantKnowledgeArtic
  * headings, prose, and imperative text outside those pairs are not executed
  * or treated as assistant instructions.
  */
-const attachedQuestionAnswers = parseAttachedQuestionAnswers(edugdQaSource)
+const attachedQuestionAnswers = parseAttachedQuestionAnswers(eduguardQaSource)
 export const assistantKnowledge: AssistantKnowledgeArticle[] = [
   ...curatedAssistantKnowledge,
   ...attachedQuestionAnswers,

@@ -27,11 +27,11 @@ val releaseSigningConfigured =
         signingStoreFile?.isFile == true
 
 android {
-    namespace = "io.github.sun808ey.edugd.dpc"
+    namespace = "io.github.sun808ey.eduguard.dpc"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.github.sun808ey.edugd.dpc"
+        applicationId = "io.github.sun808ey.eduguard.dpc"
         minSdk = 29
         targetSdk = 35
         versionCode = 1

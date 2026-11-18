@@ -29,7 +29,7 @@ PACKAGE_PATTERN = re.compile(
 )
 
 POSTGRES_PAYLOAD_VALIDATOR = r"""
-CREATE FUNCTION edug_valid_policy_revision_payload(value json)
+CREATE FUNCTION eduguard_valid_policy_revision_payload(value json)
 RETURNS boolean
 LANGUAGE sql
 IMMUTABLE
@@ -43,13 +43,13 @@ AS $function$
           OR value->'blocked_apps' IS NULL THEN FALSE
         WHEN json_typeof(value->'schema_version') <> 'number' THEN FALSE
         WHEN (value->>'schema_version')::integer <> 1 THEN FALSE
-        ELSE edug_valid_blocked_apps(value->'blocked_apps')
+        ELSE eduguard_valid_blocked_apps(value->'blocked_apps')
     END
 $function$
 """
 
 POSTGRES_IMMUTABILITY_FUNCTION = r"""
-CREATE FUNCTION edug_reject_policy_revision_mutation()
+CREATE FUNCTION eduguard_reject_policy_revision_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $function$
@@ -144,7 +144,7 @@ def upgrade() -> None:
         op.execute(POSTGRES_PAYLOAD_VALIDATOR)
 
     payload_constraint = sa.CheckConstraint(
-        "edug_valid_policy_revision_payload(payload)",
+        "eduguard_valid_policy_revision_payload(payload)",
         name="ck_policy_revisions_payload",
     )
     if not is_postgresql:
@@ -329,7 +329,7 @@ def upgrade() -> None:
             "CREATE TRIGGER trg_policy_revisions_immutable "
             "BEFORE UPDATE OR DELETE ON policy_revisions "
             "FOR EACH ROW EXECUTE FUNCTION "
-            "edug_reject_policy_revision_mutation()"
+            "eduguard_reject_policy_revision_mutation()"
         )
 
 
@@ -400,7 +400,7 @@ def downgrade() -> None:
         op.execute(
             "DROP TRIGGER trg_policy_revisions_immutable ON policy_revisions"
         )
-        op.execute("DROP FUNCTION edug_reject_policy_revision_mutation()")
+        op.execute("DROP FUNCTION eduguard_reject_policy_revision_mutation()")
 
     with op.batch_alter_table("device_policy_assignments") as batch_op:
         batch_op.add_column(sa.Column("policy_id", sa.Integer(), nullable=True))
@@ -474,7 +474,7 @@ def downgrade() -> None:
     )
     op.drop_table("policy_revisions")
     if is_postgresql:
-        op.execute("DROP FUNCTION edug_valid_policy_revision_payload(json)")
+        op.execute("DROP FUNCTION eduguard_valid_policy_revision_payload(json)")
 
     with op.batch_alter_table("policies") as batch_op:
         batch_op.add_column(sa.Column("version", sa.Integer(), nullable=True))
@@ -515,7 +515,7 @@ def downgrade() -> None:
         op.create_check_constraint(
             "ck_policies_blocked_apps",
             "policies",
-            "edug_valid_blocked_apps(blocked_apps)",
+            "eduguard_valid_blocked_apps(blocked_apps)",
         )
 
     with op.batch_alter_table("device_policy_assignments") as batch_op:

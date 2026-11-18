@@ -15,7 +15,7 @@ def test_disposable_stack_cannot_publish_database_or_use_hosted_secrets() -> Non
         assert "env_file" not in service
         assert "network_mode" not in service
     values = configuration["services"]["tests"]["environment"]
-    password_reference = "${EDUG_DISPOSABLE_POSTGRES_TOKEN:?required}"
+    password_reference = "${EDUGUARD_DISPOSABLE_POSTGRES_TOKEN:?required}"
     assert values["POSTGRES_TEST_DATABASE_URL"].count(password_reference) == 1
     assert values["MIGRATION_DATABASE_URL"].count(password_reference) == 1
     assert (

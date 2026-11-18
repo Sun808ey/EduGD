@@ -61,7 +61,7 @@ inventory, proposed assignments, credential boundaries and remaining controls.
 
 - `DEVELOPMENT_DATABASE_URL` is the interactive local-development database.
   When `APP_ENV=development`, it may target only the dedicated local
-  PostgreSQL database `edug_local` on `localhost`, `127.0.0.1`, or `::1`.
+  PostgreSQL database `eduguard_local` on `localhost`, `127.0.0.1`, or `::1`.
   Local development is the sole exception to the Supabase-project hostname
   requirement; production, PostgreSQL testing, migration, and hosted
   environments remain Supabase-only.

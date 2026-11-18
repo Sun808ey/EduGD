@@ -1,26 +1,26 @@
 # Step 5: private configuration handoff
 
+> **Historical handoff record.** The success statements below describe the
+> September 2026 verification snapshot and do not establish present hosted
+> availability. Consult the [current project status](../../docs/current-status.md)
+> before any provider operation.
+
 > Historical deployment note: this sealed-variable record describes the
-> `e4a1b7c9d2f6` / 18-table deployment snapshot. The current repository head is
-> `d8f1a3c6e9b2`; do not use the historical table count as a current migration
+> `e4a1b7c9d2f6` / 18-table deployment snapshot. Do not use the historical
+> table count or the older repository revision as a current migration
 > expectation.
 
-The broader setup now follows [the corrected workbook execution record](setup-workbook-reconciliation.md).
-Browser control and both projects' SSL/Data API checks now pass. Staging is
-now migrated to `e4a1b7c9d2f6`, with restricted runtime grants and RLS policies
-verified in the catalog. The encrypted owner handoff passed; no replacement is
-needed. The hosted runtime database connection and staging API health/readiness
-now pass. Staging administrator bootstrap, frontend deployment and authenticated
-browser checks are independently verified; do not repeat them. Production
-migration and runtime database security are also complete: head
-`e4a1b7c9d2f6`, 18 expected tables, 126 permission checks, RLS on all tables,
-18 runtime-only policies and Data API roles denied. Production API runtime
-connectivity, public readiness, Vercel deployment and browser login-page checks
-now pass. This document preserves the sealed-variable handoff record; it is
-not a pending provider-configuration checklist. Android offline-device
-acceptance remains outside this web/backend rollout.
-The owner has authorized continued implementation. Never send credential values
-in chat or commit them to Git.
+The [workbook execution record](setup-workbook-reconciliation.md) preserved
+successful setup and verification evidence as of September 2026. That record
+included SSL/Data API checks, staging and production migrations, runtime grants,
+TLS and deployment checks. Those results were observed at that time and do not
+establish current availability; consult the current-status page before any
+provider action. This document preserves the sealed-variable handoff record;
+it is not a current provider-configuration checklist. Android offline-device
+acceptance remains unverified without physical-device evidence.
+The owner authorized the implementation recorded in this handoff at that time.
+That historical approval does not authorize a new hosted change. Never send
+credential values in chat or commit them to Git.
 
 ## 1. Confirm existing data and key ownership
 
@@ -31,7 +31,7 @@ Owner-confirmed checkpoint:
 - Production application data: absent (owner confirmation).
 - Owner reports `PRODUCTION_DATABASE_URL`, `PAIRING_TOKEN_PEPPER_VERSION`,
   `DEVICE_ENROLLMENT_MODE` and `ENROLLMENT_ADMIN_ENABLED` entered in both
-  environments, with separate `edug_runtime` passwords. Values were not disclosed.
+  environments, with separate `eduguard_runtime` passwords. Values were not disclosed.
 - The owner subsequently confirmed all entries are saved and sealed. The
   saved-versus-pending manual checkpoint is satisfied by that confirmation.
   Do not unseal, overwrite or request re-entry merely to make CLI reads work.
@@ -80,7 +80,7 @@ connectivity or grants. No provider mutation or network database probe was made
 to resolve this checkpoint.
 
 Report only whether this is a fresh installation or a migration from an existing
-EduG installation, whether either Supabase project contains application data,
+EduGuard installation, whether either Supabase project contains application data,
 and the current enrollment mode/admin-enabled state. If migrating, retain
 existing signing/audit/pairing keys and identify the source privately; do not
 generate replacements or run migrations until inventory/recovery checks pass.

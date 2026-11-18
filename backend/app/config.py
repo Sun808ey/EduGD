@@ -110,10 +110,10 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
     JWT_TOKEN_LOCATION = ("headers",)
     JWT_HEADER_TYPE = "Bearer"
-    JWT_ENCODE_ISSUER = "edug-school-policy-api"
-    JWT_DECODE_ISSUER = "edug-school-policy-api"
-    JWT_ENCODE_AUDIENCE = "edug-school-administration"
-    JWT_DECODE_AUDIENCE = "edug-school-administration"
+    JWT_ENCODE_ISSUER = "eduguard-school-policy-api"
+    JWT_DECODE_ISSUER = "eduguard-school-policy-api"
+    JWT_ENCODE_AUDIENCE = "eduguard-school-administration"
+    JWT_DECODE_AUDIENCE = "eduguard-school-administration"
     SQLALCHEMY_DATABASE_URI: str | None = None
     SQLALCHEMY_ENGINE_OPTIONS: dict[str, object] = {}
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -278,7 +278,7 @@ def validate_database_separation() -> None:
             variable_name == "DEVELOPMENT_DATABASE_URL"
             and os.getenv("APP_ENV", "development").lower() == "development"
             and (parsed_url.host or "").lower() in LOCAL_DEVELOPMENT_HOSTNAMES
-            and parsed_url.database == "edug_local"
+            and parsed_url.database == "eduguard_local"
         )
         if is_local_development:
             continue
@@ -311,7 +311,7 @@ def validate_migration_target(
         allow_local_development
         and (application_url.host or "").lower() in LOCAL_DEVELOPMENT_HOSTNAMES
         and (migration_url.host or "").lower() in LOCAL_DEVELOPMENT_HOSTNAMES
-        and application_url.database == migration_url.database == "edug_local"
+        and application_url.database == migration_url.database == "eduguard_local"
     )
     if local_urls:
         if (
@@ -383,7 +383,7 @@ def validate_postgres_database_uri(
     is_local_development = (
         allow_local_development
         and hostname in LOCAL_DEVELOPMENT_HOSTNAMES
-        and parsed_url.database == "edug_local"
+        and parsed_url.database == "eduguard_local"
     )
     if port not in {None, 5432} and not is_local_development:
         raise RuntimeError(f"{variable_name} requires direct or session port 5432")

@@ -17,7 +17,9 @@ def main() -> None:
     if (directory / "server.key").exists() and (directory / "server.crt").exists():
         return
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "EduG disposable test")])
+    name = x509.Name(
+        [x509.NameAttribute(NameOID.COMMON_NAME, "EduGuard disposable test")]
+    )
     now = datetime.now(UTC)
     certificate = (
         x509.CertificateBuilder()
@@ -30,7 +32,7 @@ def main() -> None:
         .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
         .add_extension(
             x509.SubjectAlternativeName(
-                [x509.DNSName("db.eduglocaltest0000001.supabase.co")]
+                [x509.DNSName("db.eduguardtest00000001.supabase.co")]
             ),
             critical=False,
         )

@@ -63,8 +63,8 @@ from app.models import (
 )
 from app.services.administrator_authentication import bootstrap_administrator
 
-ADMIN_USERNAME = os.getenv("EDUG_DEMO_ADMIN_USERNAME", "ed.admin")
-READONLY_USERNAME = os.getenv("EDUG_DEMO_READONLY_USERNAME", "local.e2e.reader")
+ADMIN_USERNAME = os.getenv("EDUGUARD_DEMO_ADMIN_USERNAME", "ed.admin")
+READONLY_USERNAME = os.getenv("EDUGUARD_DEMO_READONLY_USERNAME", "local.e2e.reader")
 
 
 def _required_demo_credential(name: str) -> str:
@@ -76,16 +76,16 @@ def _required_demo_credential(name: str) -> str:
     return value
 
 
-ADMIN_PASSWORD = _required_demo_credential("EDUG_DEMO_ADMIN_PASSWORD")
-READONLY_PASSWORD = _required_demo_credential("EDUG_DEMO_READONLY_PASSWORD")
+ADMIN_PASSWORD = _required_demo_credential("EDUGUARD_DEMO_ADMIN_PASSWORD")
+READONLY_PASSWORD = _required_demo_credential("EDUGUARD_DEMO_READONLY_PASSWORD")
 OPERATOR_SUBJECT = "local:e2e"
 REASON = "NDEJJE SS operational scenario"
 PHONE_UUID = UUID("22222222-2222-4222-8222-222222222222")
 TABLET_UUID = UUID("55555555-5555-4555-8555-555555555555")
 CLASS_POLICY_UUID = UUID("33333333-3333-4333-8333-333333333333")
 EXAM_POLICY_UUID = UUID("44444444-4444-4444-8444-444444444444")
-DPC_PACKAGE = "io.github.sun808ey.edugd.dpc"
-EXAM_PACKAGE = "org.edug.exam"
+DPC_PACKAGE = "io.github.sun808ey.eduguard.dpc"
+EXAM_PACKAGE = "org.eduguard.exam"
 DEMO_PERIOD_START = datetime(2026, 10, 1, 7, 0, tzinfo=UTC)
 DEMO_PERIOD_END = datetime(2026, 10, 21, 15, 45, tzinfo=UTC)
 _DEMO_RANDOM = Random(20261021)
@@ -187,7 +187,7 @@ def _policy_payload(*, mode_id: str, kiosk: bool) -> dict[str, object]:
         "policy_code": "EXAMINATION_DEVICE" if kiosk else "LEARNING_DEVICE",
         "description": (
             "Controls the school-owned phone during Senior Five examinations. "
-            "Only the examination workflow and the EduGD controller remain available."
+            "Only the examination workflow and the EduGuard controller remain available."
             if kiosk
             else "Controls the shared school tablet during Computer Studies lessons. "
             "Only verified learning applications remain available."
@@ -776,7 +776,7 @@ def _seed_tablet_operations(
             device_id=tablet.id,
             incident_type="unauthorised_application",
             description="Restricted application launch blocked during a Computer Studies session.",
-            reported_by="EDUGD DPC",
+            reported_by="EduGuard DPC",
             status="ACTION_TAKEN",
             action_taken="Policy remained enforced and the event was reviewed.",
             responsible_person="HOD COMPUTER STUDIES",
@@ -1332,7 +1332,7 @@ def _seed(*, blank_school: bool = False) -> None:
                 device_id=device.id,
                 incident_type="unauthorised_application",
                 description="Blocked social application launch recorded during Class Time Policy.",
-                reported_by="EDUGD DPC",
+                reported_by="EduGuard DPC",
                 status="OPEN",
                 responsible_person="ICT Master",
                 created_by_administrator_id=administrator.id,
@@ -1345,7 +1345,7 @@ def _seed(*, blank_school: bool = False) -> None:
                 device_id=device.id,
                 incident_type="kiosk_bypass_attempt",
                 description="Exam Mode kiosk exit attempt requires review.",
-                reported_by="EDUGD DPC",
+                reported_by="EduGuard DPC",
                 status="OPEN",
                 responsible_person="ICT Master",
                 created_by_administrator_id=administrator.id,

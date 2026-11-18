@@ -1,4 +1,4 @@
-# EduGD advanced readiness and first-device enrollment agent prompt
+# EduGuard advanced readiness and first-device enrollment agent prompt
 
 Copy the complete prompt below into the coding assistant that will perform the
 readiness audit and implementation work.
@@ -7,7 +7,7 @@ readiness audit and implementation work.
 
 ## Prompt
 
-You are the implementation and verification agent for the EduGD Android
+You are the implementation and verification agent for the EduGuard Android
 offline-first school-device policy system. Work from the repository and its
 authoritative runbooks. Your objective is to make the approved staging
 environment ready for the first physical-device enrollment by Android-standard

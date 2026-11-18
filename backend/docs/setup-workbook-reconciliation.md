@@ -1,4 +1,10 @@
-# EduGD backend and frontend setup
+# EduGuard backend and frontend setup
+
+> **Execution history, not live status.** This record retains earlier setup and
+> deployment evidence. Provider states have since changed, and Android DPC
+> source has since been added to the repository. Use the
+> [current project status](../../docs/current-status.md) for the latest
+> workspace, CI and hosted-service observations.
 
 This execution record reconciles the supplied `inter.md` workbook with the
 approved September 2026 configuration. It describes a personal, non-commercial
@@ -26,12 +32,12 @@ current two-project, zero-cost and secret-protection requirements.
 | Record the last four secret characters | Record names and pass/fail evidence only, with no secret fragments. |
 | Enrollment tests require issuing tokens while administration is disabled | Keep the selected `legacy`/`false` policy. Verify issuance is denied in that configuration; token lifecycle coverage belongs to isolated tests with enrollment enabled. Do not claim live issuance passed. |
 | Free capacity or Trial balance proves sustainable zero cost | Verify actual recurring allowance, usage and plan enforcement before compute starts. Free has $1 monthly credit; resource usage is metered. Trial credits are not proof that both APIs can run continuously for free.[3] |
-| Android offline checks can be inferred from backend tests | Require actual managed-device evidence. This checkout contains no Android implementation. |
+| Android offline checks can be inferred from backend tests | Require actual managed-device evidence. Android DPC source is now present, but physical-device verification remains outstanding. |
 
 Vercel Hobby eligibility rests on the confirmed personal, non-commercial nature
 of the project, consistent with its current plan restrictions.[4]
 
-## Current execution evidence
+## Historical execution evidence
 
 ### Staging frontend deployment
 
@@ -49,8 +55,9 @@ alias; use only the approved staging domain for CORS-compatible verification.
 
 Historical manual gate: staging sign-in subsequently passed. Authentication,
 dashboard API calls, RBAC and logout are recorded in the staging authenticated
-acceptance section below. Production rollout subsequently passed and is
-recorded in the current-production status.
+acceptance section below. The later production rollout was recorded in the
+historical production sections below; it is not a statement of current live
+availability.
 
 ### Staging authenticated acceptance
 
@@ -64,12 +71,10 @@ setting is checked before token generation or database writes. Logout returned
 the browser to `/login`, confirming that the protected frontend session was
 cleared. No device, policy, enrollment token or credential was created.
 
-Android offline acceptance remains unverified. This checkout has no Android
-Gradle project or wrapper, and `adb` is unavailable on this workstation, so no
-emulator/device installation, airplane-mode, restart or queued-event replay
-claim is made. This limitation must be resolved with an actual managed Android
-device and the Android implementation before the academic proof of concept can
-claim device-policy enforcement evidence.
+Android offline acceptance remained unverified at the time of this execution.
+No emulator/device installation, airplane-mode, restart or queued-event replay
+claim was made. Android implementation is now present in `android-dpc/` and
+`app/`; certification still requires an actual managed Android device.
 
 Historical production gate: the separate production migration-owner handoff,
 schema migration and runtime-security procedure subsequently passed. Staging
@@ -113,14 +118,14 @@ denied, append-only tables lack UPDATE/DELETE/TRUNCATE, and `anon`,
 `authenticated` and `service_role` lack table access.
 
 Supabase automatically enabled RLS on all 18 tables. Explicit
-`edug_backend_runtime` policies now allow only the dedicated `edug_runtime`
+`eduguard_backend_runtime` policies now allow only the dedicated `eduguard_runtime`
 role through RLS; the narrower SQL grants still constrain permitted operations.
 This server role relies on Flask's administrator/device authorization, not
 Supabase Auth claims. No browser/API role received a policy or grant. Future
 tables require a separate reviewed privilege/policy decision.
 
 The first grants transaction rolled back because this migration owner cannot
-`SET ROLE edug_runtime`. Verification was changed to catalog checks without
+`SET ROLE eduguard_runtime`. Verification was changed to catalog checks without
 granting extra role membership. Actual password-authenticated runtime checks
 are delegated to the one-shot Railway probe using the existing sealed variables.
 
@@ -143,7 +148,7 @@ Latest continuation supersedes the earlier browser interruption below:
   dialog, and the resulting switch was verified on. Production Data API is disabled.
 - A read-only staging SQL transaction returned database `postgres`, inspection
   role `postgres`, PostgreSQL 17.6, zero public tables and no Alembic table.
-- `edug_runtime` exists with LOGIN; SUPERUSER, CREATEDB, CREATEROLE, REPLICATION
+- `eduguard_runtime` exists with LOGIN; SUPERUSER, CREATEDB, CREATEROLE, REPLICATION
   and BYPASSRLS are all false. Password correctness, object grants after schema
   creation and Railway-to-database TLS remain separate pending checks.
 - Retrieved the public certificate from the dashboard's download URL into
@@ -197,7 +202,7 @@ Latest continuation supersedes the earlier browser interruption below:
    enforcement after the interrupted action, enable if still off and confirm
    success. Then verify production SSL and disable the unused Data API in both
    projects. SSL changes can briefly restart the database.[5][6]
-2. Inspect existing `edug_runtime` roles and empty schemas, establish verified
+2. Inspect existing `eduguard_runtime` roles and empty schemas, establish verified
    TLS for migration and runtime connections, and confirm the separate migration
    execution context. Do not reset existing passwords. Follow the migration
    runbook's restricted grants and inspect default privileges.
@@ -276,7 +281,7 @@ the same Windows account that owns the encrypted handoff:
 ```
 
 The helper repeats the empty-target gate immediately before Alembic, upgrades
-to the current repository head `d8f1a3c6e9b2`, and verifies the metadata-derived
+to the then-current repository head `d8f1a3c6e9b2`, and verifies the metadata-derived
 public table inventory. Runtime grants,
 RLS policies, API deployment and frontend rollout remain blocked until this
 step reports `"production_schema_migration":"PASS"`.
@@ -291,9 +296,9 @@ runtime security transaction next:
 & 'E:\EduG\backend\scripts\configure_production_runtime_security.ps1'
 ```
 
-This preserves the existing `edug_runtime` password, rejects an absent or
+This preserves the existing `eduguard_runtime` password, rejects an absent or
 overprivileged role, denies Data API roles, grants only the reviewed table and
-sequence operations, enables RLS, and creates one `edug_backend_runtime` policy
+sequence operations, enables RLS, and creates one `eduguard_backend_runtime` policy
 per table. API deployment remains blocked until all 126 permission checks and
 all 18 policy checks pass.
 
@@ -308,12 +313,12 @@ be prepared. In the owner's PowerShell, create a dedicated passphrase-protected
 key outside the repository (do not overwrite an existing key):
 
 ```powershell
-$edugKey = Join-Path $env:USERPROFILE '.ssh/edug-staging-operator'
-New-Item -ItemType Directory -Force (Split-Path $edugKey) | Out-Null
-if (Test-Path -LiteralPath $edugKey) { throw 'Key exists; do not overwrite it.' }
-ssh-keygen -t ed25519 -f $edugKey -C edug-staging-operator
-railway ssh keys add --key "$edugKey.pub" --name edug-staging-operator
-railway ssh -p 7d0c485e-3e9f-411c-9412-af8dd6f32481 -e a8928189-e7bb-46be-8788-856816caecd0 -s 5ac7afd9-8d99-4ab6-92b8-3e4adab1f058 -i $edugKey
+$eduguardKey = Join-Path $env:USERPROFILE '.ssh/eduguard-staging-operator'
+New-Item -ItemType Directory -Force (Split-Path $eduguardKey) | Out-Null
+if (Test-Path -LiteralPath $eduguardKey) { throw 'Key exists; do not overwrite it.' }
+ssh-keygen -t ed25519 -f $eduguardKey -C eduguard-staging-operator
+railway ssh keys add --key "$eduguardKey.pub" --name eduguard-staging-operator
+railway ssh -p 7d0c485e-3e9f-411c-9412-af8dd6f32481 -e a8928189-e7bb-46be-8788-856816caecd0 -s 5ac7afd9-8d99-4ab6-92b8-3e4adab1f058 -i $eduguardKey
 ```
 
 After the remote shell opens, run:

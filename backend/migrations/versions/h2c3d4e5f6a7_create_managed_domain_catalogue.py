@@ -62,12 +62,12 @@ def upgrade() -> None:
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
                 REVOKE ALL PRIVILEGES ON TABLE managed_domains FROM service_role;
             END IF;
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
-                REVOKE ALL PRIVILEGES ON TABLE managed_domains FROM edug_runtime;
-                GRANT SELECT, INSERT, UPDATE ON TABLE managed_domains TO edug_runtime;
-                CREATE POLICY edug_backend_runtime ON managed_domains
-                AS PERMISSIVE FOR ALL TO edug_runtime USING (true) WITH CHECK (true);
-                GRANT USAGE, SELECT ON SEQUENCE managed_domains_id_seq TO edug_runtime;
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eduguard_runtime') THEN
+                REVOKE ALL PRIVILEGES ON TABLE managed_domains FROM eduguard_runtime;
+                GRANT SELECT, INSERT, UPDATE ON TABLE managed_domains TO eduguard_runtime;
+                CREATE POLICY eduguard_backend_runtime ON managed_domains
+                AS PERMISSIVE FOR ALL TO eduguard_runtime USING (true) WITH CHECK (true);
+                GRANT USAGE, SELECT ON SEQUENCE managed_domains_id_seq TO eduguard_runtime;
             END IF;
             END $$"""
         )

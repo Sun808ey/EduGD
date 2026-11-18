@@ -453,10 +453,10 @@ def validate_policy_v3(value: object) -> dict[str, object]:
         emergency_packages = result.get("emergency_packages")
         if (
             not isinstance(emergency_packages, list)
-            or "io.github.sun808ey.edugd.dpc" not in emergency_packages
+            or "io.github.sun808ey.eduguard.dpc" not in emergency_packages
         ):
             raise PolicyContractError(
-                "the EDUGD DPC package must remain an emergency package"
+                "the EduGuard DPC package must remain an emergency package"
             )
     return result
 

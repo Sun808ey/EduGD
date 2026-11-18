@@ -25,15 +25,15 @@ from app.models import (
 pytestmark = pytest.mark.postgres
 
 HARDENED_FUNCTIONS = {
-    "edug_reject_certification_mutation",
-    "edug_reject_device_audit_mutation",
-    "edug_reject_device_control_event_mutation",
-    "edug_reject_device_status_evidence_mutation",
-    "edug_reject_policy_assignment_event_mutation",
-    "edug_reject_policy_revision_mutation",
-    "edug_reject_policy_sync_event_mutation",
-    "edug_valid_blocked_apps",
-    "edug_valid_policy_revision_payload",
+    "eduguard_reject_certification_mutation",
+    "eduguard_reject_device_audit_mutation",
+    "eduguard_reject_device_control_event_mutation",
+    "eduguard_reject_device_status_evidence_mutation",
+    "eduguard_reject_policy_assignment_event_mutation",
+    "eduguard_reject_policy_revision_mutation",
+    "eduguard_reject_policy_sync_event_mutation",
+    "eduguard_valid_blocked_apps",
+    "eduguard_valid_policy_revision_payload",
 }
 
 
@@ -996,7 +996,7 @@ def test_security_functions_have_fixed_resolution_and_runtime_only_execution(
         text(
             """SELECT p.proname,
             COALESCE(p.proconfig, ARRAY[]::text[]) AS configuration,
-            has_function_privilege('edug_runtime', p.oid, 'EXECUTE') AS runtime_execute,
+            has_function_privilege('eduguard_runtime', p.oid, 'EXECUTE') AS runtime_execute,
             has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_execute,
             has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated_execute,
             has_function_privilege('service_role', p.oid, 'EXECUTE') AS service_execute

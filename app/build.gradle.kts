@@ -7,12 +7,12 @@ plugins {
 }
 
 android {
-    namespace = "io.github.sun808ey.edugd.dpc"
+    namespace = "io.github.sun808ey.eduguard.dpc"
     // AGP 8.5.2 supports the stable Android 35 platform available in the pinned toolchain.
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.github.sun808ey.edugd.dpc"
+        applicationId = "io.github.sun808ey.eduguard.dpc"
         minSdk = 29
         targetSdk = 37
         versionCode = 1

@@ -11,8 +11,8 @@ describe('AdminLanguageSelector', () => {
     fireEvent.click(screen.getByRole('button', { name: /language/i }))
     expect(screen.getAllByRole('menuitemradio')).toHaveLength(6)
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Luganda' }))
-    expect(localStorage.getItem('edug.admin.language')).toBe('lug')
-    expect(localStorage.getItem('edug.public.language')).toBeNull()
+    expect(localStorage.getItem('eduguard.admin.language')).toBe('lug')
+    expect(localStorage.getItem('eduguard.public.language')).toBeNull()
   })
 
   it('restores focus after Escape closes the menu', () => {

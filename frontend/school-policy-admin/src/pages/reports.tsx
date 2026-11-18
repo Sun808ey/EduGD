@@ -23,7 +23,7 @@ export function ReportsPage() {
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = 'edugd-violations.csv'
+      anchor.download = 'eduguard-violations.csv'
       anchor.click()
       URL.revokeObjectURL(url)
     } catch {

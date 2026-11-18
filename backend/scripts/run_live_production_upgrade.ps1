@@ -9,37 +9,37 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$edugBackend = Split-Path -Parent $PSScriptRoot
-$edugPython = Join-Path $edugBackend 'venv\Scripts\python.exe'
-$edugHandoff = Join-Path $edugBackend 'operator-evidence\production-migration-url.clixml'
-$edugEvidence = Resolve-Path -LiteralPath $BackupRestoreEvidence -ErrorAction Stop
-$edugPointer = [IntPtr]::Zero
-$edugSecure = $null
+$eduguardBackend = Split-Path -Parent $PSScriptRoot
+$eduguardPython = Join-Path $eduguardBackend 'venv\Scripts\python.exe'
+$eduguardHandoff = Join-Path $eduguardBackend 'operator-evidence\production-migration-url.clixml'
+$eduguardEvidence = Resolve-Path -LiteralPath $BackupRestoreEvidence -ErrorAction Stop
+$eduguardPointer = [IntPtr]::Zero
+$eduguardSecure = $null
 
 if (-not $MaintenanceWindowConfirmed) { throw 'An approved maintenance window is required.' }
-if (-not (Test-Path -LiteralPath $edugPython)) { throw 'Backend Python environment is missing.' }
-if (-not (Test-Path -LiteralPath $edugHandoff)) { throw 'Encrypted production handoff is missing.' }
+if (-not (Test-Path -LiteralPath $eduguardPython)) { throw 'Backend Python environment is missing.' }
+if (-not (Test-Path -LiteralPath $eduguardHandoff)) { throw 'Encrypted production handoff is missing.' }
 
 # The evidence contains no credentials. It is an operator attestation for a
 # completed backup-and-restore rehearsal against this exact production revision.
-$edugAttestation = Get-Content -LiteralPath $edugEvidence -Raw | ConvertFrom-Json
+$eduguardAttestation = Get-Content -LiteralPath $eduguardEvidence -Raw | ConvertFrom-Json
 if (
-    $edugAttestation.status -ne 'PASS' -or
-    $edugAttestation.project_ref -ne 'hszskxrgkptbytuquyfu' -or
-    $edugAttestation.before_revision -ne 'c2f8a1b4d630' -or
-    -not $edugAttestation.restore_completed_at -or
-    -not $edugAttestation.artifact_sha256 -or
-    -not $edugAttestation.restore_inventory_sha256 -or
-    -not $edugAttestation.migration_log_sha256 -or
-    -not $edugAttestation.archive_path -or
-    $edugAttestation.artifact_sha256 -notmatch '^[a-fA-F0-9]{64}$' -or
-    $edugAttestation.restore_inventory_sha256 -notmatch '^[a-fA-F0-9]{64}$' -or
-    $edugAttestation.migration_log_sha256 -notmatch '^[a-fA-F0-9]{64}$' -or
-    -not (Test-Path -LiteralPath $edugAttestation.archive_path) -or
-    ((Get-FileHash -LiteralPath $edugAttestation.archive_path -Algorithm SHA256).Hash -ne $edugAttestation.artifact_sha256)
+    $eduguardAttestation.status -ne 'PASS' -or
+    $eduguardAttestation.project_ref -ne 'hszskxrgkptbytuquyfu' -or
+    $eduguardAttestation.before_revision -ne 'c2f8a1b4d630' -or
+    -not $eduguardAttestation.restore_completed_at -or
+    -not $eduguardAttestation.artifact_sha256 -or
+    -not $eduguardAttestation.restore_inventory_sha256 -or
+    -not $eduguardAttestation.migration_log_sha256 -or
+    -not $eduguardAttestation.archive_path -or
+    $eduguardAttestation.artifact_sha256 -notmatch '^[a-fA-F0-9]{64}$' -or
+    $eduguardAttestation.restore_inventory_sha256 -notmatch '^[a-fA-F0-9]{64}$' -or
+    $eduguardAttestation.migration_log_sha256 -notmatch '^[a-fA-F0-9]{64}$' -or
+    -not (Test-Path -LiteralPath $eduguardAttestation.archive_path) -or
+    ((Get-FileHash -LiteralPath $eduguardAttestation.archive_path -Algorithm SHA256).Hash -ne $eduguardAttestation.artifact_sha256)
 ) { throw 'Backup-and-restore rehearsal evidence is incomplete or does not match production.' }
 
-$edugUpgrade = @'
+$eduguardUpgrade = @'
 import json
 import os
 from pathlib import Path
@@ -59,13 +59,13 @@ EXPECTED_HOST = "aws-1-eu-west-1.pooler.supabase.com"
 EXPECTED_USER = "postgres.hszskxrgkptbytuquyfu"
 NEW_RELEASE_TABLES = {"managed_applications"}
 HARDENED_FUNCTIONS = {
-    "edug_reject_certification_mutation", "edug_reject_device_audit_mutation",
-    "edug_reject_device_control_event_mutation",
-    "edug_reject_device_status_evidence_mutation",
-    "edug_reject_policy_assignment_event_mutation",
-    "edug_reject_policy_revision_mutation",
-    "edug_reject_policy_sync_event_mutation", "edug_valid_blocked_apps",
-    "edug_valid_policy_revision_payload", "edug_reject_web_filter_event_mutation",
+    "eduguard_reject_certification_mutation", "eduguard_reject_device_audit_mutation",
+    "eduguard_reject_device_control_event_mutation",
+    "eduguard_reject_device_status_evidence_mutation",
+    "eduguard_reject_policy_assignment_event_mutation",
+    "eduguard_reject_policy_revision_mutation",
+    "eduguard_reject_policy_sync_event_mutation", "eduguard_valid_blocked_apps",
+    "eduguard_valid_policy_revision_payload", "eduguard_reject_web_filter_event_mutation",
 }
 
 result = {"production_schema_migration": "FAIL", "stage": "local_identity"}
@@ -79,8 +79,8 @@ def require(condition: bool, label: str) -> None:
 
 
 try:
-    raw = os.environ.pop("EDUG_PRODUCTION_MIGRATION_URL")
-    require(os.environ.pop("EDUG_BACKUP_RESTORE_EVIDENCE") == "PASS", "backup evidence missing")
+    raw = os.environ.pop("EDUGUARD_PRODUCTION_MIGRATION_URL")
+    require(os.environ.pop("EDUGUARD_BACKUP_RESTORE_EVIDENCE") == "PASS", "backup evidence missing")
     url = make_url(raw)
     require(url.database == "postgres", "unexpected database")
     require(url.host == EXPECTED_HOST and url.port == 5432, "unexpected migration host")
@@ -107,7 +107,7 @@ try:
         finally:
             transaction.rollback()
 
-    app = Flask("edug_live_production_upgrade")
+    app = Flask("eduguard_live_production_upgrade")
     app.config.update(
         APP_ENV="production", SQLALCHEMY_DATABASE_URI=raw,
         SQLALCHEMY_TRACK_MODIFICATIONS=False, MIGRATION_DATABASE_URI=raw,
@@ -121,7 +121,7 @@ try:
     # cannot run concurrently. The maintenance-window gate protects application writers.
     lock_connection = engine.connect()
     require(lock_connection.execute(text(
-        "SELECT pg_try_advisory_lock(hashtext('edug-production-schema-upgrade'))"
+        "SELECT pg_try_advisory_lock(hashtext('eduguard-production-schema-upgrade'))"
     )).scalar_one() is True, "production migration lock is unavailable")
 
     result["stage"] = "alembic_upgrade"
@@ -140,9 +140,9 @@ try:
         require(len(functions) == len(HARDENED_FUNCTIONS), "required function is missing")
         for function in functions:
             connection.execute(text(f"ALTER FUNCTION {function} SET search_path TO ''"))
-            for role in ("PUBLIC", "anon", "authenticated", "service_role", "edug_runtime"):
+            for role in ("PUBLIC", "anon", "authenticated", "service_role", "eduguard_runtime"):
                 connection.execute(text(f"REVOKE EXECUTE ON FUNCTION {function} FROM {role}"))
-            connection.execute(text(f"GRANT EXECUTE ON FUNCTION {function} TO edug_runtime"))
+            connection.execute(text(f"GRANT EXECUTE ON FUNCTION {function} TO eduguard_runtime"))
 
     result["stage"] = "post_migration_verification"
     with engine.connect() as connection:
@@ -161,7 +161,7 @@ try:
                 "WHERE n.nspname='public' AND c.relkind='r'"
             )).scalar_one() is True, "RLS verification failed")
             require(connection.execute(text(
-                "SELECT bool_and(has_table_privilege('edug_runtime', "
+                "SELECT bool_and(has_table_privilege('eduguard_runtime', "
                 "quote_ident(table_schema)||'.'||quote_ident(table_name), 'SELECT')) "
                 "FROM information_schema.tables WHERE table_schema='public' "
                 "AND table_type='BASE TABLE'"
@@ -191,7 +191,7 @@ try:
                 "ON n.oid=p.pronamespace WHERE n.nspname='public' "
                 "AND p.proname = ANY(:names) "
                 "AND COALESCE(p.proconfig, ARRAY[]::text[]) @> ARRAY['search_path=\"\"'] "
-                "AND has_function_privilege('edug_runtime', p.oid, 'EXECUTE') "
+                "AND has_function_privilege('eduguard_runtime', p.oid, 'EXECUTE') "
                 "AND NOT has_function_privilege('anon', p.oid, 'EXECUTE') "
                 "AND NOT has_function_privilege('authenticated', p.oid, 'EXECUTE') "
                 "AND NOT has_function_privilege('service_role', p.oid, 'EXECUTE')"
@@ -215,7 +215,7 @@ except Exception as error:
 finally:
     if lock_connection is not None:
         try:
-            lock_connection.execute(text("SELECT pg_advisory_unlock(hashtext('edug-production-schema-upgrade'))"))
+            lock_connection.execute(text("SELECT pg_advisory_unlock(hashtext('eduguard-production-schema-upgrade'))"))
         finally:
             lock_connection.close()
     if engine is not None:
@@ -226,20 +226,20 @@ raise SystemExit(0 if result["production_schema_migration"] == "PASS" else 1)
 '@
 
 try {
-    $edugSecure = Import-Clixml -LiteralPath $edugHandoff
-    $edugPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($edugSecure)
-    $env:EDUG_PRODUCTION_MIGRATION_URL = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($edugPointer)
-    $env:EDUG_BACKUP_RESTORE_EVIDENCE = 'PASS'
-    Push-Location $edugBackend
+    $eduguardSecure = Import-Clixml -LiteralPath $eduguardHandoff
+    $eduguardPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($eduguardSecure)
+    $env:EDUGUARD_PRODUCTION_MIGRATION_URL = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($eduguardPointer)
+    $env:EDUGUARD_BACKUP_RESTORE_EVIDENCE = 'PASS'
+    Push-Location $eduguardBackend
     try {
-        $edugOutput = @($edugUpgrade | & $edugPython -)
-        $edugExitCode = $LASTEXITCODE
-        $edugOutput | Write-Output
-        if ($edugExitCode -ne 0) { throw 'Live production upgrade failed.' }
+        $eduguardOutput = @($eduguardUpgrade | & $eduguardPython -)
+        $eduguardExitCode = $LASTEXITCODE
+        $eduguardOutput | Write-Output
+        if ($eduguardExitCode -ne 0) { throw 'Live production upgrade failed.' }
     } finally { Pop-Location }
 } finally {
-    Remove-Item Env:EDUG_PRODUCTION_MIGRATION_URL -ErrorAction SilentlyContinue
-    Remove-Item Env:EDUG_BACKUP_RESTORE_EVIDENCE -ErrorAction SilentlyContinue
-    if ($edugPointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($edugPointer) }
-    if ($null -ne $edugSecure) { $edugSecure.Dispose() }
+    Remove-Item Env:EDUGUARD_PRODUCTION_MIGRATION_URL -ErrorAction SilentlyContinue
+    Remove-Item Env:EDUGUARD_BACKUP_RESTORE_EVIDENCE -ErrorAction SilentlyContinue
+    if ($eduguardPointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($eduguardPointer) }
+    if ($null -ne $eduguardSecure) { $eduguardSecure.Dispose() }
 }

@@ -23,11 +23,11 @@ export interface OfflineQueueItem {
   response?: unknown
 }
 
-const DB_NAME = 'edugd-offline-v1'
+const DB_NAME = 'eduguard-offline-v1'
 const DB_VERSION = 1
 const CACHE_STORE = 'cache'
 const QUEUE_STORE = 'queue'
-const STORAGE_PREFIX = 'edugd.offline.v1.'
+const STORAGE_PREFIX = 'eduguard.offline.v1.'
 
 const newUuid = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()

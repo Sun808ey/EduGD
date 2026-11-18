@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
 
-declare module 'virtual:edugd-qa-source' {
-  export const edugdQaSource: string
+declare module 'virtual:eduguard-qa-source' {
+  export const eduguardQaSource: string
 }

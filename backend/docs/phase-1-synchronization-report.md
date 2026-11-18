@@ -1,5 +1,9 @@
 # Phase 1 GitHub synchronization
 
+> **Historical synchronization report, September 2026.** It records the GitHub
+> and local state at that time. The latest observed repository and provider
+> state is in [current project status](../../docs/current-status.md).
+
 ## Scope and evidence
 
 This review covers the prepared Flask backend and React/Vite administrator

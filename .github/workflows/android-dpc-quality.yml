@@ -48,15 +48,15 @@ jobs:
       - name: Create disposable release keystore
         run: |
           keytool -genkeypair -noprompt -storetype PKCS12 \
-            -keystore "$RUNNER_TEMP/edugd-ci-release.p12" \
+            -keystore "$RUNNER_TEMP/eduguard-ci-release.p12" \
             -storepass "$CI_KEYSTORE_PASSWORD" \
             -keypass "$CI_KEYSTORE_PASSWORD" \
-            -alias edugd-ci -keyalg RSA -keysize 2048 -validity 1 \
-            -dname "CN=EduG CI,OU=CI,O=EduG,L=Kampala,C=UG"
+            -alias eduguard-ci -keyalg RSA -keysize 2048 -validity 1 \
+            -dname "CN=EduGuard CI,OU=CI,O=EduGuard,L=Kampala,C=UG"
           printf '%s\n' \
-            "storeFile=$RUNNER_TEMP/edugd-ci-release.p12" \
+            "storeFile=$RUNNER_TEMP/eduguard-ci-release.p12" \
             "storePassword=$CI_KEYSTORE_PASSWORD" \
-            "keyAlias=edugd-ci" \
+            "keyAlias=eduguard-ci" \
             "keyPassword=$CI_KEYSTORE_PASSWORD" \
             > android-dpc/keystore.properties
 
@@ -73,4 +73,4 @@ jobs:
         if: ${{ always() }}
         run: |
           rm -f android-dpc/keystore.properties
-          rm -f "$RUNNER_TEMP/edugd-ci-release.p12"
+          rm -f "$RUNNER_TEMP/eduguard-ci-release.p12"

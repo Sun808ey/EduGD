@@ -17,7 +17,7 @@ def upgrade() -> None:
         # persistence. Keep the database constraint strict for legacy v1 rows
         # while allowing the additive v3 schema.
         op.execute(
-            """CREATE OR REPLACE FUNCTION edug_valid_policy_revision_payload(value json)
+            """CREATE OR REPLACE FUNCTION eduguard_valid_policy_revision_payload(value json)
             RETURNS boolean LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $function$
                 SELECT CASE
                     WHEN json_typeof(value) <> 'object' THEN FALSE
@@ -26,7 +26,7 @@ def upgrade() -> None:
                     WHEN (value->>'schema_version')::integer <> 1 THEN FALSE
                     WHEN (SELECT count(*) FROM json_object_keys(value)) <> 2 THEN FALSE
                     WHEN value->'blocked_apps' IS NULL THEN FALSE
-                    ELSE edug_valid_blocked_apps(value->'blocked_apps')
+                    ELSE eduguard_valid_blocked_apps(value->'blocked_apps')
                 END
             $function$"""
         )
@@ -46,7 +46,7 @@ def upgrade() -> None:
                 IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOKE ALL PRIVILEGES ON TABLE {table} FROM anon; END IF;
                 IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN REVOKE ALL PRIVILEGES ON TABLE {table} FROM authenticated; END IF;
                 IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN REVOKE ALL PRIVILEGES ON TABLE {table} FROM service_role; END IF;
-                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN REVOKE ALL PRIVILEGES ON TABLE {table} FROM edug_runtime; END IF;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eduguard_runtime') THEN REVOKE ALL PRIVILEGES ON TABLE {table} FROM eduguard_runtime; END IF;
                 END $$"""
             )
             if table == "device_block_overrides":
@@ -57,33 +57,33 @@ def upgrade() -> None:
                 privileges = "SELECT, INSERT"
             op.execute(
                 f"""DO $$ BEGIN
-                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
-                    GRANT {privileges} ON TABLE {table} TO edug_runtime;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eduguard_runtime') THEN
+                    GRANT {privileges} ON TABLE {table} TO eduguard_runtime;
                 END IF;
                 END $$"""
             )
             op.execute(
                 f"""DO $$ BEGIN
-                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
-                    CREATE POLICY edug_backend_runtime ON {table}
-                    AS PERMISSIVE FOR ALL TO edug_runtime USING (true) WITH CHECK (true);
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eduguard_runtime') THEN
+                    CREATE POLICY eduguard_backend_runtime ON {table}
+                    AS PERMISSIVE FOR ALL TO eduguard_runtime USING (true) WITH CHECK (true);
                 END IF;
                 END $$"""
             )
         op.execute(
             """DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
-                GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO edug_runtime;
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eduguard_runtime') THEN
+                GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO eduguard_runtime;
             END IF;
             END $$"""
         )
-        op.execute("""CREATE FUNCTION edug_reject_device_control_event_mutation() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'device control evidence is immutable'; END; $$ LANGUAGE plpgsql""")
-        op.execute("CREATE TRIGGER trg_device_control_events_immutable BEFORE UPDATE OR DELETE ON device_control_events FOR EACH ROW EXECUTE FUNCTION edug_reject_device_control_event_mutation()")
+        op.execute("""CREATE FUNCTION eduguard_reject_device_control_event_mutation() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'device control evidence is immutable'; END; $$ LANGUAGE plpgsql""")
+        op.execute("CREATE TRIGGER trg_device_control_events_immutable BEFORE UPDATE OR DELETE ON device_control_events FOR EACH ROW EXECUTE FUNCTION eduguard_reject_device_control_event_mutation()")
 
 def downgrade() -> None:
     if op.get_bind().dialect.name == "postgresql":
         op.execute("DROP TRIGGER trg_device_control_events_immutable ON device_control_events")
-        op.execute("DROP FUNCTION edug_reject_device_control_event_mutation()")
+        op.execute("DROP FUNCTION eduguard_reject_device_control_event_mutation()")
     with op.batch_alter_table("administrator_permissions") as batch:
         batch.drop_constraint("ck_administrator_permissions_permission", type_="check")
         batch.create_check_constraint("ck_administrator_permissions_permission", "permission IN ('administrator.manage','enrollment_token.issue','enrollment_token.revoke','device_credential.revoke','policy.assign')")

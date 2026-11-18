@@ -90,7 +90,7 @@ def _record(challenge: bytes = b"x" * 32):
         "security_level": "TrustedEnvironment",
         "verified_boot": "Verified",
         "device_locked": True,
-        "dpc_package": "io.github.sun808ey.edugd.dpc",
+        "dpc_package": "io.github.sun808ey.eduguard.dpc",
         "dpc_signing_sha256": "f" * 64,
         "play_device_integrity": True,
         "inventory_sha256": sha256(canonical_json_bytes(handlers)).hexdigest(),

@@ -1,1 +1,1 @@
-export const BRAND_NAME = 'EduGD'
+export const BRAND_NAME = 'EduGuard'

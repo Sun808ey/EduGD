@@ -1,4 +1,9 @@
-# EduGD DPC v3 frontend readiness audit — 23 September 2026
+# EduGuard DPC v3 frontend readiness audit — 23 September 2026
+
+> **Historical audit.** The deployment results below are from 23 September
+> 2026 and do not describe current live availability. Consult the
+> [current project status](../../../docs/current-status.md) for the latest
+> provider observations.
 
 ## Verdict: FAIL — authenticated staging workflows remain unverified
 
@@ -9,7 +14,7 @@ privileged database configuration.
 
 ## Findings addressed
 
-- The landing page now presents EduGD's Android-only, offline-first operating
+- The landing page now presents EduGuard's Android-only, offline-first operating
   model, controls, privacy limits and stakeholder context. Its device artwork
   is an explicitly neutral illustration, not a screenshot or fleet simulation.
 - The admin dashboard reads DPC totals from a dedicated authenticated API
@@ -41,7 +46,7 @@ privileged database configuration.
   `0cfebf18-925f-43c2-9cd2-77235ba44749` is `SUCCESS`, with hosted verification
   `PASS` and HTTPS health/readiness both returning `200`.
 - Vercel production deployment is `READY` at `https://edug-admin.vercel.app`.
-  Public browser verification found the EduGD landing page, redirected the
+  Public browser verification found the EduGuard landing page, redirected the
   protected dashboard to login, and recorded zero console errors.
 - The first authenticated staging policy submission exposed a frontend payload
   defect: four required `device_controls` fields were omitted and the API

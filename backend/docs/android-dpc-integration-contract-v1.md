@@ -1,4 +1,4 @@
-# EduGD Android DPC Integration Contract v1
+# EduGuard Android DPC Integration Contract v1
 
 Status: server and administrator control-plane contract. This repository contains the Android DPC source; physical Device Owner runtime certification remains a separate verification gate.
 
@@ -40,7 +40,7 @@ The v3 payload requires:
   "timezone": "Africa/Kampala",
   "refresh_after_seconds": 3600,
   "default_mode": "school",
-  "emergency_packages": ["org.edug.dpc"],
+  "emergency_packages": ["org.eduguard.dpc"],
   "required_capabilities": ["screen_time", "web_filter", "application_restrictions", "device_restrictions", "screen_lock", "network_settings"],
   "minimum_dpc_version": 1,
   "modes": [],
@@ -129,7 +129,7 @@ When present, `policy_code` is a unique administrator-facing identifier and
 `description` is bounded policy context. The server validates both before
 creating revision 1; revision numbers are generated monotonically by the
 server. Kiosk mode requires an approved kiosk application, examination mode
-requires camera, screenshot, and microphone restrictions, and the EDUGD DPC
+requires camera, screenshot, and microphone restrictions, and the EduGuard DPC
 package remains in the emergency package set.
 
 The optional `device_use` object is the Iteration 1 school-facing control
@@ -256,7 +256,7 @@ Domains are strict IDNA-normalized ASCII names. Paths, queries, URLs, and browsi
 
 Application identity is the canonical package name plus, when verified, the signing-certificate SHA-256 digest. Display names are not identity. The server catalogue stores application UUID, display name, package name, verified signing digest, category, education-approved flag, mandatory-block flag, status, and timestamps. The `games` restriction is a category, not a package identity.
 
-The policy is allowlist-first. The effective allowed set preserves the EduGD DPC, System UI, independently certified emergency packages, required Android dependencies, and administrator-approved educational packages selected from the catalogue. Manageable non-essential third-party packages outside that effective set are suspended.
+The policy is allowlist-first. The effective allowed set preserves the EduGuard DPC, System UI, independently certified emergency packages, required Android dependencies, and administrator-approved educational packages selected from the catalogue. Manageable non-essential third-party packages outside that effective set are suspended.
 
 A blocked application means `SUSPENDED` and is enforced by Android `DevicePolicyManager.setPackagesSuspended`. Application hiding is not enforcement and `setApplicationHidden` is not required by this contract. Emergency and required system packages are preserved.
 

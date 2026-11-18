@@ -145,7 +145,7 @@ test('rejects unsafe localhost QR origins without persisting the token', async (
   await page.getByRole('button', { name: 'Close' }).click()
   await expect(page.getByText(pairingToken as string, { exact: true })).toHaveCount(0)
   expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 })
-  expect(await page.evaluate(async () => (await indexedDB.databases()).map((database) => database.name))).toContain('edugd-offline-v1')
+  expect(await page.evaluate(async () => (await indexedDB.databases()).map((database) => database.name))).toContain('eduguard-offline-v1')
 })
 
 test('enforces live permission boundaries', async ({ page }) => {
@@ -237,7 +237,7 @@ test('executes disposable token, policy, assignment, and Block lifecycle over li
   expect(typeof pairingToken).toBe('string')
   expect(typeof tokenUuid).toBe('string')
   expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 })
-  expect(await page.evaluate(async () => (await indexedDB.databases()).map((database) => database.name))).toContain('edugd-offline-v1')
+  expect(await page.evaluate(async () => (await indexedDB.databases()).map((database) => database.name))).toContain('eduguard-offline-v1')
   expect(await page.context().cookies()).toEqual([])
 
   const tokenList = await liveApi(page, token, '/admin/enrollment-tokens?page=1&per_page=25')
@@ -509,7 +509,7 @@ test('shows a real browser-offline dependency failure and recovers when connecti
 })
 
 test('expires a disposable enrollment token through the live enrollment contract', async ({ page }) => {
-  test.skip(process.env.EDUG_LIVE_TOKEN_EXPIRY_TEST !== '1', 'run this scenario in its isolated expiry gate')
+  test.skip(process.env.EDUGUARD_LIVE_TOKEN_EXPIRY_TEST !== '1', 'run this scenario in its isolated expiry gate')
   const authorization: string[] = []
   page.on('request', (request) => {
     const value = request.headers().authorization
@@ -550,7 +550,7 @@ test('expires a disposable enrollment token through the live enrollment contract
 })
 
 test('receives a real login rate-limit response from disposable Redis', async ({ page }) => {
-  test.skip(process.env.EDUG_LIVE_RATE_LIMIT_TEST !== '1', 'run this scenario in its isolated rate-limit gate')
+  test.skip(process.env.EDUGUARD_LIVE_RATE_LIMIT_TEST !== '1', 'run this scenario in its isolated rate-limit gate')
   const responses: number[] = []
   for (let attempt = 0; attempt < 12; attempt += 1) {
     const response = await page.request.post('/api/v1/admin/auth/login', {

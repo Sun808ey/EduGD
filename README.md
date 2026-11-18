@@ -1,4 +1,4 @@
-# Android Offline-First School-Owned Phone-Use Policy Enforcement System
+# EduGuard — Android Offline-First School-Owned Phone-Use Policy Enforcement System
 
 ### A Local Context-Based Proof-of-Concept MVP for Ugandan Secondary Schools
 
@@ -68,16 +68,20 @@ Local Offline Policy Enforcement
 ## Repository Structure
 
 ```text
-EduGD/
+EduGuard/
+├── android-dpc/   # Android device-policy controller
+├── app/           # Android application module
 ├── backend/       # Flask REST API, migrations, Railway/Gunicorn configuration
 ├── frontend/      # React + Vite administrator dashboard
 ├── .github/       # CI/CD workflows
 └── README.md
 ```
 
-Operational and security documentation lives in `backend/docs`. Android DPC
-sources are not present in this checkout; offline enforcement and device
-integration remain external verification requirements.
+Operational and security documentation lives in `backend/docs`. Current
+repository and hosted-service readiness is summarized in the
+[current project status](docs/current-status.md). Android DPC source is present;
+physical-device certification and proof of offline enforcement remain
+verification requirements.
 
 ## Development
 
@@ -132,10 +136,17 @@ GitHub Actions includes backend quality, frontend quality and a dedicated
 Supabase PostgreSQL integration workflow. The latter requires the configured
 `backend-integration-test` environment and an approved disposable database.
 
+The latest hosted-status snapshot is in
+[docs/current-status.md](docs/current-status.md). It records Railway staging
+and production deployments as failed, both Vercel deployments as canceled,
+healthy Supabase staging and inactive Supabase production. These provider
+states are not inferred from local source or older reports.
+
 The prepared administrator portal and backend are implemented. Repository
-synchronization does not establish production readiness: live PostgreSQL,
-restore rehearsal, Railway/Redis/TLS/CORS and Android checks remain release
-gates. See the [production integration report](backend/docs/production-integration-report.md)
+synchronization does not establish production readiness. Live database
+schema/connectivity, restore rehearsal, Railway/Redis/TLS/CORS, frontend
+integration and Android device checks remain release gates. See the
+[production integration report](backend/docs/production-integration-report.md)
 and [Phase 1 synchronization report](backend/docs/phase-1-synchronization-report.md).
 
 ## Project Status

@@ -13,7 +13,7 @@ def human_device_reference(device_id: int, asset_number: str | None) -> str:
     }
     if asset_number in known:
         return known[asset_number]
-    prefix = "EDUGD"
+    prefix = "EduGuard"
     if asset_number:
         candidate = asset_number.split("-", 1)[0].upper()
         if re.fullmatch(r"[A-Z0-9]{2,12}", candidate):

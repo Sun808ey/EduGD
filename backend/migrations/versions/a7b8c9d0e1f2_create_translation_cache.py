@@ -58,12 +58,12 @@ def upgrade() -> None:
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
                 REVOKE ALL PRIVILEGES ON TABLE translation_cache_entries FROM service_role;
             END IF;
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
-                REVOKE ALL PRIVILEGES ON TABLE translation_cache_entries FROM edug_runtime;
-                GRANT SELECT, INSERT, UPDATE ON TABLE translation_cache_entries TO edug_runtime;
-                GRANT USAGE, SELECT ON SEQUENCE translation_cache_entries_id_seq TO edug_runtime;
-                CREATE POLICY edug_backend_runtime ON translation_cache_entries
-                AS PERMISSIVE FOR ALL TO edug_runtime USING (true) WITH CHECK (true);
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eduguard_runtime') THEN
+                REVOKE ALL PRIVILEGES ON TABLE translation_cache_entries FROM eduguard_runtime;
+                GRANT SELECT, INSERT, UPDATE ON TABLE translation_cache_entries TO eduguard_runtime;
+                GRANT USAGE, SELECT ON SEQUENCE translation_cache_entries_id_seq TO eduguard_runtime;
+                CREATE POLICY eduguard_backend_runtime ON translation_cache_entries
+                AS PERMISSIVE FOR ALL TO eduguard_runtime USING (true) WITH CHECK (true);
             END IF;
             END $$"""
         )

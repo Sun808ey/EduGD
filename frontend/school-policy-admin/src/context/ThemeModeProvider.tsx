@@ -3,7 +3,7 @@ import { createTheme, CssBaseline, ThemeProvider } from '@mui/material'
 import { ThemeModeContext, type ThemeMode } from './ThemeModeContext'
 
 function initialMode(): ThemeMode {
-  const stored = window.localStorage.getItem('edugd-theme')
+  const stored = window.localStorage.getItem('eduguard-theme')
   if (stored === 'light' || stored === 'dark') {
     return stored
   }
@@ -22,7 +22,7 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
     mode,
     toggle: () => setMode((current) => {
       const next = current === 'light' ? 'dark' : 'light'
-      window.localStorage.setItem('edugd-theme', next)
+      window.localStorage.setItem('eduguard-theme', next)
       return next
     }),
   }), [mode])

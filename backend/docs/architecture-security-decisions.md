@@ -14,10 +14,10 @@ disabled; no Supabase Auth, Realtime or Edge Functions are introduced.
 The deployment configuration is defined by `environment.md`, `railway.json`,
 and `database-migration-runbook.md`. Source data migration,
 provider setup, Android runtime evidence and final cutover remain operator
-gates. Android code is not present in this checkout. The backend now defines a
-versioned DPC policy contract and an authenticated queued security-event upload
-endpoint, but local contract tests do not prove Android interoperability or a
-hosted migration.
+gates. Android DPC source is present in this repository, but physical-device
+runtime evidence is not verified. The backend defines a versioned DPC policy
+contract and authenticated queued security-event upload endpoint; local
+contract tests do not prove Android interoperability or a hosted migration.
 
 Registration/enrollment/authentication events must be preserved, but they do
 not all implement the same DB trigger/ORM immutability mechanisms as revisions

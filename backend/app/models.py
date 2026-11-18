@@ -338,7 +338,7 @@ class Administrator(db.Model):
 
 
 class School(db.Model):
-    """The single school organisation served by a one-school EDUGD installation."""
+    """The single school organisation served by a one-school EduGuard installation."""
 
     __tablename__ = "schools"
     __table_args__ = (
@@ -1456,7 +1456,7 @@ class PolicyRevision(db.Model):
             name="ck_policy_revisions_actor_provenance",
         ),
         CheckConstraint(
-            "edug_valid_policy_revision_payload(payload)",
+            "eduguard_valid_policy_revision_payload(payload)",
             name="ck_policy_revisions_payload",
         ).ddl_if(dialect="postgresql"),
         Index(

@@ -173,20 +173,20 @@ def upgrade() -> None:
                 IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
                     REVOKE ALL PRIVILEGES ON TABLE {table} FROM service_role;
                 END IF;
-                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
-                    REVOKE ALL PRIVILEGES ON TABLE {table} FROM edug_runtime;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eduguard_runtime') THEN
+                    REVOKE ALL PRIVILEGES ON TABLE {table} FROM eduguard_runtime;
                 END IF;
                 END $$"""
             )
         op.execute(
-            """CREATE FUNCTION edug_reject_device_audit_mutation() RETURNS trigger AS $$
+            """CREATE FUNCTION eduguard_reject_device_audit_mutation() RETURNS trigger AS $$
             BEGIN RAISE EXCEPTION 'device audit evidence is immutable'; END;
             $$ LANGUAGE plpgsql"""
         )
         for table in ("device_audit_batches", "device_security_events"):
             op.execute(
                 f"CREATE TRIGGER trg_{table}_immutable BEFORE UPDATE OR DELETE ON {table} "
-                "FOR EACH ROW EXECUTE FUNCTION edug_reject_device_audit_mutation()"
+                "FOR EACH ROW EXECUTE FUNCTION eduguard_reject_device_audit_mutation()"
             )
 
 
@@ -194,7 +194,7 @@ def downgrade() -> None:
     if op.get_bind().dialect.name == "postgresql":
         for table in ("device_security_events", "device_audit_batches"):
             op.execute(f"DROP TRIGGER trg_{table}_immutable ON {table}")
-        op.execute("DROP FUNCTION edug_reject_device_audit_mutation()")
+        op.execute("DROP FUNCTION eduguard_reject_device_audit_mutation()")
     op.drop_index(
         "ix_device_security_events_code_occurred", table_name="device_security_events"
     )

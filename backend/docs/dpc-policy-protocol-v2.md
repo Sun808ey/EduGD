@@ -28,7 +28,7 @@ not available.
 - Supported live DPC builds target API 29 through 35 only. API 36 is rejected.
 - The DPC advertises capabilities during enrollment. The server must not assign a policy whose required capabilities are absent.
 - Android identifiers are configured in `app/android_integration_config.py`: DPC
-  `io.github.sun808ey.edugd.dpc` and the initial Classroom, Moodle, Khan Academy,
+  `io.github.sun808ey.eduguard.dpc` and the initial Classroom, Moodle, Khan Academy,
   and Wikipedia allowlist. The AOSP/Google emulator candidate names are recognition
   hints only; a package name is never proof of its platform signature or role.
 - Before activating any device policy, the DPC must report the handlers for

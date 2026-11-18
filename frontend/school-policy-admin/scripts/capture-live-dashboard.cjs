@@ -2,11 +2,11 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('@playwright/test');
 
-const outputDir = path.resolve(__dirname, '../../../output/edugd-pitch-assets');
+const outputDir = path.resolve(__dirname, '../../../output/eduguard-pitch-assets');
 fs.mkdirSync(outputDir, { recursive: true });
-const captureUsername = process.env.EDUG_CAPTURE_USERNAME || 'ed.admin';
-const capturePassword = process.env.EDUG_CAPTURE_PASSWORD;
-if (!capturePassword) throw new Error('Set EDUG_CAPTURE_PASSWORD before capturing authenticated dashboard snapshots.');
+const captureUsername = process.env.EDUGUARD_CAPTURE_USERNAME || 'ed.admin';
+const capturePassword = process.env.EDUGUARD_CAPTURE_PASSWORD;
+if (!capturePassword) throw new Error('Set EDUGUARD_CAPTURE_PASSWORD before capturing authenticated dashboard snapshots.');
 
 (async () => {
   const browser = await chromium.launch({ headless: true });

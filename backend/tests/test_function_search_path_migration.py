@@ -22,14 +22,14 @@ def test_function_hardening_migration_sets_a_fixed_search_path(monkeypatch) -> N
 
     rendered = "\n".join(statements)
     assert "SET search_path = ''" in rendered
-    assert "edug_reject_device_control_event_mutation()" in rendered
-    assert "public.edug_valid_blocked_apps(value->'blocked_apps')" in rendered
+    assert "eduguard_reject_device_control_event_mutation()" in rendered
+    assert "public.eduguard_valid_blocked_apps(value->'blocked_apps')" in rendered
     assert (
-        "REVOKE ALL ON FUNCTION public.edug_valid_blocked_apps(value json) FROM PUBLIC"
+        "REVOKE ALL ON FUNCTION public.eduguard_valid_blocked_apps(value json) FROM PUBLIC"
         in rendered
     )
     assert (
-        "GRANT EXECUTE ON FUNCTION public.edug_valid_blocked_apps(value json) TO edug_runtime"
+        "GRANT EXECUTE ON FUNCTION public.eduguard_valid_blocked_apps(value json) TO eduguard_runtime"
         in rendered
     )
 

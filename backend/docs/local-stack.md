@@ -29,7 +29,7 @@ python scripts/local_stack.py
 Then open `http://127.0.0.1:5173/login`. The API base is
 `http://127.0.0.1:5000/api/v1`; the browser reaches it through the Vite
 development proxy. Press `Ctrl+C` to stop Flask and Vite and remove only the
-`edug-local-stack` containers, network, and disposable volume.
+`eduguard-local-stack` containers, network, and disposable volume.
 
 The launcher accepts `--backend-port`, `--frontend-port`, and `--postgres-port`
 when an explicitly verified local port is unavailable. It does not silently

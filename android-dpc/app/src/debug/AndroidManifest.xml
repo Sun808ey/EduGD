@@ -3,6 +3,6 @@
         <activity
             android:name=".demo.DpcDemoActivity"
             android:exported="true"
-            android:label="EduGD DPC demonstration harness" />
+            android:label="EduGuard DPC demonstration harness" />
     </application>
 </manifest>

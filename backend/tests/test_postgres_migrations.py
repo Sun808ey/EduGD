@@ -20,9 +20,10 @@ from test_support.postgres_safety import (
 
 pytestmark = [pytest.mark.postgres, pytest.mark.migration]
 MIGRATIONS_DIRECTORY = Path(__file__).resolve().parents[1] / "migrations"
-HEAD_REVISION = "k6l7m8n9o0"
-EXPECTED_REVISION_COUNT = 39
+HEAD_REVISION = "l7m8n9o0p1"
+EXPECTED_REVISION_COUNT = 40
 EXPECTED_REVISIONS = (
+    "l7m8n9o0p1",
     "k6l7m8n9o0",
     "j5k6l7m8n9",
     "i4e5f6a7b8c9",

@@ -21,12 +21,12 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 BACKEND = Path(__file__).resolve().parents[1]
 FRONTEND = BACKEND.parent / "frontend" / "school-policy-admin"
 COMPOSE_FILE = BACKEND / "compose.local-postgres.yml"
-PROJECT_NAME = "edug-local-stack"
+PROJECT_NAME = "eduguard-local-stack"
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run EduGD's disposable local PostgreSQL, Flask, and Vite stack."
+        description="Run EduGuard's disposable local PostgreSQL, Flask, and Vite stack."
     )
     parser.add_argument("--backend-port", type=int, default=5000)
     parser.add_argument("--frontend-port", type=int, default=5173)
@@ -153,18 +153,18 @@ def main() -> int:
     env = os.environ.copy()
     env.update(
         {
-            "EDUG_LOCAL_POSTGRES_TOKEN": token,
-            "EDUG_LOCAL_POSTGRES_PORT": str(args.postgres_port),
-            "EDUG_LOCAL_REDIS_TOKEN": redis_token,
-            "EDUG_LOCAL_REDIS_PORT": str(args.redis_port),
+            "EDUGUARD_LOCAL_POSTGRES_TOKEN": token,
+            "EDUGUARD_LOCAL_POSTGRES_PORT": str(args.postgres_port),
+            "EDUGUARD_LOCAL_REDIS_TOKEN": redis_token,
+            "EDUGUARD_LOCAL_REDIS_PORT": str(args.redis_port),
             "APP_ENV": "development",
             "DEVELOPMENT_DATABASE_URL": (
-                "postgresql+psycopg2://edug_local:"
-                f"{token}@127.0.0.1:{args.postgres_port}/edug_local"
+                "postgresql+psycopg2://eduguard_local:"
+                f"{token}@127.0.0.1:{args.postgres_port}/eduguard_local"
             ),
             "MIGRATION_DATABASE_URL": (
-                "postgresql+psycopg2://edug_local:"
-                f"{token}@127.0.0.1:{args.postgres_port}/edug_local"
+                "postgresql+psycopg2://eduguard_local:"
+                f"{token}@127.0.0.1:{args.postgres_port}/eduguard_local"
             ),
             "PAIRING_TOKEN_PEPPER": pairing_token_pepper,
             "PAIRING_TOKEN_PEPPER_VERSION": "1",
@@ -181,14 +181,14 @@ def main() -> int:
             "DEVICE_ENROLLMENT_MODE": "new_devices_required",
             "PHYSICAL_CERTIFICATION_REQUIRED": "false",
             "ADMIN_LOGIN_RATE_LIMIT": os.getenv(
-                "EDUG_LOCAL_ADMIN_LOGIN_RATE_LIMIT", "100 per minute"
+                "EDUGUARD_LOCAL_ADMIN_LOGIN_RATE_LIMIT", "100 per minute"
             ),
             "ENROLLMENT_TOKEN_TTL_SECONDS": os.getenv(
-                "EDUG_LOCAL_ENROLLMENT_TOKEN_TTL_SECONDS", "600"
+                "EDUGUARD_LOCAL_ENROLLMENT_TOKEN_TTL_SECONDS", "600"
             ),
             "DPC_POLICY_SIGNING_PRIVATE_KEY": dpc_policy_signing_key,
-            "VITE_DPC_APK_DOWNLOAD_URL": "https://downloads.example.invalid/edugd-dpc.apk",
-            "VITE_DPC_ADMIN_COMPONENT": "io.github.sun808ey.edugd.dpc/.admin.AdminReceiver",
+            "VITE_DPC_APK_DOWNLOAD_URL": "https://downloads.example.invalid/eduguard-dpc.apk",
+            "VITE_DPC_ADMIN_COMPONENT": "io.github.sun808ey.eduguard.dpc/.admin.AdminReceiver",
             "VITE_DPC_SIGNATURE_CHECKSUM": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             "VITE_DPC_MIN_VERSION_CODE": "1",
         }
@@ -257,7 +257,7 @@ def main() -> int:
         )
         _wait_for(f"http://127.0.0.1:{args.frontend_port}/login", vite_process)
         print(
-            f"Local EduGD stack ready: API=http://127.0.0.1:{args.backend_port}/api/v1 "
+            f"Local EduGuard stack ready: API=http://127.0.0.1:{args.backend_port}/api/v1 "
             f"Frontend=http://127.0.0.1:{args.frontend_port}"
         )
         if args.smoke:

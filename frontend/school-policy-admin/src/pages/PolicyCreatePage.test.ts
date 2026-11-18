@@ -4,8 +4,8 @@ import { buildPolicyPayload, recommendedComplianceSettings, recommendedDataColle
 const options = {
   policyCode: 'LEARNING_DEVICE',
   description: 'Controls tablets used for classroom learning activities.',
-  emergency: 'io.github.sun808ey.edugd.dpc',
-  allowed: 'org.edugd.learning\ncom.google.android.apps.pdfviewer',
+  emergency: 'io.github.sun808ey.eduguard.dpc',
+  allowed: 'org.eduguard.learning\ncom.google.android.apps.pdfviewer',
   blocked: '',
   limit: '480',
   reset: '0',
@@ -135,12 +135,12 @@ describe('policy template device-use mode', () => {
 
     expect(payload.approved_applications).toHaveLength(2)
     expect(modes[0].allowed_packages).toEqual([
-      'io.github.sun808ey.edugd.dpc',
+      'io.github.sun808ey.eduguard.dpc',
       'org.example.learning',
       'org.example.browser',
     ])
     expect(modes[0].lock_task_packages).toEqual([
-      'io.github.sun808ey.edugd.dpc',
+      'io.github.sun808ey.eduguard.dpc',
       'org.example.learning',
     ])
   })

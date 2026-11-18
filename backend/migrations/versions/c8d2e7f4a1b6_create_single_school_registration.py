@@ -48,11 +48,11 @@ def upgrade() -> None:
         op.execute("REVOKE ALL PRIVILEGES ON TABLE schools FROM PUBLIC")
         op.execute(
             """DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'edug_runtime') THEN
-                GRANT SELECT, INSERT ON schools TO edug_runtime;
-                GRANT USAGE, SELECT ON SEQUENCE schools_id_seq TO edug_runtime;
-                EXECUTE 'CREATE POLICY edug_backend_runtime ON schools FOR ALL '
-                    'TO edug_runtime USING (true) WITH CHECK (true)';
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'eduguard_runtime') THEN
+                GRANT SELECT, INSERT ON schools TO eduguard_runtime;
+                GRANT USAGE, SELECT ON SEQUENCE schools_id_seq TO eduguard_runtime;
+                EXECUTE 'CREATE POLICY eduguard_backend_runtime ON schools FOR ALL '
+                    'TO eduguard_runtime USING (true) WITH CHECK (true)';
             END IF;
             END $$"""
         )

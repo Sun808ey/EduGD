@@ -1,5 +1,9 @@
 # Railway staging deployment failure audit
 
+> **Historical failure audit, 23 September 2026.** The current Railway staging
+> and production deployment states are in
+> [current project status](../../docs/current-status.md).
+
 Date: 2026-09-23
 Service: `edug-api-staging`
 Railway project: `blissful-luck`
@@ -119,7 +123,7 @@ the previous deployment ID remained active. The corrected submission used
 - `/api/v1/ready`: HTTP 200 over HTTPS.
 
 The verifier's pass covers verified PostgreSQL TLS, runtime role
-`edug_runtime`, migration head `fa3d7e1b9c42`, application-table permission
+`eduguard_runtime`, migration head `fa3d7e1b9c42`, application-table permission
 checks, and Redis readiness. No migration ran, production was untouched, and no
 second hosted deployment was attempted.
 

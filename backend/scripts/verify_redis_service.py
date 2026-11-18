@@ -46,7 +46,7 @@ def verify(url: str, expected_host: str, ca_file: str | None = None) -> None:
         options["ssl_ca_certs"] = ca_file
     client = Redis.from_url(url, **options)
     # Reuse the verified TLS pool for the installed limits library.
-    namespace = f"edug-redis-probe:{uuid4().hex}"
+    namespace = f"eduguard-redis-probe:{uuid4().hex}"
     storage = RedisStorage(
         url, connection_pool=client.connection_pool, key_prefix=namespace
     )
